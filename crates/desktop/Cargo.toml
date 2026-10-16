@@ -10,6 +10,11 @@ rust-version.workspace = true
 [lints]
 workspace = true
 
+# A library too, so Android can load the app (Tauri's mobile entry point).
+[lib]
+name = "orphusbot_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [build-dependencies]
 tauri-build = { version = "2.7.3", features = [] }
 

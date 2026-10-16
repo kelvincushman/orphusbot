@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-026: The Android app is the desktop crate built for Android, and it signs in by device linking (2026-10-16)
+
+- **Context:** M4 needs OrphusBot on the phone. The desktop app (D-019) is already a thin window onto the server's web UI.
+- **Decision:** one Tauri crate for both. `crates/desktop` becomes a library with Tauri's mobile entry point, and its generated `gen/android` project is committed. Sign-in reuses device linking rather than passkeys in the WebView or a new device-token flow.
+- **Alternatives:** a separate `apps/mobile` crate (a second copy of the same 100 lines); passkeys inside the Android WebView (needs a Credential Manager bridge and an assetlinks file on the server); a keystore-held device token (planned in §12, not needed for a first app that works).
+- **Consequences:** the phone always matches the server's UI version, and there is nothing Android-specific to keep in step except the activity's inset padding. A linked session lasts 30 days, then the phone is linked again; long-lived device tokens and the offline outbox remain open (B-CLI-05, B-CLI-06).
+
 ## D-025: The wearable pairs with a one-time code in the app's bearer field, and its tasks become tickets (2026-10-16)
 
 **Decided:** OrphusBot makes a one-time pairing code (10 minutes, stored hashed) from a signed-in session; the existing phone app sends it as the "bearer" on `POST /api/device/register` and gets its device token. A deliberate button capture becomes a ticket assigned by System 1 (or to the inbox), and runs, cues and asks follow from it. Until the app reports GATT write results (W-3), a habitat message counts as delivered when the app takes it from the poll.

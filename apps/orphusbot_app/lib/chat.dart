@@ -1,0 +1,337 @@
+// The main screen: bots down the left, the chosen bot's whole conversation on
+// the right (formatted text, pictures and files it shared, approvals to answer),
+// and the composer at the bottom.
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:markdown_widget/markdown_widget.dart';
+
+import 'api.dart';
+import 'thread.dart' as t;
+
+class ChatScreen extends StatefulWidget {
+  const ChatScreen({super.key, required this.api, required this.onSignedOut});
+  final Api api;
+  final VoidCallback onSignedOut;
+
+  @override
+  State<ChatScreen> createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends State<ChatScreen> {
+  List<Map<String, dynamic>> bots = [];
+  final threads = <String, t.ThreadView>{};
+  String chosen = 'inbox';
+  String? problem;
+  StreamSubscription<Map<String, dynamic>>? sub;
+  final composer = TextEditingController();
+  final scroll = ScrollController();
+  final focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _start();
+  }
+
+  Future<void> _start() async {
+    try {
+      final list = await widget.api.get('/api/bots') as List<dynamic>;
+      setState(() => bots = list.cast<Map<String, dynamic>>().where((b) => b['disabled'] != true).toList());
+    } on SignedOut {
+      return widget.onSignedOut();
+    } catch (e) {
+      setState(() => problem = '$e');
+    }
+    sub = widget.api.events().listen((e) {
+      final bot = e['bot'] as String?;
+      if (bot == null) return;
+      setState(() => threads.putIfAbsent(bot, t.ThreadView.new).apply(e));
+      if (bot == chosen) _toBottom();
+    }, onError: (Object e) => e is SignedOut ? widget.onSignedOut() : setState(() => problem = '$e'));
+  }
+
+  @override
+  void dispose() {
+    sub?.cancel();
+    composer.dispose();
+    scroll.dispose();
+    focus.dispose();
+    super.dispose();
+  }
+
+  void _toBottom() => WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (scroll.hasClients) scroll.jumpTo(scroll.position.maxScrollExtent);
+      });
+
+  Future<void> _act(Future<void> Function() action) async {
+    try {
+      await action();
+      setState(() => problem = null);
+    } on SignedOut {
+      widget.onSignedOut();
+    } catch (e) {
+      setState(() => problem = '$e');
+    }
+  }
+
+  void _send() {
+    final text = composer.text.trim();
+    if (text.isEmpty) return;
+    composer.clear();
+    _act(() => widget.api.send(chosen, text));
+    focus.requestFocus();
+  }
+
+  t.ThreadView get view => threads[chosen] ?? t.ThreadView();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      body: Row(children: [
+        SizedBox(width: 220, child: _botList(scheme)),
+        VerticalDivider(width: 1, color: scheme.outlineVariant),
+        Expanded(child: _conversation(scheme)),
+      ]),
+    );
+  }
+
+  Widget _botList(ColorScheme scheme) {
+    return ListView(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+        child: Text('OrphusBot', style: Theme.of(context).textTheme.titleLarge),
+      ),
+      for (final b in bots)
+        Builder(builder: (context) {
+          final slug = b['slug'] as String;
+          final v = threads[slug];
+          final waiting = v?.waiting ?? 0;
+          final working = v != null && v.run != t.RunState.idle;
+          return ListTile(
+            selected: slug == chosen,
+            selectedTileColor: scheme.primary.withValues(alpha: 0.12),
+            title: Text(b['name'] as String),
+            subtitle: Text(
+              waiting > 0 ? 'needs you' : (working ? 'working…' : (b['remit'] as String? ?? '')),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: waiting > 0 ? scheme.error : null),
+            ),
+            trailing: waiting > 0
+                ? Badge(label: Text('$waiting'))
+                : (working ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)) : null),
+            onTap: () {
+              setState(() => chosen = slug);
+              _toBottom();
+              focus.requestFocus();
+            },
+          );
+        }),
+    ]);
+  }
+
+  Widget _conversation(ColorScheme scheme) {
+    final v = view;
+    final name = bots.firstWhere((b) => b['slug'] == chosen, orElse: () => {'name': chosen})['name'] as String;
+    return Column(children: [
+      // Header: who, and what it's doing.
+      ListTile(
+        title: Text(name, style: Theme.of(context).textTheme.titleMedium),
+        subtitle: Text(switch (v.run) {
+          t.RunState.idle => 'Ready',
+          t.RunState.queued => 'Waiting${v.where == null ? '' : ': ${v.where}'}',
+          t.RunState.running => 'Working${v.where == null ? '' : ' ${v.where}'}',
+        }),
+        trailing: v.run == t.RunState.idle
+            ? null
+            : OutlinedButton.icon(
+                onPressed: () => _act(() => widget.api.stop(chosen)),
+                icon: const Icon(Icons.stop),
+                label: const Text('Stop'),
+              ),
+      ),
+      if (problem != null)
+        MaterialBanner(
+          content: Text(problem!),
+          actions: [TextButton(onPressed: () => setState(() => problem = null), child: const Text('Dismiss'))],
+        ),
+      Divider(height: 1, color: scheme.outlineVariant),
+      Expanded(
+        child: ListView(
+          controller: scroll,
+          padding: const EdgeInsets.all(16),
+          children: [
+            if (v.items.isEmpty) Center(child: Text('Say hello to $name.', style: TextStyle(color: scheme.outline))),
+            for (final item in v.items) _item(item, scheme, name),
+            if (v.streaming != null) _bubble(v.streaming!, false, scheme),
+          ],
+        ),
+      ),
+      Divider(height: 1, color: scheme.outlineVariant),
+      _composer(name),
+    ]);
+  }
+
+  Widget _item(t.Item item, ColorScheme scheme, String name) => switch (item) {
+        t.Message(:final mine, :final text) => _bubble(text, mine, scheme),
+        t.Notice(:final text, :final error) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Center(child: Text(text, style: TextStyle(color: error ? scheme.error : scheme.outline))),
+          ),
+        t.Artifact() => _artifact(item, scheme),
+        t.Card() => _card(item, scheme, name),
+      };
+
+  Widget _bubble(String text, bool mine, ColorScheme scheme) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Align(
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 720),
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: mine ? scheme.primaryContainer : scheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: mine
+            ? SelectableText(text)
+            : MarkdownBlock(data: text, selectable: true, config: dark ? MarkdownConfig.darkConfig : MarkdownConfig.defaultConfig),
+      ),
+    );
+  }
+
+  /// A file the bot shared: pictures show in the chat; everything opens or saves.
+  Widget _artifact(t.Artifact a, ColorScheme scheme) {
+    final url = widget.api.artifactUrl(a.id);
+    final label = '${a.name}${a.version > 1 ? ' (version ${a.version})' : ''} · ${(a.size / 1024).ceil()} KB';
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        constraints: const BoxConstraints(maxWidth: 480),
+        decoration: BoxDecoration(
+          border: Border.all(color: scheme.outlineVariant),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (a.isImage)
+            Image.network(url, headers: widget.api.headers, fit: BoxFit.contain,
+                errorBuilder: (_, _, _) => const Padding(padding: EdgeInsets.all(12), child: Text("Couldn't load the picture"))),
+          ListTile(
+            leading: Icon(a.isImage ? Icons.image_outlined : Icons.description_outlined),
+            title: Text(label),
+            trailing: IconButton(
+              tooltip: 'Copy the download link',
+              icon: const Icon(Icons.link),
+              onPressed: () => Clipboard.setData(ClipboardData(text: url)),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _card(t.Card c, ColorScheme scheme, String name) {
+    final k = c.kind;
+    final title = switch (k['kind']) {
+      'approval' => 'Allow $name to use ${k['tool']}?',
+      'takeover' => '$name needs you on its screen',
+      _ => (k['title'] as String?) ?? 'A question',
+    };
+    final detail = switch (k['kind']) {
+      'approval' => const JsonEncoder.withIndent('  ').convert(k['input']),
+      'takeover' => k['reason'] as String? ?? '',
+      _ => k['message'] as String? ?? '',
+    };
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: c.outcome == null ? scheme.error : scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: Theme.of(context).textTheme.titleSmall),
+          if (detail.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            SelectableText(detail, style: const TextStyle(fontFamily: 'monospace')),
+          ],
+          const SizedBox(height: 10),
+          if (c.outcome != null)
+            Text(c.outcome!, style: TextStyle(color: scheme.outline))
+          else if (c.approval)
+            Wrap(spacing: 8, children: [
+              FilledButton(onPressed: () => _act(() => widget.api.answer(c.id, {'decision': 'allow'})), child: const Text('Allow once')),
+              OutlinedButton(
+                  onPressed: () => _act(() => widget.api.answer(c.id, {'decision': 'always'})),
+                  child: Text('Always allow ${k['tool']}')),
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(foregroundColor: scheme.error),
+                onPressed: () => _act(() => widget.api.answer(c.id, {'decision': 'deny'})),
+                child: const Text('Deny'),
+              ),
+            ])
+          else if (k['kind'] == 'takeover')
+            FilledButton(onPressed: () => _act(() => widget.api.answer(c.id, {'confirmed': true})), child: const Text("I'm done"))
+          else
+            _QuestionAnswer(options: (k['options'] as List<dynamic>? ?? []).cast<String>(),
+                onAnswer: (v) => _act(() => widget.api.answer(c.id, {'value': v}))),
+        ]),
+      ),
+    );
+  }
+
+  Widget _composer(String name) => Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(children: [
+          Expanded(
+            child: CallbackShortcuts(
+              bindings: {const SingleActivator(LogicalKeyboardKey.enter): _send},
+              child: TextField(
+                controller: composer,
+                focusNode: focus,
+                autofocus: true,
+                minLines: 1,
+                maxLines: 6,
+                decoration: InputDecoration(
+                  hintText: 'Message $name  (Enter sends, Shift+Enter for a new line)',
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.icon(onPressed: _send, icon: const Icon(Icons.send), label: const Text('Send')),
+        ]),
+      );
+}
+
+/// Pick an option, or type an answer.
+class _QuestionAnswer extends StatefulWidget {
+  const _QuestionAnswer({required this.options, required this.onAnswer});
+  final List<String> options;
+  final void Function(String) onAnswer;
+  @override
+  State<_QuestionAnswer> createState() => _QuestionAnswerState();
+}
+
+class _QuestionAnswerState extends State<_QuestionAnswer> {
+  final text = TextEditingController();
+  @override
+  Widget build(BuildContext context) => widget.options.isNotEmpty
+      ? Wrap(spacing: 8, children: [
+          for (final o in widget.options) OutlinedButton(onPressed: () => widget.onAnswer(o), child: Text(o)),
+        ])
+      : Row(children: [
+          Expanded(child: TextField(controller: text, decoration: const InputDecoration(hintText: 'Your answer'))),
+          const SizedBox(width: 8),
+          FilledButton(onPressed: () => widget.onAnswer(text.text), child: const Text('Answer')),
+        ]);
+}

@@ -19,7 +19,8 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "command": "orphusbot"
+      "command": "orphusbot",
+      "app": "orphusbot-app"
     },
     "schema": [
       {
@@ -28,6 +29,13 @@
         "label": "The orphusbot command",
         "placeholder": "orphusbot",
         "defaultValue": "orphusbot"
+      },
+      {
+        "key": "app",
+        "type": "string",
+        "label": "The OrphusBot app (for Open chat)",
+        "placeholder": "orphusbot-app",
+        "defaultValue": "orphusbot-app"
       }
     ]
   }

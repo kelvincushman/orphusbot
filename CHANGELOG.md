@@ -13,6 +13,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **The OrphusBot app (M7.1):** a real desktop app, built with Flutter, for Omarchy now and the Mac and phones next. Bots on the left; on the right the whole conversation with formatted replies, the pictures and files your bots share, approvals and questions answered in place, live status and a Stop button; type at the bottom. Open it from the launcher or the bar panel's **Open chat**.
 - **OrphusBot on Omarchy (M8.3):** a bar widget that shows when your bots are working and turns urgent when one needs you, a panel to answer approvals and message any bot, notifications, and `SUPER+ALT+B` to open it. It runs on the new `orphusbot` command (`link`, `status`, `watch`, `answer`, `send`), which works on its own too. Setup is in `omarchy/kelvincushman.orphusbot/README.md`.
 - **Bots work as a team (M8.2):** a bot can hand a teammate part of the job ("ask Coder to write the benchmark"); it becomes a ticket for that bot, and the answer comes back to the asking bot, which carries on. Each bot knows who is on the team, and team bots share a `/shared` folder.
 - **A model drop-down when setting up a bot:** pick from every model your machines can use, or type one under Other.

@@ -97,6 +97,16 @@ The chat header's **Screen** button shows the bot's screen live; **Take control*
 
 Without `ORPHUSBOT_URL`, the first run asks for the server address and saves it; `--reset` forgets it. Sign in with **Sign in with another device**: approve the code it shows from a browser where you have a passkey (Settings → Link a device, or open the link it shows). To build installable packages (`.deb`, `.rpm`, AppImage): `cd crates/desktop && npx @tauri-apps/cli@2 build`.
 
+**Flutter app.** Needs the Flutter SDK (`git clone -b stable https://github.com/flutter/flutter ~/.local/share/flutter`), and for Linux `cmake`, `ninja`, `clang` and GTK 3 headers. Then:
+
+```sh
+cd apps/orphusbot_app
+flutter test                       # the reducer tests
+flutter build linux --release      # build/linux/x64/release/bundle/orphusbot-app
+```
+
+On Omarchy, copy the bundle to `~/.local/share/orphusbot-app`, link `orphusbot-app` into `~/.local/bin`, and the bar panel's **Open chat** starts it.
+
 **macOS app.** It has to be built on a Mac. With Xcode's command line tools, Rust and Node.js installed, and the Mac's SSH key on the GPU box, run `sh scripts/macos-setup.sh <user>@<gpu-box>` from a clone: it builds the app, installs `/Applications/OrphusBot.app`, and adds a launchd agent that keeps the tunnel to the server open at `http://localhost:7480` (see DEPLOY.md, "Before the domain").
 
 **Android app.** The same crate builds an APK. You need the Android SDK (platform-tools, a platform, build-tools, the NDK) and JDK 17 or newer, the Rust Android targets (`rustup target add x86_64-linux-android aarch64-linux-android`), and these set:

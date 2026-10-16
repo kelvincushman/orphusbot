@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-033: One Flutter app for every device (2026-10-16)
+
+- **Context:** the desktop and Android apps are Tauri windows onto the server's web UI. Kelvin wants real applications, for Omarchy, the Mac and phones, with richer chat (media, history, animations with Rive, whose Flutter runtime is native).
+- **Decision:** a Flutter app in `apps/orphusbot_app`, built for Linux first and then macOS, Android and iOS. It talks to the same server API and signs in by device linking. The web UI (Leptos) stays for browsers; the Tauri apps stay until the Flutter ones cover them. AGENTS.md's "Rust first" holds for the server, node and command line.
+- **Alternatives:** keep Tauri and make it a proper desktop app (smaller change, but the same web UI and no native Rive); Flutter only on phones (two UIs to keep in step on desktop).
+- **Consequences:** a second UI codebase (Dart) beside Leptos, kept honest by sharing the reducer's behaviour through tests. Rive animations plug straight in. The wearable companion app is Flutter too and can merge in later.
+
 ## D-032: Fleets run with the bridge loaded in every helper; workflows stay blocked (2026-10-16)
 
 - **Context:** D-030 blocked fleets and workflows because helper sessions skip the bridge. Testing showed helpers do load project extensions from the engine's working folder, and run in the same process as the engine.

@@ -9,5 +9,5 @@
     "MD060": false,  // table column alignment
     "MD041": false   // PR template and CLAUDE.md legitimately start without an H1
   },
-  "ignores": ["**/node_modules/**", "target/**", "wearable/**", "crates/ui/novnc/**", "crates/ui/dist/**"]  // wearable docs predate these rules; noVNC is vendored as is
+  "ignores": ["**/node_modules/**", "**/ephemeral/**", "**/build/**", "**/.dart_tool/**", "target/**", "wearable/**", "crates/ui/novnc/**", "crates/ui/dist/**"]  // wearable docs predate these rules; noVNC is vendored as is
 }

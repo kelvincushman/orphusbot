@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-032: Fleets run with the bridge loaded in every helper; workflows stay blocked (2026-10-16)
+
+- **Context:** D-030 blocked fleets and workflows because helper sessions skip the bridge. Testing showed helpers do load project extensions from the engine's working folder, and run in the same process as the engine.
+- **Decision:** the node installs the bridge as a project extension in the engine's work folder too; the engine's bridge shares its dialog channel through a process-wide symbol, and helpers' copies ask through it. `subagent`, `fleet` and `roundtable` are then allowed; `workflow` stays refused, because a workflow's own code acts without tool calls. Fleets are started by `/fleet <name> <task>` in a message or a routine.
+- **Alternatives:** an overlay agent directory holding the bridge (Orphus saves `auth.json` by rename, which would split the owner's login); waiting for Orphus to propagate extensions to helpers (still the cleaner fix, and this can be dropped then); a separate run-target field (the slash command already says it).
+- **Consequences:** fleets cost one approval per helper launch unless the owner allows `subagent` always; each helper action is gated as usual. The mechanism depends on Orphus loading project extensions in helpers and running them in-process; if either changes, helpers' calls fail closed ("only runs under orphusbot-node").
+
 ## D-031: The node reaches an E2B sandbox's envd directly, with that sandbox's token (2026-10-16)
 
 - **Context:** DESIGN §6.2 planned that a node's bridge sends each operation up the link and the server runs it against E2B, so nothing E2B-related reaches a node.
@@ -21,6 +28,7 @@ Format:
 ## D-030: Fleets and workflows are not run targets until Orphus can keep them gated (2026-10-16)
 
 - **Context:** PRD B-RUN-06 and M6 ask that a run can launch an Orphus fleet or a Goal workflow. Both work by spawning subagents or in-process stage sessions. OrphusBot's guarantees come from the bridge: every tool call is gated, and in a bot computer every tool runs inside the container. Child sessions don't load the bridge, and Orphus has no structured RPC for fleet or workflow state (H-B6, orphus-desktop H-03).
+- **Superseded for fleets by D-032.**
 - **Decision:** don't offer them yet. The bridge blocks the `subagent`, `workflow` and `fleet` tools in every mode, and the gate denies them as well, even against an owner's rule. Checked 2026-10-16 with a real Orphus engine: a subagent forked from a gated session ran `bash` on the host and the bridge was never asked.
 - **Alternatives:** launch them by slash command in the prompt (child tool calls would skip the gate and run on the node: breaks AGENTS.md rule 5 in spirit and DESIGN §4.4); loading the bridge into children ourselves (depends on Orphus internals that change).
 - **Consequences:** a bot does one engine turn per run. Revisit when Orphus passes extensions (or a gate hook) to child sessions and exposes fleet and workflow state over RPC.

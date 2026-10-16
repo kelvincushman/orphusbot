@@ -43,16 +43,24 @@ export const TAKEOVER_TITLE = "orphusbot-takeover";
 const computer = process.env.ORPHUSBOT_COMPUTER;
 const runtime = process.env.ORPHUSBOT_RUNTIME ?? "podman";
 const home = process.env.ORPHUSBOT_COMPUTER_HOME ?? "/home/bot";
+/**
+ * Helper agents run as other sessions in this process. They are gated only when
+ * the node has put this file where they load it (ORPHUSBOT_HELPERS_GATED); without
+ * that, a subagent's bash was seen to run unasked, so they are blocked
+ * (DECISIONS D-030). `workflow` is always blocked: a workflow's own TypeScript
+ * (`ctx.tool`, model-written definitions) runs on the host with no tool call to gate.
+ */
+const UNGATED_HELPERS = ["subagent", "workflow", "fleet"];
+const HELPER_TOOLS = ["subagent", "fleet", "roundtable"];
 /** In a computer, only these run: each one is redirected into it. */
 // Plus `mcp`, Orphus's MCP gateway, when the owner granted the bot a connection:
 // it only talks to those servers, so it is safe to run outside the computer.
-const COMPUTER_TOOLS = ["read", "write", "edit", "bash", "request_takeover", "share_file", ...(process.env.ORPHUSBOT_MCP ? ["mcp"] : [])];
-/**
- * Tools that run helper agents. Their helpers' own tool calls never reach this
- * gate (checked: a subagent's bash ran unasked), so they are blocked everywhere,
- * even without a computer (DECISIONS D-030).
- */
-const UNGATED_HELPERS = ["subagent", "workflow", "fleet"];
+const COMPUTER_TOOLS = [
+  "read", "write", "edit", "bash", "request_takeover", "share_file",
+  ...(process.env.ORPHUSBOT_MCP ? ["mcp"] : []),
+  // Fleets: helpers whose calls come back through this gate and into the computer.
+  ...(process.env.ORPHUSBOT_HELPERS_GATED === "1" ? HELPER_TOOLS : []),
+];
 const IMAGES: Record<string, string> = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
 };
@@ -153,12 +161,39 @@ async function inComputer(script: string, args: string[] = [], input?: Buffer): 
   });
 }
 
+/**
+ * The engine's own dialogs, shared with helper agents. Orphus runs a helper
+ * (subagent, workflow stage, fleet member) as another session in this same
+ * process; when the node installs this file where helpers load it too, their
+ * copies ask through the engine's channel, so their calls are gated and run in
+ * the computer like the bot's own (DESIGN §11.2).
+ */
+type Dialogs = { input(title: string, placeholder?: string): Promise<string | undefined>; confirm(title: string, message: string): Promise<boolean> };
+const SHARED = Symbol.for("orphusbot.dialogs");
+const shared = globalThis as unknown as Record<symbol, Dialogs | undefined>;
+function dialogs(ctx: { mode: string; ui: Dialogs }): Dialogs | undefined {
+  if (ctx.mode === "rpc") shared[SHARED] = ctx.ui;
+  return ctx.mode === "rpc" ? ctx.ui : shared[SHARED];
+}
+/** Set by the node when helpers load this file too (see `dialogs`). */
+const helpersGated = process.env.ORPHUSBOT_HELPERS_GATED === "1";
+
+/** Sessions this bridge is already set up in: the file may load twice in one (CLI and project). */
+const LOADED = Symbol.for("orphusbot.bridge.sessions");
+const loaded = ((globalThis as unknown as Record<symbol, WeakSet<object>>)[LOADED] ??= new WeakSet());
+
 export default function (pi: ExtensionAPI) {
+  if (loaded.has(pi)) return;
+  loaded.add(pi);
+  pi.on("session_start", async (_event, ctx) => {
+    dialogs(ctx);
+  });
   pi.on("tool_call", async (event, ctx) => {
-    if (ctx.mode !== "rpc") {
+    const ui = dialogs(ctx);
+    if (!ui) {
       return { block: true, reason: "orphusbot-bridge only runs under orphusbot-node." };
     }
-    if (UNGATED_HELPERS.includes(event.toolName)) {
+    if (UNGATED_HELPERS.includes(event.toolName) && (!helpersGated || event.toolName === "workflow")) {
       return { block: true, reason: `${event.toolName} starts helpers whose actions OrphusBot can't check, so it is switched off. Do the work yourself.` };
     }
     // Anything else (an MCP tool, another extension's tool) would run on the host.
@@ -171,8 +206,9 @@ export default function (pi: ExtensionAPI) {
       input: event.input,
       // Lets the server tell a file edit inside the computer (reversible) from one on the host.
       inComputer: !!computer,
+      helpersGated,
     });
-    const answer = await ctx.ui.input(GATE_TITLE, request);
+    const answer = await ui.input(GATE_TITLE, request);
     if (answer === "allow") return;
     const reason = typeof answer === "string" && answer.startsWith("deny:")
       ? answer.slice("deny:".length)
@@ -276,7 +312,7 @@ export default function (pi: ExtensionAPI) {
       if (!hasScreen) {
         return { content: [{ type: "text", text: "This computer has no screen, so the owner can't take over." }], details: {} };
       }
-      const done = await ctx.ui.confirm(TAKEOVER_TITLE, params.reason);
+      const done = await (dialogs(ctx) ?? ctx.ui).confirm(TAKEOVER_TITLE, params.reason);
       const text = done
         ? "The owner says they're done. Check the screen, then carry on."
         : "The owner couldn't do it. Find another way, or say what is blocking you.";

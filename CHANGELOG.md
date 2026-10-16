@@ -13,6 +13,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **Fleets (M6.3):** start a message or a routine with `/fleet <name> <task>` (for example `/fleet research-team compare e-bike batteries`) and an Orphus fleet does the work. Every helper it starts asks you first, and every helper's actions are checked and run in the bot's computer, just like the bot's own. Orphus workflows stay switched off.
 - **Computers in E2B (M4.5):** tick "In E2B" on a bot and its computer is a cloud sandbox instead of a container on your machines. Set `ORPHUSBOT_E2B_API_KEY` on the server. The bot's thinking still happens on your machine with your subscriptions; only its commands and files go to E2B. The sandbox pauses itself when idle and picks up where it left off.
 - **Files from your bots (M6.2):** a bot can hand you a file it made (a report, a spreadsheet, an image, up to 10 MB). It shows in the chat as a download link; sharing the same name again adds a new version.
 - **Connections (M6.1):** Settings → **Connections** adds an MCP server (name, address and an optional token) and picks which bots may use it. A bot searches its tools on its own; every call that does something asks you first, by name (for example "Allow Inbox to use mcp:pa_mail_list?"), and **Always allow** covers only that one tool. Tokens are encrypted on the server (set `ORPHUSBOT_SECRET_KEY_FILE`) and hidden as `[secret]` anywhere they would show up.

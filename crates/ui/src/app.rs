@@ -1211,6 +1211,7 @@ fn RoutineForm(
             </label>
             <label>"Instruction"<textarea rows=3 required maxlength="8000" bind:value=prompt
                 placeholder="Check my inbox for anything from customers and summarise it"></textarea></label>
+            <p class="muted">"To have a fleet do it, start with its name: /fleet research-team compare this week's e-bike prices"</p>
             <fieldset>
                 <legend>"When"</legend>
                 {[("schedule", "On a schedule"), ("once", "Once"), ("webhook", "Only when its webhook is called")].map(|(m, label)| view! {

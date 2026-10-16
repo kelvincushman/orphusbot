@@ -60,7 +60,7 @@ Full detail: [docs/DESIGN.md](docs/DESIGN.md).
 | **M3 System 1 + wearable** ✅ | Laya triage and approvals, tickets, routines, wearable tasks with the full duplex loop |
 | **M4 Reach + capture** ✅ | Android app, push, usage tracking, ambient capture, computers in E2B (needs your E2B key) |
 | **M5 Learning** ✅ | Label capture, calibration, apply and rollback. In-process Laya deferred ([D-028](docs/DECISIONS.md)) |
-| **M6 Breadth** ✅ | MCP connections, secrets, artifacts. Fleets and workflows as run targets wait on Orphus ([D-030](docs/DECISIONS.md)) |
+| **M6 Breadth** ✅ | MCP connections, secrets, artifacts, fleets (`/fleet <name> <task>`). Workflows stay off: their own code can't be gated ([D-032](docs/DECISIONS.md)) |
 
 ## Documentation
 

@@ -1212,6 +1212,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures-util",
+ "hex",
+ "openssl",
  "orphusbot-proto",
  "serde_json",
  "tokio",
@@ -1237,6 +1239,8 @@ dependencies = [
  "axum",
  "futures-util",
  "getrandom 0.4.3",
+ "hex",
+ "openssl",
  "orphusbot-proto",
  "serde",
  "serde_json",

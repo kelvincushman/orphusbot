@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "delete from node where id = $1 returning name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "node",
+            "name": "name"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "744e4b1d5b85c354ce511fbdf598333c4d7cd0042ca3e141e7b4d1daa22556b1"
+}

@@ -2,25 +2,27 @@
 //! `orphus --mode rpc` engine for the one bot (DESIGN §4).
 
 mod engine;
+mod key;
 
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
 
 use anyhow::{Context, bail};
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{SinkExt, Stream, StreamExt};
+use key::NodeKey;
 use orphusbot_proto::{Attempt, FromNode, ToNode};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::mpsc;
-use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-use tokio_tungstenite::tungstenite::http::HeaderValue;
+use tokio_tungstenite::tungstenite::{self, Message};
 use tracing::{info, warn};
 
 struct Config {
     server: String,
-    token: String,
+    /// Used when enrolling; after that the name comes from the key file.
     name: String,
+    key_path: PathBuf,
     orphus: String,
     session_dir: String,
 }
@@ -35,8 +37,10 @@ async fn main() -> anyhow::Result<()> {
     let cfg = Config {
         server: std::env::var("ORPHUSBOT_SERVER")
             .unwrap_or_else(|_| "ws://127.0.0.1:7480/node".into()),
-        token: std::env::var("ORPHUSBOT_NODE_TOKEN").context("ORPHUSBOT_NODE_TOKEN is not set")?,
         name: std::env::var("ORPHUSBOT_NODE_NAME").unwrap_or_else(|_| hostname()),
+        key_path: std::env::var("ORPHUSBOT_NODE_KEY")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| format!("{home}/.config/orphusbot/node.json").into()),
         orphus: std::env::var("ORPHUS_BIN").unwrap_or_else(|_| "orphus".into()),
         session_dir: std::env::var("ORPHUSBOT_SESSION_DIR")
             .unwrap_or_else(|_| format!("{home}/.local/share/orphusbot/sessions")),
@@ -45,10 +49,18 @@ async fn main() -> anyhow::Result<()> {
         bail!("ORPHUSBOT_SERVER must be a ws:// or wss:// URL");
     }
 
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match args.as_slice() {
+        [] => {}
+        [cmd, code] if cmd == "enrol" || cmd == "enroll" => return enrol(&cfg, code).await,
+        _ => bail!("usage: orphusbot-node [enrol <code>]"),
+    }
+    let key = NodeKey::load(&cfg.key_path)?;
+
     // Reconnect forever, backing off up to 30 s.
     let mut backoff = 1;
     loop {
-        match session(&cfg).await {
+        match session(&cfg, &key).await {
             Ok(()) => backoff = 1,
             Err(e) => warn!("link: {e:#}"),
         }
@@ -64,25 +76,72 @@ fn hostname() -> String {
         .unwrap_or_else(|_| "node".into())
 }
 
-/// One connection to the server, until it drops.
-async fn session(cfg: &Config) -> anyhow::Result<()> {
-    let mut req = cfg.server.as_str().into_client_request()?;
-    req.headers_mut().insert(
-        "authorization",
-        HeaderValue::from_str(&format!("Bearer {}", cfg.token))?,
-    );
-    let (ws, _) = tokio_tungstenite::connect_async(req)
+/// Waits for the server's first frame, its challenge nonce.
+async fn challenge<S>(stream: &mut S) -> anyhow::Result<String>
+where
+    S: Stream<Item = Result<Message, tungstenite::Error>> + Unpin,
+{
+    match stream.next().await {
+        Some(Ok(Message::Text(text))) => match serde_json::from_str(&text)? {
+            ToNode::Challenge { nonce } => Ok(nonce),
+            _ => bail!("the server didn't start with a challenge"),
+        },
+        Some(Err(e)) => Err(e.into()),
+        _ => bail!("the server closed the link before its challenge"),
+    }
+}
+
+/// `orphusbot-node enrol <code>`: make a key, register it with a one-time
+/// code from the web page, and save it (DESIGN §4.1).
+async fn enrol(cfg: &Config, code: &str) -> anyhow::Result<()> {
+    let key = NodeKey::generate(cfg.name.clone())?;
+    let (ws, _) = tokio_tungstenite::connect_async(cfg.server.as_str())
         .await
         .context("connecting to the server")?;
     let (mut sink, mut stream) = ws.split();
-    info!(server = %cfg.server, "connected");
+    challenge(&mut stream).await?;
+    let enrol = FromNode::Enrol {
+        code: code.trim().to_owned(),
+        node: key.name.clone(),
+        public_key: key.public_hex()?,
+    };
+    sink.send(Message::text(serde_json::to_string(&enrol)?))
+        .await?;
+    while let Some(frame) = stream.next().await {
+        let Message::Text(text) = frame? else {
+            continue;
+        };
+        if let ToNode::Enrolled { error } = serde_json::from_str(&text)? {
+            if let Some(error) = error {
+                bail!("{error}");
+            }
+            key.save(&cfg.key_path)?;
+            println!(
+                "Enrolled as \"{}\". The key is in {}. Start the node with `orphusbot-node`.",
+                key.name,
+                cfg.key_path.display()
+            );
+            return Ok(());
+        }
+    }
+    bail!("the server closed the link without answering")
+}
 
+/// One connection to the server, until it drops.
+async fn session(cfg: &Config, key: &NodeKey) -> anyhow::Result<()> {
+    let (ws, _) = tokio_tungstenite::connect_async(cfg.server.as_str())
+        .await
+        .context("connecting to the server")?;
+    let (mut sink, mut stream) = ws.split();
+    let nonce = challenge(&mut stream).await?;
     let hello = FromNode::Hello {
-        node: cfg.name.clone(),
+        node: key.name.clone(),
         version: env!("CARGO_PKG_VERSION").into(),
+        signature: key.sign(&nonce)?,
     };
     sink.send(Message::text(serde_json::to_string(&hello)?))
         .await?;
+    info!(server = %cfg.server, node = %key.name, "connected");
 
     // Frames from the engine reader go out through one channel.
     let (out_tx, mut out_rx) = mpsc::channel::<FromNode>(256);
@@ -118,6 +177,7 @@ async fn session(cfg: &Config) -> anyhow::Result<()> {
                             e.command(r#"{"type":"abort"}"#).await.ok();
                         }
                     }
+                    Ok(ToNode::Challenge { .. } | ToNode::Enrolled { .. }) => {}
                     Err(e) => warn!("unreadable frame from server: {e}"),
                 }
             }

@@ -100,13 +100,13 @@ pub struct Session {
     passkey: Option<i64>,
 }
 
-fn random_token() -> anyhow::Result<String> {
+pub(crate) fn random_token() -> anyhow::Result<String> {
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes).map_err(|e| anyhow::anyhow!("no OS randomness: {e}"))?;
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
 
-fn digest(token: &str) -> Vec<u8> {
+pub(crate) fn digest(token: &str) -> Vec<u8> {
     Sha256::digest(token.as_bytes()).to_vec()
 }
 
@@ -463,7 +463,6 @@ mod tests {
             live: tokio::sync::broadcast::channel(16).0,
             rt: Mutex::default(),
             auth: Auth::new(ORIGIN, SETUP.into()).unwrap(),
-            node_token: "node-token-for-tests".into(),
         })
     }
 

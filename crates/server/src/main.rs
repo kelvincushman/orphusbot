@@ -991,6 +991,7 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
     publish(app, None, Some(&bot.slug), event);
     device::run_news(app, run, device::RunNews::Running).await;
     spec.mcp = connections::for_bot(app, &bot.slug).await;
+    spec.instructions.push_str(bots::HOUSE_STYLE);
     if let Ok(roster) = bots::all(&app.db).await
         && let Some(note) = team::roster_note(&roster, &bot.slug)
     {

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "kelvincushman.orphusbot",
+  "name": "OrphusBot",
+  "version": "0.1.0",
+  "author": "kelvincushman",
+  "license": "MIT",
+  "description": "Your OrphusBot bots in the Omarchy bar: what they're doing, approvals to answer, and a box to message them.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "OrphusBot",
+    "description": "See your bots at a glance, answer their approvals, and send them a message.",
+    "category": "Productivity",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "command": "orphusbot"
+    },
+    "schema": [
+      {
+        "key": "command",
+        "type": "string",
+        "label": "The orphusbot command",
+        "placeholder": "orphusbot",
+        "defaultValue": "orphusbot"
+      }
+    ]
+  }
+}

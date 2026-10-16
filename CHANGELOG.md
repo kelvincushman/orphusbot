@@ -13,6 +13,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **OrphusBot on Omarchy (M8.3):** a bar widget that shows when your bots are working and turns urgent when one needs you, a panel to answer approvals and message any bot, notifications, and `SUPER+ALT+B` to open it. It runs on the new `orphusbot` command (`link`, `status`, `watch`, `answer`, `send`), which works on its own too. Setup is in `omarchy/kelvincushman.orphusbot/README.md`.
 - **Bots work as a team (M8.2):** a bot can hand a teammate part of the job ("ask Coder to write the benchmark"); it becomes a ticket for that bot, and the answer comes back to the asking bot, which carries on. Each bot knows who is on the team, and team bots share a `/shared` folder.
 - **A model drop-down when setting up a bot:** pick from every model your machines can use, or type one under Other.
 - **Laptops work unplugged above 30% battery** (`ORPHUSBOT_MIN_BATTERY` on the node).

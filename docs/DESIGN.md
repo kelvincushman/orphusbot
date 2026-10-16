@@ -334,8 +334,9 @@ if class == reversible and ans.verdict == pass         → allow
   - approving or denying a card;
   - reassigning a task;
   - changing urgency;
-  - accepting or dismissing a capture proposal;
-  - marking a run's result good or bad.
+  - keeping the bot System 1 picked (starting or finishing the ticket with it).
+- **Built (M5.1):** changing a triaged ticket's urgency labels it with the new level (agreeing when that was Laya's most likely level); starting a triaged ticket with **Start**, or moving it to done, with the bot System 1 picked labels that pick as right, once per decision. Without this, the only bot labels were corrections, so every fit would have seen System 1 as always wrong.
+- **Not labels, on purpose:** accepting or dismissing a capture proposal, and a run's result. System 1 only decides whether to *skip* a capture window or a routine, and a skipped one never produces a proposal or a result, so those actions can't say whether a skip was right; they judge System 2's work instead.
 - **Calibration** (`decisions.calibrate`, manual) exports labels to JSONL, then runs Laya's `laya.calibrate` (Python, on the GPU box) through a small CLI wrapper. It reads back proposed temperatures and thresholds and shows before/after metrics on a held-out time slice. **Apply** makes it active; **rollback** re-activates the previous row.
 - **Fine-tuning** (M5+) is the same flow with `laya-train` and an ONNX export. The resulting checkpoint is trained on Kelvin's private conversations, so it is **never published** (§17).
 

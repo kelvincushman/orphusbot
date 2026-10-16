@@ -25,6 +25,13 @@ Panel {
   property string chosenBot: "inbox"
   property string note: ""
 
+  // The chosen bot's entry in the status, for its state and latest reply.
+  readonly property var chosen: {
+    var bots = status.bots || []
+    for (var i = 0; i < bots.length; i++) if (bots[i].slug === chosenBot) return bots[i]
+    return null
+  }
+
   // The bar sizes each slot from the root's implicit size (see the NetBird widget).
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
@@ -258,6 +265,21 @@ Panel {
             text: "Send"; bordered: true; foreground: root.foreground; fontFamily: root.fontFamily
             onClicked: root.send()
           }
+        }
+
+        // What the chosen bot is doing, and its latest answer.
+        Text {
+          visible: root.chosen !== null
+          width: parent.width
+          text: !root.chosen ? ""
+            : (root.chosen.state === "running" || root.chosen.state === "queued")
+              ? root.chosen.name + " is working…"
+              : (root.chosen.reply ? root.chosen.name + ": " + root.chosen.reply : root.chosen.name + " hasn't said anything yet.")
+          textFormat: Text.PlainText
+          color: root.chosen && root.chosen.reply && root.chosen.state === "idle" ? root.foreground : root.dim
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.body
+          wrapMode: Text.WordWrap
         }
       }
     }

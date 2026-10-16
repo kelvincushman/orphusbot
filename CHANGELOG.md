@@ -59,6 +59,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Fixed
 
+- The Omarchy panel now shows the chosen bot's reply (and "working…" while it thinks), and the "finished" notification carries the reply; before, a message sent from the panel was answered but you never saw the answer.
 - Bots without a computer could start Orphus helpers (`subagent`, `workflow`, `fleet`) once you approved that call, and the helpers then ran commands without asking. Those tools are now refused everywhere.
 - Choice lists (a bot's thinking level, a ticket's bot, urgency and status, a routine's bot and schedule) showed their first option instead of the saved one, so editing a bot could reset its thinking level. They now show the saved value.
 - The ticket board now refreshes while it's open, so a bot System 1 assigns to a new ticket appears without reopening it.

@@ -12,6 +12,7 @@ mod gate;
 mod links;
 mod nodes;
 mod placement;
+mod routines;
 mod runs;
 mod screens;
 mod system1;
@@ -206,6 +207,7 @@ async fn main() -> anyhow::Result<()> {
         ui_dir,
     });
     tokio::spawn(reconcile_forever(app.clone()));
+    tokio::spawn(routines::schedule_forever(app.clone()));
 
     let router = router(app);
 
@@ -231,6 +233,9 @@ fn router(app: Shared) -> Router {
         .route("/api/bots", get(bots::list).post(bots::create))
         .route("/api/bots/update", post(bots::update))
         .route("/api/decisions", get(system1::list))
+        .route("/api/routines", get(routines::list).post(routines::save))
+        .route("/api/routines/delete", post(routines::delete))
+        .route("/api/routines/run", post(routines::run_now))
         .route("/api/screen", get(screens::open))
         .route("/api/links/{code}", get(links::lookup))
         .route("/api/links/approve", post(links::approve))
@@ -245,6 +250,8 @@ fn router(app: Shared) -> Router {
         .route("/auth/login/finish", post(auth::login_finish))
         .route("/auth/link/start", post(links::start))
         .route("/auth/link/poll", post(links::poll))
+        // Public: the secret token in the path is the credential.
+        .route("/hooks/routine/{token}", post(routines::hook))
         .route("/node", get(node_link))
         .merge(api)
         .fallback_service(ServeDir::new(&app.ui_dir))

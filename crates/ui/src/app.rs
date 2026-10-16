@@ -323,6 +323,7 @@ fn Shell() -> impl IntoView {
     provide_context(desk);
     desk.load_bots(ctx);
     let settings = RwSignal::new(false);
+    let routines = RwSignal::new(false);
     let menu = RwSignal::new(false);
     // `None`: closed; `Some(None)`: a new bot; `Some(Some(bot))`: editing it.
     let editing = RwSignal::new(None::<Option<Bot>>);
@@ -371,6 +372,7 @@ fn Shell() -> impl IntoView {
                 } />
                 <button class="new-bot" on:click=move |_| { editing.set(Some(None)); menu.set(false); }>"+ New bot"</button>
                 <div class="spacer"></div>
+                <button on:click=move |_| { routines.set(true); menu.set(false); }>"Routines"</button>
                 <button on:click=move |_| settings.set(true)>"Settings"</button>
             </nav>
             <main class="chat">
@@ -402,6 +404,9 @@ fn Shell() -> impl IntoView {
             </Show>
             <Show when=move || ctx.bot_screen.get()>
                 <BotScreen />
+            </Show>
+            <Show when=move || routines.get()>
+                <Routines open=routines />
             </Show>
             {move || editing.get().map(|bot| view! { <BotSheet bot editing /> })}
         </div>
@@ -768,6 +773,246 @@ fn BotScreen() -> impl IntoView {
                 <div class="vnc" node_ref=host></div>
             </section>
         </div>
+    }
+}
+
+/// A routine, as the server lists it (server `routines::Routine`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+struct Routine {
+    id: i64,
+    bot: String,
+    name: String,
+    prompt: String,
+    cron: Option<String>,
+    timezone: String,
+    once_at: Option<String>,
+    webhook: bool,
+    preflight: bool,
+    active: bool,
+    next_at: Option<String>,
+    last_fired_at: Option<String>,
+}
+
+impl Routine {
+    fn when(&self) -> String {
+        let mut parts = Vec::new();
+        if let Some(cron) = &self.cron {
+            let preset = PRESETS
+                .iter()
+                .find(|(c, _)| c == cron)
+                .map(|(_, l)| (*l).to_owned());
+            parts.push(preset.unwrap_or_else(|| format!("cron {cron}")));
+        }
+        if let Some(once) = &self.once_at {
+            parts.push(format!("once at {}", once.replace('T', " ")));
+        }
+        if self.webhook {
+            parts.push("webhook".to_owned());
+        }
+        parts.join(" · ")
+    }
+}
+
+/// Schedules most people want, as cron (read in the routine's time zone).
+const PRESETS: [(&str, &str); 5] = [
+    ("0 8 * * *", "every day at 8:00"),
+    ("0 8 * * 1-5", "weekdays at 8:00"),
+    ("0 18 * * 5", "Fridays at 18:00"),
+    ("0 * * * *", "every hour"),
+    ("*/15 * * * *", "every 15 minutes"),
+];
+
+/// Routines: what each bot does on its own, and when (PRD B-RTN-01..03).
+#[component]
+fn Routines(open: RwSignal<bool>) -> impl IntoView {
+    let ctx = expect_context::<Ctx>();
+    let desk = expect_context::<Desk>();
+    let list = RwSignal::new(Vec::<Routine>::new());
+    let editing = RwSignal::new(None::<Routine>);
+    let hook_url = RwSignal::new(None::<String>);
+    let load = move || {
+        ctx.run(async move {
+            list.set(api::get("/api/routines").await?);
+            Ok(())
+        })
+    };
+    load();
+    let blank = move || Routine {
+        bot: desk.selected.get_untracked(),
+        cron: Some(PRESETS[0].0.to_owned()),
+        timezone: api::time_zone(),
+        active: true,
+        ..Routine::default()
+    };
+    let act = move |path: &'static str, id: i64, done: &'static str| {
+        ctx.run(async move {
+            api::post(path, &json!({ "id": id })).await?;
+            ctx.toast.set(done.into());
+            load();
+            Ok(())
+        })
+    };
+    let bot_name = move |slug: &str| {
+        desk.bots
+            .with(|b| b.iter().find(|b| b.slug == slug).map(|b| b.name.clone()))
+            .unwrap_or_else(|| slug.to_owned())
+    };
+    view! {
+        <div class="overlay" on:keydown=move |ev: KeyboardEvent| if ev.key() == "Escape" { open.set(false) }>
+            <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="routines-title">
+                <header>
+                    <h2 id="routines-title">"Routines"</h2>
+                    <button autofocus on:click=move |_| open.set(false)>"Close"</button>
+                </header>
+                <p class="muted">"Things a bot does on its own: on a schedule, once, or when something calls its webhook."</p>
+                <ul>
+                    <For each=move || list.get() key=|r| (r.id, r.active, r.next_at.clone(), r.last_fired_at.clone()) children=move |r| {
+                        let (id, edit) = (r.id, r.clone());
+                        let next = r.next_at.as_deref().map(|n| n.chars().take(16).collect::<String>()).unwrap_or_else(|| "—".into());
+                        view! {
+                            <li class="routine" class:off=!r.active>
+                                <span>
+                                    {r.name.clone()}
+                                    <small>{format!("{} · {}{}", bot_name(&r.bot), r.when(), if r.active { format!(" · next {next}") } else { " · paused".to_owned() })}</small>
+                                </span>
+                                <span class="row">
+                                    <button on:click=move |_| act("/api/routines/run", id, "Started.")>"Run now"</button>
+                                    <button on:click=move |_| { hook_url.set(None); editing.set(Some(edit.clone())); }>"Edit"</button>
+                                    <button class="danger" on:click=move |_| if confirmed("Delete this routine?") { act("/api/routines/delete", id, "Deleted.") }>"Delete"</button>
+                                </span>
+                            </li>
+                        }
+                    } />
+                </ul>
+                {move || list.with(Vec::is_empty).then(|| view! { <p class="muted">"No routines yet."</p> })}
+                {move || hook_url.get().map(|url| view! {
+                    <div class="card">
+                        <h2>"Webhook address"</h2>
+                        <p class="muted">"Shown once. Anything that POSTs here starts the routine; what it sends is given to the bot as data."</p>
+                        <pre>{url}</pre>
+                    </div>
+                })}
+                {move || match editing.get() {
+                    Some(r) => view! { <RoutineForm routine=r editing hook_url saved=Callback::new(move |_| load()) /> }.into_any(),
+                    None => view! { <button class="primary" on:click=move |_| { hook_url.set(None); editing.set(Some(blank())); }>"New routine"</button> }.into_any(),
+                }}
+            </section>
+        </div>
+    }
+}
+
+#[component]
+fn RoutineForm(
+    routine: Routine,
+    editing: RwSignal<Option<Routine>>,
+    hook_url: RwSignal<Option<String>>,
+    saved: Callback<()>,
+) -> impl IntoView {
+    let ctx = expect_context::<Ctx>();
+    let desk = expect_context::<Desk>();
+    // "schedule", "once" or "webhook".
+    let mode = RwSignal::new(if routine.cron.is_some() {
+        "schedule"
+    } else if routine.once_at.is_some() {
+        "once"
+    } else {
+        "webhook"
+    });
+    let name = RwSignal::new(routine.name.clone());
+    let bot = RwSignal::new(routine.bot.clone());
+    let prompt = RwSignal::new(routine.prompt.clone());
+    let cron = RwSignal::new(
+        routine
+            .cron
+            .clone()
+            .unwrap_or_else(|| PRESETS[0].0.to_owned()),
+    );
+    let once = RwSignal::new(routine.once_at.clone().unwrap_or_default());
+    let timezone = RwSignal::new(routine.timezone.clone());
+    let webhook = RwSignal::new(routine.webhook);
+    let preflight = RwSignal::new(routine.preflight);
+    let active = RwSignal::new(routine.active);
+    let is_new = routine.id == 0;
+    let save = move |ev: SubmitEvent| {
+        ev.prevent_default();
+        let m = mode.get_untracked();
+        let body = Routine {
+            name: name.get_untracked(),
+            bot: bot.get_untracked(),
+            prompt: prompt.get_untracked(),
+            cron: (m == "schedule").then(|| cron.get_untracked()),
+            once_at: (m == "once").then(|| once.get_untracked()),
+            timezone: timezone.get_untracked(),
+            webhook: m == "webhook" || webhook.get_untracked(),
+            preflight: preflight.get_untracked(),
+            active: active.get_untracked(),
+            ..routine.clone()
+        };
+        ctx.run(async move {
+            let res: serde_json::Value = api::post(
+                "/api/routines",
+                &serde_json::to_value(&body).map_err(|e| e.to_string())?,
+            )
+            .await?
+            .json()
+            .await
+            .map_err(|e| e.to_string())?;
+            if let Some(why) = res["error"].as_str() {
+                return Err(why.to_owned());
+            }
+            if let (Some(path), Some(w)) = (res["hook_path"].as_str(), web_sys::window()) {
+                hook_url.set(Some(format!(
+                    "{}{path}",
+                    w.location().origin().unwrap_or_default()
+                )));
+            }
+            editing.set(None);
+            saved.run(());
+            Ok(())
+        });
+    };
+    view! {
+        <form class="card routine-form" on:submit=save>
+            <h2>{if is_new { "New routine" } else { "Edit routine" }}</h2>
+            <label>"Name"<input required maxlength="60" bind:value=name placeholder="Morning customer check" /></label>
+            <label>"Bot"
+                <select on:change=move |ev| bot.set(event_target_value(&ev)) prop:value=move || bot.get()>
+                    <For each=move || desk.bots.get().into_iter().filter(|b| !b.disabled) key=|b| b.slug.clone()
+                        children=move |b| view! { <option value=b.slug.clone()>{b.name.clone()}</option> } />
+                </select>
+            </label>
+            <label>"Instruction"<textarea rows=3 required maxlength="8000" bind:value=prompt
+                placeholder="Check my inbox for anything from customers and summarise it"></textarea></label>
+            <fieldset>
+                <legend>"When"</legend>
+                {[("schedule", "On a schedule"), ("once", "Once"), ("webhook", "Only when its webhook is called")].map(|(m, label)| view! {
+                    <label class="inline"><input type="radio" name="mode" prop:checked=move || mode.get() == m on:change=move |_| mode.set(m) />{label}</label>
+                })}
+            </fieldset>
+            <Show when=move || mode.get() == "schedule">
+                <label>"Schedule"
+                    <select on:change=move |ev| { let v = event_target_value(&ev); if !v.is_empty() { cron.set(v) } }
+                        prop:value=move || if PRESETS.iter().any(|(c, _)| *c == cron.get()) { cron.get() } else { String::new() }>
+                        {PRESETS.map(|(c, l)| view! { <option value=c>{l}</option> })}
+                        <option value="">"Custom (cron)"</option>
+                    </select>
+                </label>
+                <label>"Cron (minute hour day month weekday)"<input bind:value=cron /></label>
+            </Show>
+            <Show when=move || mode.get() == "once">
+                <label>"At"<input type="datetime-local" bind:value=once /></label>
+            </Show>
+            <Show when=move || mode.get() != "webhook">
+                <label>"Time zone"<input bind:value=timezone /></label>
+                <label class="inline"><input type="checkbox" bind:checked=webhook />"Also give it a webhook"</label>
+            </Show>
+            <label class="inline"><input type="checkbox" bind:checked=preflight />"Ask System 1 first, and skip runs with nothing new"</label>
+            <label class="inline"><input type="checkbox" bind:checked=active />"Active"</label>
+            <div class="row">
+                <button class="primary">"Save routine"</button>
+                <button type="button" on:click=move |_| editing.set(None)>"Cancel"</button>
+            </div>
+        </form>
     }
 }
 

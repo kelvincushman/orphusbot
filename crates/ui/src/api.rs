@@ -28,6 +28,7 @@ export function openScreen(el, bot, viewOnly, onEnd) {
   return rfb;
 }
 export function setViewOnly(rfb, viewOnly) { rfb.viewOnly = viewOnly; }
+export function timeZone() { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; }
 export function closeScreen(rfb) { rfb.disconnect(); }
 export async function getPasskey(options) {
   const publicKey = PublicKeyCredential.parseRequestOptionsFromJSON(JSON.parse(options).publicKey);
@@ -47,6 +48,9 @@ extern "C" {
         view_only: bool,
         on_end: &js_sys::Function,
     ) -> JsValue;
+    /// The browser's IANA time zone, such as `Europe/London`.
+    #[wasm_bindgen(js_name = timeZone)]
+    pub fn time_zone() -> String;
     #[wasm_bindgen(js_name = setViewOnly)]
     pub fn set_view_only(rfb: &JsValue, view_only: bool);
     #[wasm_bindgen(js_name = closeScreen)]

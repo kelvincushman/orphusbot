@@ -103,6 +103,7 @@ All settings are environment variables.
 | `ORPHUSBOT_LAYA_TIMEOUT_MS` | `1500` | How long to wait for Laya before abstaining |
 | `ORPHUSBOT_ROUTE_THRESHOLD` | `0.85` | Confidence Laya needs to move an inbox message to another bot |
 | `ORPHUSBOT_GATE_THRESHOLD` | `0.95` | Confidence Laya needs to let a file change inside a bot's computer through (never below 0.9) |
+| `ORPHUSBOT_ROUTINE_RUNS_PER_DAY` | `20` | How many runs routines may start per day, across all routines (PRD Q3) |
 | `ORPHUSBOT_BIND` | `127.0.0.1:7480` | Address to listen on. Bind to your NetBird address to reach it from other machines; **never** to a public interface |
 | `RUST_LOG` | off | Log level, e.g. `info` |
 

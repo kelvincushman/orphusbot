@@ -100,6 +100,7 @@ impl ThreadView {
                     self.items.push(Item::Notice { text, error });
                 }
             }
+            ThreadEvent::Notice { text } => self.items.push(Item::Notice { text, error: false }),
             ThreadEvent::Routed { name, sure, .. } => self.items.push(Item::Notice {
                 text: format!("Sent to {name} (System 1 was {sure}% sure)"),
                 error: false,

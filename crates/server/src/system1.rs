@@ -224,6 +224,44 @@ impl System1 {
     }
 }
 
+impl System1 {
+    /// Pre-flight (DESIGN §7.2 `preflight.worth_running`): is a routine worth running now?
+    /// Skips only when System 1 is sure there's nothing to do; abstaining fires it.
+    pub async fn worth_running(&self, db: &PgPool, state: &str) -> bool {
+        if !self.enabled() {
+            return true;
+        }
+        let state: String = state.chars().take(MAX_STATE_CHARS).collect();
+        let questions = json!({ "worth_running": {
+            "type": "noul",
+            "instructions": "Is there likely something new for this routine to do now, given what it is for and what it found last time?",
+        }});
+        let asked = self.ask(&state, questions).await;
+        let yes = asked
+            .answers
+            .as_ref()
+            .and_then(|a| a["worth_running"]["noul"].as_f64());
+        // Sure it's a no-op: the probability of "yes" is at most 1 - threshold.
+        let skip = yes.is_some_and(|p| p <= 1.0 - self.route_threshold);
+        let receipt = Receipt {
+            catalogue: "preflight",
+            state: &state,
+            threshold: self.route_threshold,
+            confidence: yes.map(|p| 1.0 - p),
+            outcome: if skip {
+                "Skipped: nothing new"
+            } else {
+                "Fired"
+            }
+            .to_owned(),
+            run: None,
+            tool_call_id: None,
+        };
+        record(db, &receipt, &asked).await;
+        !skip
+    }
+}
+
 /// Laya's calibrated confidence in the chosen answer.
 fn confidence(answer: &Value) -> Option<f64> {
     answer["answer_confidence"].as_f64()

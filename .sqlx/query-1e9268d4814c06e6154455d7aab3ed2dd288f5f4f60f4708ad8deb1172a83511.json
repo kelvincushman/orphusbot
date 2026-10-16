@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update routine set next_at = to_timestamp($2) where id = $1 and active and next_at <= now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1e9268d4814c06e6154455d7aab3ed2dd288f5f4f60f4708ad8deb1172a83511"
+}

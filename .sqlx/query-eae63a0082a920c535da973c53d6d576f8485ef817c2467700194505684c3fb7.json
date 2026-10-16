@@ -1,0 +1,138 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select r.id, b.slug, r.name, r.prompt, r.cron, r.timezone,\n                  to_char(r.once_at at time zone r.timezone, 'YYYY-MM-DD\"T\"HH24:MI') as once_at,\n                  r.hook_hash is not null as \"webhook!\", r.preflight, r.active,\n                  r.next_at::text as next_at, r.last_fired_at::text as last_fired_at\n           from routine r join bot b on b.id = r.bot_id order by r.name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "routine",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "slug",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "slug"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "routine",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "prompt",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "routine",
+            "name": "prompt"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "cron",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "routine",
+            "name": "cron"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "timezone",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "routine",
+            "name": "timezone"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "once_at",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "webhook!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "preflight",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "routine",
+            "name": "preflight"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "active",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "routine",
+            "name": "active"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "next_at",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 11,
+        "name": "last_fired_at",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      null,
+      null,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "eae63a0082a920c535da973c53d6d576f8485ef817c2467700194505684c3fb7"
+}

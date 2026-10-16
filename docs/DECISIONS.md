@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-027: Thresholds are fitted in the server with Laya's cut; temperatures stay with Laya (2026-10-16)
+
+- **Context:** DESIGN §7.5 planned to run `laya.calibrate` on the GPU box. It fits per-bucket temperatures from Laya's raw logits, which needs the model and the full state; receipts keep only the calibrated `answer_confidence`, and states are cleared after 30 days.
+- **Decision:** OrphusBot fits only the thresholds it acts on (`triage.bot`, `gate.verdict`), in Rust, using Laya's conservative selective cut (`_select_abstention_threshold`) on the confidences in its receipts, with the newest fifth of labels held out. Temperature refits and fine-tuning stay with Laya's tools on the GPU box and arrive as a new checkpoint.
+- **Alternatives:** a Python wrapper around `laya.calibrate` (needs the model loaded, logits re-computed from states that may be gone, and Python in the server's path); one threshold for everything (doesn't transfer between a bot pick and a gate verdict).
+- **Consequences:** fitting is instant, works with no GPU and no Laya running, and is tested in Rust. A new Laya checkpoint changes the confidence scale, so its thresholds must be refitted after it is used for a while.
+
 ## D-026: The Android app is the desktop crate built for Android, and it signs in by device linking (2026-10-16)
 
 - **Context:** M4 needs OrphusBot on the phone. The desktop app (D-019) is already a thin window onto the server's web UI.

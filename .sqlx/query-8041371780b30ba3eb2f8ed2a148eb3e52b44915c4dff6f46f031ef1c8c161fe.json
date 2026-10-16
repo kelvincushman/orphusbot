@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update decision_model set active = false where active",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "8041371780b30ba3eb2f8ed2a148eb3e52b44915c4dff6f46f031ef1c8c161fe"
+}

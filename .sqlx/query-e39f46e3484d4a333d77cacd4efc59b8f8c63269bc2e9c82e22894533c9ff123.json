@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update decision_model set thresholds = '{\"gate.verdict\": 0.99}' where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e39f46e3484d4a333d77cacd4efc59b8f8c63269bc2e9c82e22894533c9ff123"
+}

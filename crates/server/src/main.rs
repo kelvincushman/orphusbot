@@ -7,6 +7,7 @@
 
 mod auth;
 mod bots;
+mod calibrate;
 mod capture;
 mod db;
 mod device;
@@ -217,6 +218,7 @@ async fn main() -> anyhow::Result<()> {
         notifier: notify::Notifier::from_env(&origin),
         ui_dir,
     });
+    calibrate::load(&app).await;
     tokio::spawn(reconcile_forever(app.clone()));
     tokio::spawn(routines::schedule_forever(app.clone()));
     tokio::spawn(device::expire_forever(app.clone()));
@@ -247,6 +249,10 @@ fn router(app: Shared) -> Router {
         .route("/api/bots/update", post(bots::update))
         .route("/api/decisions", get(system1::list))
         .route("/api/decisions/health", get(system1::health))
+        .route("/api/decisions/calibrations", get(calibrate::list))
+        .route("/api/decisions/fit", post(calibrate::fit))
+        .route("/api/decisions/apply", post(calibrate::apply))
+        .route("/api/decisions/rollback", post(calibrate::rollback))
         .route("/api/usage", get(usage::summary))
         .route("/api/routines", get(routines::list).post(routines::save))
         .route("/api/routines/delete", post(routines::delete))

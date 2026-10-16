@@ -1340,11 +1340,37 @@ fn Decisions(open: RwSignal<bool>) -> impl IntoView {
     let list = RwSignal::new(Vec::<Decision>::new());
     let health = RwSignal::new(Vec::<Value>::new());
     let filter = RwSignal::new(String::new());
+    let calibrations = RwSignal::new(Vec::<Value>::new());
+    let note = RwSignal::new(String::new());
     ctx.run(async move {
         list.set(api::get("/api/decisions").await?);
         health.set(api::get("/api/decisions/health").await?);
+        calibrations.set(api::get("/api/decisions/calibrations").await?);
         Ok(())
     });
+    // Apply, roll back or fit, then show the calibrations as they now are.
+    let change = move |path: &'static str, body: Value| {
+        ctx.run(async move {
+            let res: Value = api::post(path, &body)
+                .await?
+                .json()
+                .await
+                .unwrap_or_default();
+            if path.ends_with("/fit") {
+                note.set(match res["model"].is_null() {
+                    true => format!(
+                        "Not enough labels to fit yet: {}.",
+                        label_counts(&res["report"])
+                    ),
+                    false => {
+                        "Fitted. See how it does on your newest labels below, then apply it.".into()
+                    }
+                });
+            }
+            calibrations.set(api::get("/api/decisions/calibrations").await?);
+            Ok(())
+        })
+    };
     let shown = move || -> Vec<Decision> {
         let f = filter.get();
         list.get()
@@ -1359,7 +1385,7 @@ fn Decisions(open: RwSignal<bool>) -> impl IntoView {
                     <h2 id="decisions-title">"Decisions"</h2>
                     <button autofocus on:click=move |_| open.set(false)>"Close"</button>
                 </header>
-                <p class="muted">"What System 1 (Laya) decided. It only acts when it's sure enough; otherwise you're asked. Your approvals and corrections are kept as labels to calibrate it later."</p>
+                <p class="muted">"What System 1 (Laya) decided. It only acts when it's sure enough; otherwise you're asked. Your approvals and corrections are kept as labels to calibrate it."</p>
                 <ul class="health">
                     {move || health.get().into_iter().map(|h| {
                         let asked = h["asked"].as_i64().unwrap_or(0);
@@ -1368,6 +1394,34 @@ fn Decisions(open: RwSignal<bool>) -> impl IntoView {
                         let latency = h["latency_ms"].as_f64().map(|l| format!(" · {:.1} s average", l / 1000.0)).unwrap_or_default();
                         view! { <li><span><strong>{catalogue_name(h["catalogue"].as_str().unwrap_or_default())}</strong>
                             <small>{format!("{asked} asked · {} abstained · {labelled} labelled{agree}{latency}", h["abstained"].as_i64().unwrap_or(0))}</small></span></li> }
+                    }).collect_view()}
+                </ul>
+                <h3>"Calibration"</h3>
+                <p class="muted">"Fitting sets how sure System 1 must be from your labels, so it's wrong at most 1 time in 10 when picking a bot and 1 in 20 when letting a tool call through (never less than 90% sure). It's checked on your newest labels, which it doesn't learn from. Nothing changes until you apply it."</p>
+                <div class="row">
+                    <button on:click=move |_| change("/api/decisions/fit", json!({}))>"Fit from labels"</button>
+                    {move || calibrations.with(|c| c.iter().any(|c| c["active"] == true)).then(|| view! {
+                        <button on:click=move |_| change("/api/decisions/rollback", json!({}))>"Roll back"</button>
+                    })}
+                </div>
+                {move || (!note.get().is_empty()).then(|| view! { <p role="status">{note.get()}</p> })}
+                <ul class="calibrations">
+                    {move || calibrations.get().into_iter().map(|c| {
+                        let id = c["id"].as_i64().unwrap_or_default();
+                        let active = c["active"] == true;
+                        let when = day(c["fitted_at"].as_str().unwrap_or_default());
+                        view! {
+                            <li>
+                                <span>
+                                    <strong>{format!("Calibration {id}")}</strong>
+                                    <small>{if active { format!("fitted {when} · in use") } else { format!("fitted {when}") }}</small>
+                                    {calibration_lines(&c).into_iter().map(|l| view! { <small>{l}</small> }).collect_view()}
+                                </span>
+                                {(!active).then(|| view! {
+                                    <button on:click=move |_| change("/api/decisions/apply", json!({ "id": id }))>"Apply"</button>
+                                })}
+                            </li>
+                        }
                     }).collect_view()}
                 </ul>
                 <div class="row">
@@ -1397,6 +1451,49 @@ fn Decisions(open: RwSignal<bool>) -> impl IntoView {
             </section>
         </div>
     }
+}
+
+fn question_name(key: &str) -> &'static str {
+    match key {
+        "triage.bot" => "Which bot",
+        "gate.verdict" => "Tool calls",
+        _ => "Other",
+    }
+}
+
+/// "Which bot has 12 of 30 labels, Tool calls has 3 of 30 labels".
+fn label_counts(report: &Value) -> String {
+    let counts = report.as_object().into_iter().flatten();
+    let parts: Vec<String> = counts
+        .map(|(k, v)| {
+            format!(
+                "{} has {} of {} labels",
+                question_name(k),
+                v["labels"],
+                v["needs"]
+            )
+        })
+        .collect();
+    parts.join(", ")
+}
+
+/// One line per question: the new threshold and how it did on the held-out labels.
+fn calibration_lines(c: &Value) -> Vec<String> {
+    let pct = |v: &Value| v.as_f64().unwrap_or(0.0) * 100.0;
+    let report = c["report"].as_object().into_iter().flatten();
+    report
+        .map(|(k, v)| {
+            let name = question_name(k);
+            let (b, a) = (&v["before"], &v["after"]);
+            if a.is_null() {
+                return format!("{name}: kept as it was ({} of {} labels)", v["labels"], v["needs"]);
+            }
+            format!(
+                "{name}: needs {:.0}% sure (was {:.0}%). On your newest {} labels it would act {} times with {} wrong (was {} with {} wrong).",
+                pct(&a["threshold"]), pct(&b["threshold"]), v["held_out"], a["accepted"], a["errors"], b["accepted"], b["errors"]
+            )
+        })
+        .collect()
 }
 
 impl Decision {

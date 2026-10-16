@@ -27,7 +27,7 @@ use crate::{ApiError, Shared, internal, lock, tokens_match};
 const COOKIE: &str = "orphusbot_session";
 /// A setup session only has to last long enough to add a passkey.
 const SETUP_SESSION: Duration = Duration::from_secs(60 * 60);
-const SESSION: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+pub(crate) const SESSION: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 /// How long the browser has to finish a passkey prompt.
 const CEREMONY: Duration = Duration::from_secs(5 * 60);
 const MAX_NAME_CHARS: usize = 60;
@@ -83,7 +83,7 @@ impl Auth {
             .map(|(_, c)| c)
     }
 
-    fn cookie(&self, token: &str, ttl: Duration) -> String {
+    pub(crate) fn cookie(&self, token: &str, ttl: Duration) -> String {
         let secure = if self.secure { "; Secure" } else { "" };
         format!(
             "{COOKIE}={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age={}{secure}",
@@ -97,7 +97,7 @@ impl Auth {
 pub struct Session {
     hash: Vec<u8>,
     /// `None` for a setup session.
-    passkey: Option<i64>,
+    pub(crate) passkey: Option<i64>,
 }
 
 pub(crate) fn random_token() -> anyhow::Result<String> {
@@ -135,7 +135,7 @@ async fn current(db: &PgPool, headers: &HeaderMap) -> sqlx::Result<Option<Sessio
     Ok(passkey.map(|passkey| Session { hash, passkey }))
 }
 
-async fn create_session(
+pub(crate) async fn create_session(
     db: &PgPool,
     passkey: Option<i64>,
     ttl: Duration,
@@ -446,7 +446,7 @@ pub async fn remove_passkey(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use axum::body::{Body, to_bytes};
     use axum::http::Request as HttpRequest;
@@ -457,7 +457,7 @@ mod tests {
     const ORIGIN: &str = "http://localhost:7480";
     const SETUP: &str = "setup-token-for-tests";
 
-    fn app(db: PgPool) -> Shared {
+    pub(crate) fn app(db: PgPool) -> Shared {
         std::sync::Arc::new(crate::App {
             db,
             live: tokio::sync::broadcast::channel(16).0,
@@ -468,7 +468,7 @@ mod tests {
     }
 
     /// Sends one request; returns the status, the session cookie it set (if any) and the body.
-    async fn call(
+    pub(crate) async fn call(
         app: &Shared,
         path: &str,
         cookie: &str,

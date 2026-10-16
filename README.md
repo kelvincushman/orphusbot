@@ -4,7 +4,9 @@
 
 OrphusBot is an open-source, self-hosted bot service. You hand it a task from the web, your desktop, your Android phone or a one-button wearable, and named bots carry it out on real computers using the [Orphus](https://github.com/kelvincushman/orphus) agent harness and the Claude and ChatGPT subscriptions you already pay for. A fast decision model routes every task and checks every risky step, and every decision it makes is recorded so you can see it and correct it.
 
-> **Status: early development.** M0 and most of M1 work: a message from the browser streams a reply from Orphus on a node; runs survive a node dropping; risky tool calls wait for your approval; you sign in with a passkey. Everything else is designed but not built yet (see [Roadmap](#roadmap)). To run it, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md); to put it on your own network with HTTPS, [docs/DEPLOY.md](docs/DEPLOY.md). Issues and design feedback are welcome.
+> **Status: early development.** M0 and most of M1 work: a message from the browser streams a reply from Orphus on a node; runs survive a node dropping; risky tool calls wait for your approval; you sign in with a passkey; each machine enrols with its own key; and a Leptos web UI in the Rakazo layout ties it together. Everything else is designed but not built yet (see [Roadmap](#roadmap)). To run it, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md); to put it on your own network with HTTPS, [docs/DEPLOY.md](docs/DEPLOY.md). Issues and design feedback are welcome.
+
+![The OrphusBot web UI: a bot list on the left, and a chat with an approved write tool call on the right](docs/media/web-ui.png)
 
 ---
 

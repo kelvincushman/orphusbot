@@ -22,8 +22,8 @@ use axum::extract::ws::{Message as WsMessage, WebSocket, WebSocketUpgrade};
 use axum::extract::{Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::from_fn_with_state;
+use axum::response::Response;
 use axum::response::sse::{Event, KeepAlive, Sse};
-use axum::response::{Html, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use futures_util::{SinkExt, Stream, StreamExt};
@@ -36,9 +36,9 @@ use serde_json::{Value, json};
 use sqlx::PgPool;
 use subtle::ConstantTimeEq;
 use tokio::sync::{Notify, broadcast, mpsc};
+use tower_http::services::ServeDir;
 use tracing::{info, warn};
 
-const UI_HTML: &str = include_str!("ui.html");
 const MAX_MESSAGE_CHARS: usize = 32_000;
 const MIN_TOKEN_CHARS: usize = 16;
 /// How often leases are renewed and lapsed ones swept (DESIGN §3.3).
@@ -91,6 +91,8 @@ struct App {
     // ponytail: one std Mutex for all link state; per-node state when there is more than one node.
     rt: Mutex<Runtime>,
     auth: auth::Auth,
+    /// The built web UI (crates/ui/dist), served at `/`.
+    ui_dir: String,
 }
 
 type Shared = Arc<App>;
@@ -107,6 +109,12 @@ async fn main() -> anyhow::Result<()> {
     let origin =
         std::env::var("ORPHUSBOT_ORIGIN").unwrap_or_else(|_| "http://localhost:7480".into());
     let auth = auth::Auth::new(&origin, setup_token)?;
+    let ui_dir = std::env::var("ORPHUSBOT_UI_DIR").unwrap_or_else(|_| "crates/ui/dist".into());
+    if !std::path::Path::new(&ui_dir).join("index.html").exists() {
+        warn!(
+            "no web UI in {ui_dir}: run `trunk build --release` in crates/ui, or set ORPHUSBOT_UI_DIR"
+        );
+    }
 
     let db = PgPool::connect(&db_url)
         .await
@@ -136,6 +144,7 @@ async fn main() -> anyhow::Result<()> {
         live,
         rt: Mutex::default(),
         auth,
+        ui_dir,
     });
     tokio::spawn(reconcile_forever(app.clone()));
 
@@ -165,13 +174,13 @@ fn router(app: Shared) -> Router {
         .route("/api/nodes/remove", post(nodes::remove))
         .route_layer(from_fn_with_state(app.clone(), auth::require_session));
     Router::new()
-        .route("/", get(|| async { Html(UI_HTML) }))
         .route("/auth/state", get(auth::state))
         .route("/auth/setup", post(auth::setup))
         .route("/auth/login/start", post(auth::login_start))
         .route("/auth/login/finish", post(auth::login_finish))
         .route("/node", get(node_link))
         .merge(api)
+        .fallback_service(ServeDir::new(&app.ui_dir))
         .with_state(app)
 }
 

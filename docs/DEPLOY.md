@@ -33,6 +33,7 @@ This guide uses Cloudflare for DNS and [Caddy](https://caddyserver.com) for HTTP
        tls {
            dns cloudflare {env.CF_API_TOKEN}
        }
+       encode zstd gzip
        reverse_proxy 127.0.0.1:7480
    }
    ```
@@ -44,6 +45,7 @@ This guide uses Cloudflare for DNS and [Caddy](https://caddyserver.com) for HTTP
    ```sh
    ORPHUSBOT_BIND=127.0.0.1:7480
    ORPHUSBOT_ORIGIN=https://bots.example.com
+   ORPHUSBOT_UI_DIR=/opt/orphusbot/ui   # the contents of crates/ui/dist after `trunk build --release`
    ```
 
    With an `https` origin, session cookies are also marked `Secure`.

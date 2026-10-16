@@ -62,6 +62,10 @@ Full detail: [docs/DESIGN.md](docs/DESIGN.md).
 | **M5 Learning** ✅ | Label capture, calibration, apply and rollback. In-process Laya deferred ([D-028](docs/DECISIONS.md)) |
 | **M6 Breadth** ✅ | MCP connections, secrets, artifacts, fleets (`/fleet <name> <task>`). Workflows stay off: their own code can't be gated ([D-032](docs/DECISIONS.md)) |
 
+## On Omarchy
+
+The `orphusbot` command and an Omarchy bar widget put your bots in the bar: what they're doing, approvals to answer, and a box to message them (`SUPER+ALT+B`). See [omarchy/kelvincushman.orphusbot/README.md](omarchy/kelvincushman.orphusbot/README.md).
+
 ## Documentation
 
 | Document | What it covers |

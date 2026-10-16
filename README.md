@@ -4,7 +4,7 @@
 
 OrphusBot is an open-source, self-hosted bot service. You hand it a task from the web, your desktop, your Android phone or a one-button wearable, and named bots carry it out on real computers using the [Orphus](https://github.com/kelvincushman/orphus) agent harness and the Claude and ChatGPT subscriptions you already pay for. A fast decision model routes every task and checks every risky step, and every decision it makes is recorded so you can see it and correct it.
 
-> **Status: early development.** Milestone M0 works: a message from the browser streams a reply from Orphus on a node. Everything else is designed but not built yet (see [Roadmap](#roadmap)). To run it, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). Issues and design feedback are welcome.
+> **Status: early development.** M0 and most of M1 work: a message from the browser streams a reply from Orphus on a node; runs survive a node dropping; risky tool calls wait for your approval; you sign in with a passkey. Everything else is designed but not built yet (see [Roadmap](#roadmap)). To run it, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md); to put it on your own network with HTTPS, [docs/DEPLOY.md](docs/DEPLOY.md). Issues and design feedback are welcome.
 
 ---
 
@@ -68,6 +68,7 @@ Full detail: [docs/DESIGN.md](docs/DESIGN.md).
 | [docs/PRD.md](docs/PRD.md) | Product requirements: goals, requirements by area, user journeys, milestones, open questions |
 | [docs/DESIGN.md](docs/DESIGN.md) | Design: components, run loop, decision layer, computers, wearable duplex habitat, capture, security, testing, deployment |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Building, running and testing it locally |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | Running the server over NetBird with HTTPS and passkeys |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Decision log: what was decided, when and why |
 | [docs/research/rakazo-architecture.md](docs/research/rakazo-architecture.md) | The study of Rakazo that informed the design |
 | [wearable/README.md](wearable/README.md) | The wearable: firmware, companion app, hardware, device channel, its own docs |

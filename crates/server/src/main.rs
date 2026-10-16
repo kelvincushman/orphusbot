@@ -6,6 +6,7 @@
 //! lease lapses, the run goes back to the queue and resumes on the next node
 //! (DESIGN §3.2, §3.3).
 
+mod auth;
 mod db;
 mod gate;
 mod runs;
@@ -19,10 +20,11 @@ use anyhow::{Context, bail};
 use axum::extract::ws::{Message as WsMessage, WebSocket, WebSocketUpgrade};
 use axum::extract::{Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
+use axum::middleware::from_fn_with_state;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
-use axum::{Form, Json, Router};
+use axum::{Json, Router};
 use futures_util::{SinkExt, Stream, StreamExt};
 use orphusbot_proto::{
     Attempt, Dialog, DialogKind, FromNode, Role, RunOutcome, ThreadEvent, ToNode,
@@ -36,7 +38,6 @@ use tokio::sync::{broadcast, mpsc};
 use tracing::{info, warn};
 
 const UI_HTML: &str = include_str!("ui.html");
-const COOKIE: &str = "orphusbot_session";
 const MAX_MESSAGE_CHARS: usize = 32_000;
 const MIN_TOKEN_CHARS: usize = 16;
 /// How often leases are renewed and lapsed ones swept (DESIGN §3.3).
@@ -86,7 +87,7 @@ struct App {
     live: broadcast::Sender<Live>,
     // ponytail: one std Mutex for all link state; per-node state when there is more than one node.
     rt: Mutex<Runtime>,
-    ui_token: String,
+    auth: auth::Auth,
     node_token: String,
 }
 
@@ -100,7 +101,10 @@ async fn main() -> anyhow::Result<()> {
 
     let bind = std::env::var("ORPHUSBOT_BIND").unwrap_or_else(|_| "127.0.0.1:7480".into());
     let db_url = std::env::var("DATABASE_URL").context("DATABASE_URL is not set")?;
-    let ui_token = token_from_env("ORPHUSBOT_UI_TOKEN")?;
+    let setup_token = token_from_env("ORPHUSBOT_SETUP_TOKEN")?;
+    let origin =
+        std::env::var("ORPHUSBOT_ORIGIN").unwrap_or_else(|_| "http://localhost:7480".into());
+    let auth = auth::Auth::new(&origin, setup_token)?;
     let node_token = token_from_env("ORPHUSBOT_NODE_TOKEN")?;
 
     let db = PgPool::connect(&db_url)
@@ -130,27 +134,42 @@ async fn main() -> anyhow::Result<()> {
         db,
         live,
         rt: Mutex::default(),
-        ui_token,
+        auth,
         node_token,
     });
     tokio::spawn(reconcile_forever(app.clone()));
 
-    let router = Router::new()
-        .route("/", get(|| async { Html(UI_HTML) }))
-        .route("/login", post(login))
-        .route("/api/messages", post(send_message))
-        .route("/api/runs/cancel", post(cancel_run))
-        .route("/api/dialogs/answer", post(answer_dialog))
-        .route("/api/events", get(events))
-        .route("/node", get(node_link))
-        .with_state(app);
+    let router = router(app);
 
     let listener = tokio::net::TcpListener::bind(&bind)
         .await
         .with_context(|| format!("binding {bind}"))?;
-    info!("listening on http://{bind}");
+    info!("listening on http://{bind}; browsers sign in at {origin}");
     axum::serve(listener, router).await?;
     Ok(())
+}
+
+fn router(app: Shared) -> Router {
+    let api = Router::new()
+        .route("/api/messages", post(send_message))
+        .route("/api/runs/cancel", post(cancel_run))
+        .route("/api/dialogs/answer", post(answer_dialog))
+        .route("/api/events", get(events))
+        .route("/api/passkeys", get(auth::list_passkeys))
+        .route("/api/passkeys/start", post(auth::register_start))
+        .route("/api/passkeys/finish", post(auth::register_finish))
+        .route("/api/passkeys/remove", post(auth::remove_passkey))
+        .route("/api/logout", post(auth::logout))
+        .route_layer(from_fn_with_state(app.clone(), auth::require_session));
+    Router::new()
+        .route("/", get(|| async { Html(UI_HTML) }))
+        .route("/auth/state", get(auth::state))
+        .route("/auth/setup", post(auth::setup))
+        .route("/auth/login/start", post(auth::login_start))
+        .route("/auth/login/finish", post(auth::login_finish))
+        .route("/node", get(node_link))
+        .merge(api)
+        .with_state(app)
 }
 
 fn token_from_env(name: &str) -> anyhow::Result<String> {
@@ -163,34 +182,6 @@ fn token_from_env(name: &str) -> anyhow::Result<String> {
 
 fn tokens_match(given: &str, expected: &str) -> bool {
     given.as_bytes().ct_eq(expected.as_bytes()).into()
-}
-
-// ponytail: the cookie holds the shared UI token itself; passkeys and real sessions replace this in M1.3 (PRD B-CLI-06).
-fn signed_in(app: &App, headers: &HeaderMap) -> bool {
-    headers
-        .get_all(header::COOKIE)
-        .iter()
-        .filter_map(|v| v.to_str().ok())
-        .flat_map(|v| v.split(';'))
-        .filter_map(|kv| kv.trim().split_once('='))
-        .any(|(k, v)| k == COOKIE && tokens_match(v, &app.ui_token))
-}
-
-#[derive(Deserialize)]
-struct LoginForm {
-    token: String,
-}
-
-async fn login(State(app): State<Shared>, Form(form): Form<LoginForm>) -> Response {
-    if !tokens_match(&form.token, &app.ui_token) {
-        return (StatusCode::UNAUTHORIZED, "Wrong token").into_response();
-    }
-    let cookie = format!("{COOKIE}={}; HttpOnly; SameSite=Strict; Path=/", form.token);
-    (
-        StatusCode::SEE_OTHER,
-        [(header::SET_COOKIE, cookie), (header::LOCATION, "/".into())],
-    )
-        .into_response()
 }
 
 type ApiError = (StatusCode, &'static str);
@@ -212,12 +203,8 @@ struct NewMessage {
 /// running one (B-RUN-01).
 async fn send_message(
     State(app): State<Shared>,
-    headers: HeaderMap,
     Json(msg): Json<NewMessage>,
 ) -> Result<StatusCode, ApiError> {
-    if !signed_in(&app, &headers) {
-        return Err((StatusCode::UNAUTHORIZED, "Sign in first"));
-    }
     let text = msg.text.trim().to_owned();
     if text.is_empty() || text.chars().count() > MAX_MESSAGE_CHARS {
         return Err((
@@ -257,10 +244,7 @@ async fn send_message(
 }
 
 /// Stops the thread's active run (B-RUN-03).
-async fn cancel_run(State(app): State<Shared>, headers: HeaderMap) -> Result<StatusCode, ApiError> {
-    if !signed_in(&app, &headers) {
-        return Err((StatusCode::UNAUTHORIZED, "Sign in first"));
-    }
+async fn cancel_run(State(app): State<Shared>) -> Result<StatusCode, ApiError> {
     let Some((run, fence)) = runs::cancel_active(&app.db)
         .await
         .map_err(|e| internal("cancelling run", e))?
@@ -302,12 +286,8 @@ fn ui_response(id: &str, field: &str, value: Value) -> Value {
 /// The owner answers an approval card or a question (B-RUN-05, B-CLI-04).
 async fn answer_dialog(
     State(app): State<Shared>,
-    headers: HeaderMap,
     Json(answer): Json<Answer>,
 ) -> Result<StatusCode, ApiError> {
-    if !signed_in(&app, &headers) {
-        return Err((StatusCode::UNAUTHORIZED, "Sign in first"));
-    }
     let Some(pending) = lock(&app.rt).dialogs.remove(&answer.id) else {
         return Err((StatusCode::GONE, "That question is no longer open"));
     };
@@ -580,9 +560,6 @@ async fn events(
     headers: HeaderMap,
     Query(q): Query<EventsQuery>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, StatusCode> {
-    if !signed_in(&app, &headers) {
-        return Err(StatusCode::UNAUTHORIZED);
-    }
     let after = headers
         .get("last-event-id")
         .and_then(|v| v.to_str().ok()?.parse().ok())
@@ -860,7 +837,7 @@ fn publish(app: &App, seq: Option<i64>, event: ThreadEvent) {
     let _ = app.live.send(Live { seq, event });
 }
 
-fn lock(m: &Mutex<Runtime>) -> std::sync::MutexGuard<'_, Runtime> {
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     // A poisoned lock only means another task panicked mid-update; the state is still usable.
     m.lock().unwrap_or_else(|p| p.into_inner())
 }

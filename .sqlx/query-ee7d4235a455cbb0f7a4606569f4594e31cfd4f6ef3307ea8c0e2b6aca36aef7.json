@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "delete from session where passkey_id is null",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "ee7d4235a455cbb0f7a4606569f4594e31cfd4f6ef3307ea8c0e2b6aca36aef7"
+}

@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-016: Passkeys on a real domain name pointing at a NetBird address, with a DNS-01 certificate (2026-10-16)
+
+**Decided:** the server is reached at a subdomain of the owner's domain (for Kelvin, under `kelvinlee.io`) whose `A` record is the GPU box's private NetBird address. Caddy in front of the server gets a Let's Encrypt certificate through the DNS-01 challenge (Cloudflare API token) and listens only on the NetBird interface. Passkeys come from `webauthn-rs`. Until the first passkey exists, a setup token from the environment signs you in to add one. `webauthn-rs` is MPL-2.0, so `deny.toml` allows MPL-2.0 for its crates by name only; we use it unmodified, so OrphusBot stays MIT.
+**Why:** passkeys need HTTPS and a host name that every device trusts, and the phone and desktop shouldn't need a private certificate authority installed. A DNS challenge issues a public certificate for a name that only resolves to a private address, so nothing is exposed to the internet. `webauthn-rs` is the maintained, audited Rust implementation.
+**Alternatives:** NetBird's own DNS name with a private CA installed on every device; skipping passkeys for revocable device tokens only; terminating TLS in the server with `rustls` and an ACME crate (more code than one Caddyfile).
+**Revisit if:** the server is ever exposed beyond NetBird, or Android needs sign-in before a passkey provider is set up.
+
 ## D-015: The approval gate uses Orphus's dialog protocol, not a socket (2026-10-16)
 
 **Decided:** the bridge asks for approval with an Orphus `input` dialog; the node relays dialogs and the server answers them. Tool completions are read from Orphus's `tool_execution_end` events. The unix socket in DESIGN §4.3 arrives in M2, only for redirecting tool operations into bot computers.

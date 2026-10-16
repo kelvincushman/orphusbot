@@ -76,8 +76,7 @@ orphusbot/
     ui/                      Leptos CSR app (all views)
     testkit/                 fakes for every trait, scripted fake engine, wiremock fixtures
   apps/
-    desktop/                 Tauri 2 shell (Linux first)
-    mobile/                  Tauri 2 Android shell
+    desktop/                 Tauri 2 shell (Linux first); the same crate builds the Android app (gen/android)
   bridge/                    orphusbot-bridge Orphus extension (TypeScript)
   images/desktop/            bot desktop container image (Containerfile)
   wearable/                  the wearable: firmware/, app/, hardware/, server-contract/, docs/ (own README)
@@ -626,11 +625,12 @@ Cards and cues follow the wearable's existing tiers. Nothing escalates to red fo
   - Settings.
 - **Tauri 2 desktop (`crates/desktop`):** Linux/Wayland first. The window loads the server's own web UI (no bundled copy, so it always matches the server), stays on the server's origin, and opens other links in the system browser. A bundled first-run page asks for the server address. Sign-in is device linking (D-019). Notifications come with the inbox (M2).
 - **Tauri 2 Android:**
+  - **Built (M4.4):** the desktop crate is also the Android app (D-026): `src/lib.rs` holds the app and is Tauri's mobile entry point, `src/main.rs` just calls it, and `gen/android` is the Gradle project Tauri generated (committed; build outputs ignored). The phone gets the same window onto the server's web UI, the same first-run page and the same device-link sign-in; the approve screen says "OrphusBot Android app". The activity pads the page clear of the status bar, navigation bar and keyboard (Android 15 draws edge to edge). The `connect` command is async, because a sync command that opens a window waits on Android's main thread and never returns. Not built yet: the device token in the keystore (a linked session lasts 30 days, then you link again) and the offline outbox.
   - **Push:** ntfy on the GPU box over NetBird, received through the ntfy Android app or UnifiedPush. No Google account is needed, which matches the wearable's "no third-party account" stance. **Built (M4.1):** `server::notify` publishes to one topic (`ORPHUSBOT_NTFY_URL`, optional `ORPHUSBOT_NTFY_TOKEN`) with ntfy's `Title`, `Priority`, `Tags` and `Click` headers; a tap opens the bot (`/?bot=<slug>`). Pushed: approval, question and takeover cards (priority 4), failed runs (4), finished runs started by a routine, ticket or the wearable (3), and wrist asks that expired (4). Sending is in the background and never blocks a run; nothing is sent while it isn't set.
   - Device token in the Android keystore.
   - Offline outbox in SQLite for messages and card answers.
 - **Sync:** `GET /events?after=<seq>` SSE per subscribed thread, plus a global inbox stream. On reconnect the client replays from its last `seq`. A 20 s heartbeat; the session is re-validated every 60 s.
-- **Auth:** `webauthn-rs` passkeys for the browser and desktop, on a host name with a real certificate (D-016). On Android, a passkey at first sign-in issues a long-lived device token, revocable from Settings. Devices that can't use passkeys, such as the Tauri desktop app on Linux (WebKitGTK has no WebAuthn), are **linked**: the device shows a short code, the owner approves it from a passkey session, and the device gets its own session tied to that passkey (D-019). Android will use the same flow.
+- **Auth:** `webauthn-rs` passkeys for the browser and desktop, on a host name with a real certificate (D-016). On Android, a passkey at first sign-in issues a long-lived device token, revocable from Settings. Devices that can't use passkeys, such as the Tauri desktop app on Linux (WebKitGTK has no WebAuthn), are **linked**: the device shows a short code, the owner approves it from a passkey session, and the device gets its own session tied to that passkey (D-019). Android uses the same flow (D-026).
 
 ---
 

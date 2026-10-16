@@ -87,6 +87,16 @@ The chat header's **Screen** button shows the bot's screen live; **Take control*
 
 Without `ORPHUSBOT_URL`, the first run asks for the server address and saves it; `--reset` forgets it. Sign in with **Sign in with another device**: approve the code it shows from a browser where you have a passkey (Settings → Link a device, or open the link it shows). To build installable packages (`.deb`, `.rpm`, AppImage): `cd crates/desktop && npx @tauri-apps/cli@2 build`.
 
+**Android app.** The same crate builds an APK. You need the Android SDK (platform-tools, a platform, build-tools, the NDK) and JDK 17 or newer, the Rust Android targets (`rustup target add x86_64-linux-android aarch64-linux-android`), and these set:
+
+```sh
+export ANDROID_HOME=~/Android/Sdk NDK_HOME=~/Android/Sdk/ndk/<version> JAVA_HOME=<your JDK>
+cd crates/desktop && npm install
+npm run tauri -- android build --debug --apk --target x86_64   # an emulator; aarch64 for a phone
+```
+
+The APK lands in `gen/android/app/build/outputs/apk/`. In an emulator, run `adb reverse tcp:7480 tcp:7480` so the app can reach a server on your machine at `http://localhost:7480` (plain http only works for localhost). Sign in the same way as the desktop app. A real phone needs your server's https address.
+
 ## Settings
 
 All settings are environment variables.
@@ -165,7 +175,7 @@ Queries are checked at compile time. CI builds with `SQLX_OFFLINE=true` against 
 | `crates/server/migrations` | SQL migrations, applied on start |
 | `crates/proto/src/view.rs` | The thread reducer every client uses to turn events into what it shows |
 | `crates/ui` | The Leptos web UI (browser only; built with Trunk) |
-| `crates/desktop` | The Tauri 2 desktop app: a window onto the server |
+| `crates/desktop` | The Tauri 2 desktop and Android app: a window onto the server (`gen/android` is the Android project) |
 | `crates/device` | The wearable's wire constants and cue table, tested against its firmware and app |
 | `crates/ui/novnc` | noVNC 1.7.0, vendored unmodified (MPL-2.0), for the screen panel |
 | `images/desktop` | The bot computer image with a screen (VNC, openbox, Chromium) |

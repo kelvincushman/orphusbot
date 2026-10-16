@@ -18,6 +18,7 @@ Panel {
   readonly property color dim: Qt.darker(foreground, 1.55)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property string command: settings && settings.command ? String(settings.command) : "orphusbot"
+  readonly property string appCommand: settings && settings.app ? String(settings.app) : "orphusbot-app"
 
   // From `orphusbot watch`: { running, needs_you, bots: [...], waiting: [...] }.
   property var status: ({ running: 0, needs_you: 0, bots: [], waiting: [] })
@@ -55,6 +56,13 @@ Panel {
     }
     // It stops if the server goes away or the session ends; try again shortly.
     onExited: function(exitCode) { restart.start() }
+  }
+
+  // The full app (apps/orphusbot_app): history, pictures and files, approvals.
+  Process {
+    id: launcher
+    running: false
+    command: ["sh", "-c", "setsid -f " + root.appCommand + " >/dev/null 2>&1"]
   }
 
   Timer {
@@ -130,6 +138,11 @@ Panel {
         id: column
         width: flick.width
         spacing: Style.space(12)
+
+        Button {
+          text: "Open chat"; iconText: "󰍩"; bordered: true; foreground: root.foreground; fontFamily: root.fontFamily
+          onClicked: { launcher.running = true; root.close() }
+        }
 
         PanelHero {
           width: parent.width

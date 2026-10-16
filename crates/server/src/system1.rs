@@ -8,6 +8,7 @@
 //! System 1 never approves an irreversible action (AGENTS.md rule 5); the gate
 //! only asks it about calls that are reversible by construction (`gate.rs`).
 
+use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
 use axum::Json;
@@ -24,7 +25,7 @@ use crate::{ApiError, Shared, internal};
 const ROUTE_THRESHOLD: f64 = 0.85;
 const GATE_THRESHOLD: f64 = 0.95;
 /// However it's tuned, letting a tool call through takes at least this.
-const GATE_FLOOR: f64 = 0.9;
+pub const GATE_FLOOR: f64 = 0.9;
 /// Laya's state limit is generous; receipts and requests don't need more than this.
 const MAX_STATE_CHARS: usize = 4_000;
 
@@ -35,6 +36,17 @@ pub struct System1 {
     timeout: Duration,
     route_threshold: f64,
     gate_threshold: f64,
+    /// Thresholds fitted to the owner's labels and applied (M5.2, `calibrate.rs`).
+    fitted: RwLock<Fitted>,
+}
+
+/// An applied calibration: `None` keeps that question's default.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Fitted {
+    /// `triage.bot`: which bot takes an inbox message or a ticket.
+    pub bot: Option<f64>,
+    /// `gate.verdict`: never below [`GATE_FLOOR`], however it was fitted.
+    pub gate: Option<f64>,
 }
 
 /// One answer, or an abstention, with what a receipt needs.
@@ -79,6 +91,7 @@ impl System1 {
             timeout: Duration::from_millis(timeout),
             route_threshold: threshold("ORPHUSBOT_ROUTE_THRESHOLD", ROUTE_THRESHOLD),
             gate_threshold: threshold("ORPHUSBOT_GATE_THRESHOLD", GATE_THRESHOLD).max(GATE_FLOOR),
+            fitted: RwLock::default(),
         }
     }
 
@@ -91,11 +104,30 @@ impl System1 {
             timeout: Duration::from_millis(1),
             route_threshold: ROUTE_THRESHOLD,
             gate_threshold: GATE_THRESHOLD,
+            fitted: RwLock::default(),
         }
     }
 
     pub fn enabled(&self) -> bool {
         self.url.is_some()
+    }
+
+    /// The confidence a bot pick needs: fitted when applied, else the default.
+    pub fn bot_threshold(&self) -> f64 {
+        let fitted = self.fitted.read().ok().and_then(|f| f.bot);
+        fitted.unwrap_or(self.route_threshold)
+    }
+
+    /// The confidence letting a reversible call through needs; never below the floor.
+    pub fn gate_threshold(&self) -> f64 {
+        let fitted = self.fitted.read().ok().and_then(|f| f.gate);
+        fitted.unwrap_or(self.gate_threshold).max(GATE_FLOOR)
+    }
+
+    pub fn apply(&self, fitted: Fitted) {
+        if let Ok(mut f) = self.fitted.write() {
+            *f = fitted;
+        }
     }
 
     async fn ask(&self, state: &str, questions: Value) -> Asked {
@@ -165,7 +197,7 @@ impl System1 {
         let confidence = answer.and_then(confidence);
         let chosen = choice
             .filter(|c| *c != "inbox")
-            .filter(|_| confidence.is_some_and(|c| c >= self.route_threshold))
+            .filter(|_| confidence.is_some_and(|c| c >= self.bot_threshold()))
             .and_then(|c| enabled.iter().find(|b| b.slug == c));
         let outcome = match (chosen, &asked.answers, choice) {
             (Some(bot), _, _) => format!("Sent to {}", bot.name),
@@ -176,7 +208,7 @@ impl System1 {
         let receipt = Receipt {
             catalogue: "triage",
             state: &state,
-            threshold: self.route_threshold,
+            threshold: self.bot_threshold(),
             confidence,
             outcome,
             run: None,
@@ -206,7 +238,7 @@ impl System1 {
         let answer = asked.answers.as_ref().map(|a| &a["verdict"]);
         let confidence = answer.and_then(confidence);
         let passed = answer.and_then(|a| a["choice"].as_str()) == Some("pass")
-            && confidence.is_some_and(|c| c >= self.gate_threshold);
+            && confidence.is_some_and(|c| c >= self.gate_threshold());
         let outcome = match (passed, &asked.answers) {
             (true, _) => "Allowed by System 1".to_owned(),
             (false, None) => "Abstained; asked the owner".to_owned(),
@@ -215,7 +247,7 @@ impl System1 {
         let receipt = Receipt {
             catalogue: "gate",
             state: &state,
-            threshold: self.gate_threshold,
+            threshold: self.gate_threshold(),
             confidence,
             outcome,
             run: Some(run),
@@ -317,7 +349,7 @@ impl System1 {
         let bot_conf = confidence(&a["bot"]);
         let bot = a["bot"]["choice"]
             .as_str()
-            .filter(|_| bot_conf.is_some_and(|c| c >= self.route_threshold))
+            .filter(|_| bot_conf.is_some_and(|c| c >= self.bot_threshold()))
             .and_then(|c| enabled.iter().find(|b| b.slug == c))
             .map(|b| (*b).clone());
         let urgency = most_likely(&a["urgency"])
@@ -351,7 +383,7 @@ impl System1 {
         let receipt = Receipt {
             catalogue: "triage",
             state: &state,
-            threshold: self.route_threshold,
+            threshold: self.bot_threshold(),
             confidence: bot_conf,
             outcome,
             run: None,
@@ -636,6 +668,7 @@ pub(crate) mod tests {
             timeout: Duration::from_secs(5),
             route_threshold: ROUTE_THRESHOLD,
             gate_threshold: GATE_THRESHOLD,
+            fitted: RwLock::default(),
         }
     }
 
@@ -858,6 +891,7 @@ pub(crate) mod tests {
             timeout: Duration::from_millis(300),
             route_threshold: ROUTE_THRESHOLD,
             gate_threshold: GATE_THRESHOLD,
+            fitted: RwLock::default(),
         };
         let roster = [bot("inbox", false), bot("researcher", false)];
         assert!(gone.route(&db, "look this up", &roster).await.is_none());

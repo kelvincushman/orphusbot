@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update decision_model set active = true, applied_at = now() where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1585e2cb42a822c81b5903d5c0a8b1448115bb3652a168df6f58f7f98b79b19b"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into decision_model (thresholds, report) values ('{\"gate.verdict\": 0.5}', '{}')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "42ec7a9dad16b419b313076976a0570660d97d2d9314a140b2395951e4b099f7"
+}

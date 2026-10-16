@@ -83,6 +83,16 @@ podman build -t localhost/orphusbot-desktop images/desktop
 export ORPHUSBOT_COMPUTER_IMAGE=localhost/orphusbot-desktop
 ```
 
+**The same screen in E2B.** Build the image as an E2B template once (needs `E2B_API_KEY` in your shell):
+
+```sh
+npx @e2b/cli template create orphusbot-desktop --path images/desktop --dockerfile Containerfile \
+  --cmd "env ORPHUSBOT_SCREEN_WEBSOCKET=1 /usr/local/bin/start-screen sleep infinity" \
+  --ready-cmd "test -e /tmp/.X11-unix/X1"
+```
+
+Then set `ORPHUSBOT_E2B_TEMPLATE=orphusbot-desktop` on the server. A bot in E2B gets a screen you can watch and take over like a local one.
+
 The chat header's **Screen** button shows the bot's screen live; **Take control** lets you use it.
 
 Without `ORPHUSBOT_URL`, the first run asks for the server address and saves it; `--reset` forgets it. Sign in with **Sign in with another device**: approve the code it shows from a browser where you have a passkey (Settings → Link a device, or open the link it shows). To build installable packages (`.deb`, `.rpm`, AppImage): `cd crates/desktop && npx @tauri-apps/cli@2 build`.
@@ -117,7 +127,7 @@ All settings are environment variables.
 | `ORPHUSBOT_NTFY_URL` | none | An ntfy topic to push to, such as `https://ntfy.example.com/orphusbot-<random>`; nothing is pushed without it |
 | `ORPHUSBOT_NTFY_TOKEN` | none | ntfy access token, if the topic needs one |
 | `ORPHUSBOT_DAILY_TOKEN_BUDGET` | none | Input + output tokens a day; crossing it warns on the wrist and by push, once a day |
-| `ORPHUSBOT_E2B_API_KEY` | none | Lets bots keep their computer in E2B (the bot's **Computer** setting). Optional: `ORPHUSBOT_E2B_TEMPLATE` (default `base`), `ORPHUSBOT_E2B_TIMEOUT_SECS` (default 3600: a sandbox pauses itself this long after a run starts), `ORPHUSBOT_E2B_API_URL`, `ORPHUSBOT_E2B_SANDBOX_URL` (tests). Check a key with `cargo test -p orphusbot-server live_e2b -- --ignored` (makes and deletes one sandbox) |
+| `ORPHUSBOT_E2B_API_KEY` | none | Lets bots keep their computer in E2B (the bot's **Computer** setting). Optional: `ORPHUSBOT_E2B_TEMPLATE` (default `base`), `ORPHUSBOT_E2B_TIMEOUT_SECS` (default 3600: a sandbox pauses itself this long after a run starts), `ORPHUSBOT_E2B_API_URL`, `ORPHUSBOT_E2B_SANDBOX_URL` (tests). Check a key with `cargo test -p orphusbot-server live_e2b -- --ignored` (makes and deletes one sandbox). For a screen, build the desktop image as a template (below) and set `ORPHUSBOT_E2B_TEMPLATE=orphusbot-desktop` |
 | `ORPHUSBOT_SECRET_KEY_FILE` | none | A file of exactly 32 random bytes (`head -c 32 /dev/urandom > key`) that encrypts stored tokens; without it, connections can't keep a token. Losing it loses every stored token |
 | `ORPHUSBOT_HANDS_FREE_ALLOWED` | on | Set to `false` to switch hands-free capture off for every device (the kill switch) |
 | `ORPHUSBOT_CAPTURE_RETENTION_DAYS` | `7` | Days to keep captured conversation text |

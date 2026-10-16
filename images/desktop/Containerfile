@@ -5,7 +5,7 @@ FROM docker.io/library/debian:trixie-slim
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      tigervnc-standalone-server openbox chromium socat xdotool x11-utils \
+      tigervnc-standalone-server openbox chromium socat xdotool x11-utils websockify \
       fonts-dejavu-core ca-certificates curl git python3 \
  && rm -rf /var/lib/apt/lists/*
 

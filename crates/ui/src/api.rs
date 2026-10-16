@@ -19,6 +19,16 @@ export async function createPasskey(options) {
   const publicKey = PublicKeyCredential.parseCreationOptionsFromJSON(JSON.parse(options).publicKey);
   return JSON.stringify((await navigator.credentials.create({ publicKey })).toJSON());
 }
+export function openScreen(el, viewOnly, onEnd) {
+  const scheme = location.protocol === "https:" ? "wss://" : "ws://";
+  const rfb = new window.OrphusRFB(el, scheme + location.host + "/api/screen");
+  rfb.viewOnly = viewOnly;
+  rfb.scaleViewport = true;
+  rfb.addEventListener("disconnect", () => onEnd());
+  return rfb;
+}
+export function setViewOnly(rfb, viewOnly) { rfb.viewOnly = viewOnly; }
+export function closeScreen(rfb) { rfb.disconnect(); }
 export async function getPasskey(options) {
   const publicKey = PublicKeyCredential.parseRequestOptionsFromJSON(JSON.parse(options).publicKey);
   return JSON.stringify((await navigator.credentials.get({ publicKey })).toJSON());
@@ -29,6 +39,17 @@ extern "C" {
     pub fn passkeys_work() -> bool;
     #[wasm_bindgen(catch, js_name = createPasskey)]
     async fn create_passkey(options: &str) -> Result<JsValue, JsValue>;
+    /// Connects noVNC to the bot's screen inside `el`; `on_end` runs when it disconnects.
+    #[wasm_bindgen(js_name = openScreen)]
+    pub fn open_screen(
+        el: &web_sys::HtmlElement,
+        view_only: bool,
+        on_end: &js_sys::Function,
+    ) -> JsValue;
+    #[wasm_bindgen(js_name = setViewOnly)]
+    pub fn set_view_only(rfb: &JsValue, view_only: bool);
+    #[wasm_bindgen(js_name = closeScreen)]
+    pub fn close_screen(rfb: &JsValue);
     #[wasm_bindgen(catch, js_name = getPasskey)]
     async fn get_passkey(options: &str) -> Result<JsValue, JsValue>;
 }

@@ -1,0 +1,10 @@
+#!/bin/sh
+# Starts the screen, then runs the container's command (normally `sleep infinity`).
+# The root filesystem is read-only, so everything X needs goes under /tmp.
+set -e
+mkdir -p /tmp/.X11-unix
+Xvnc :1 -geometry 1280x800 -depth 24 -localhost yes -rfbport 5900 \
+     -SecurityTypes None -AlwaysShared -desktop "OrphusBot" >/tmp/xvnc.log 2>&1 &
+for _ in 1 2 3 4 5 6 7 8 9 10; do [ -e /tmp/.X11-unix/X1 ] && break; sleep 0.3; done
+openbox >/tmp/openbox.log 2>&1 &
+exec "$@"

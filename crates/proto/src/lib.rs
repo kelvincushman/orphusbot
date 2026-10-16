@@ -23,6 +23,21 @@ pub fn link_proof(node: &str, nonce: &str) -> String {
     format!("orphusbot-node-link-v1\n{node}\n{nonce}")
 }
 
+/// A screen's bytes on the node link travel as binary WebSocket frames: an
+/// 8-byte big-endian stream number, then the VNC data (DESIGN §4.4).
+pub fn screen_frame(stream: u64, data: &[u8]) -> Vec<u8> {
+    let mut frame = Vec::with_capacity(8 + data.len());
+    frame.extend_from_slice(&stream.to_be_bytes());
+    frame.extend_from_slice(data);
+    frame
+}
+
+/// Splits a binary frame back into its stream number and data.
+pub fn split_screen_frame(frame: &[u8]) -> Option<(u64, &[u8])> {
+    let (head, data) = frame.split_first_chunk::<8>()?;
+    Some((u64::from_be_bytes(*head), data))
+}
+
 /// Server → node, over the node link (DESIGN §4.1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -31,6 +46,10 @@ pub enum ToNode {
     Challenge { nonce: String },
     /// Answer to [`FromNode::Enrol`]; the server closes the link after it.
     Enrolled { error: Option<String> },
+    /// Connect a viewer to the bot computer's screen; its bytes follow as binary frames.
+    ScreenOpen { stream: u64 },
+    /// The viewer went away.
+    ScreenClose { stream: u64 },
     /// Work on this run. `resumed` means an earlier attempt was interrupted.
     StartTurn {
         attempt: Attempt,
@@ -66,6 +85,8 @@ pub enum FromNode {
     },
     /// A chunk of assistant text while it streams.
     Delta { attempt: Attempt, text: String },
+    /// The screen stream ended, or couldn't start (`error` says why).
+    ScreenClosed { stream: u64, error: Option<String> },
     /// One complete assistant message. A run that uses tools can produce several.
     Reply { attempt: Attempt, text: String },
     /// The attempt is over; `error` says why if it failed.
@@ -103,6 +124,8 @@ pub enum DialogKind {
         input: Value,
         uncertain: bool,
     },
+    /// The bot needs the owner on its screen, for example to log in.
+    Takeover { reason: String },
     /// The bot asked a question. `method` is `select`, `confirm`, `input` or `editor`.
     Question {
         method: String,
@@ -189,6 +212,13 @@ impl ThreadEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn screen_frames_round_trip() {
+        let frame = screen_frame(7, b"RFB 003.008");
+        assert_eq!(split_screen_frame(&frame), Some((7, &b"RFB 003.008"[..])));
+        assert_eq!(split_screen_frame(&[1, 2, 3]), None);
+    }
 
     #[test]
     fn wire_format_is_tagged_snake_case() {

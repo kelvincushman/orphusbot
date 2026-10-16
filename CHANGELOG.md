@@ -13,6 +13,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **Bot screens and takeover (M2.2):** with the new desktop image (`images/desktop`), a bot's computer has a screen with Chromium. Press **Screen** in the chat to watch it live, and **Take control** to use it yourself. A bot can ask you to take over (for a login or a captcha); a card appears with **Open screen** and **Done**, and the bot carries on when you're finished. Screens go through the server and the node's existing link, so the computer opens no ports.
 - **Bot computers (M2.1):** a bot's tools (read, write, edit, bash) now run in its own rootless Podman container, not on your machine. The container has no capabilities, a read-only system, its own home folder, resource limits, and internet access but no access to your LAN or NetBird addresses. Your model logins stay on the host. Set `ORPHUSBOT_RUNTIME=none` to keep the old behaviour.
 - **Desktop app (M1.5):** `orphusbot-desktop`, a Tauri window onto your server's web UI. It stays on your server and opens other links in your browser; the first run asks for the server's address.
 - **Sign in with another device (M1.5):** for the desktop app and any browser without passkeys. The device shows a code such as `ABCD-EFGH`; approve it from a signed-in browser (Settings → Link a device, or the link it shows) and the device gets its own sign-in, which ends if you remove the approving passkey.

@@ -49,5 +49,5 @@ jobs:
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
           # Offline: checks relative links and anchors inside the repo only, so CI never flakes on external sites.
-          args: --offline --include-fragments --no-progress --exclude-path wearable "**/*.md"
+          args: --offline --include-fragments --no-progress --exclude-path wearable --exclude-path crates/ui/novnc "**/*.md"
           fail: true

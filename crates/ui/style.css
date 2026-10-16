@@ -83,6 +83,8 @@ input, textarea { background: var(--bg); border: 1px solid var(--line); border-r
 .sheet ul { list-style: none; margin: 0 0 .5rem; padding: 0; display: flex; flex-direction: column; gap: .35rem; }
 .sheet li { display: flex; justify-content: space-between; align-items: center; gap: .5rem; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: 10px; }
 .sheet li small { color: var(--muted); display: block; }
+.sheet.screen { width: min(76rem, 100%); max-height: 96vh; }
+.vnc { width: 100%; aspect-ratio: 16 / 10; background: #000; border-radius: 8px; overflow: hidden; }
 .sheet pre { margin: 0; padding: .55rem; background: var(--bot); border-radius: 8px; overflow-wrap: anywhere; white-space: pre-wrap; font-size: .85rem; }
 
 .toast { position: fixed; left: 50%; bottom: 5.5rem; transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: .5rem .9rem; border-radius: 999px; max-width: calc(100% - 2rem); z-index: 20; }

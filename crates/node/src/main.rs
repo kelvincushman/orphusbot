@@ -12,8 +12,10 @@ use std::time::Duration;
 use anyhow::{Context, bail};
 use futures_util::{SinkExt, Stream, StreamExt};
 use key::NodeKey;
-use orphusbot_proto::{Attempt, FromNode, ToNode};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use orphusbot_proto::{Attempt, FromNode, ToNode, screen_frame, split_screen_frame};
+use std::collections::HashMap;
+
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::{self, Message};
@@ -160,12 +162,26 @@ async fn session(cfg: &Config, key: &NodeKey) -> anyhow::Result<()> {
     // Frames from the engine reader go out through one channel.
     let (out_tx, mut out_rx) = mpsc::channel::<FromNode>(256);
     let mut engine: Option<Engine> = None;
+    // Screen streams: binary frames out, and each stream's VNC pipe in.
+    let (screen_tx, mut screen_rx) = mpsc::channel::<Vec<u8>>(256);
+    let mut screens: HashMap<u64, (Child, ChildStdin)> = HashMap::new();
 
     loop {
         tokio::select! {
             frame = stream.next() => {
                 let Some(frame) = frame else { break };
-                let Message::Text(text) = frame? else { continue };
+                let text = match frame? {
+                    Message::Text(text) => text,
+                    Message::Binary(data) => {
+                        if let Some((stream, bytes)) = split_screen_frame(&data)
+                            && let Some((_, pipe)) = screens.get_mut(&stream)
+                        {
+                            pipe.write_all(bytes).await.ok();
+                        }
+                        continue;
+                    }
+                    _ => continue,
+                };
                 match serde_json::from_str::<ToNode>(&text) {
                     Ok(ToNode::StartTurn { attempt, text, resumed }) => {
                         if let Err(e) = start_turn(cfg, &mut engine, &out_tx, attempt, &text, resumed).await {
@@ -191,12 +207,24 @@ async fn session(cfg: &Config, key: &NodeKey) -> anyhow::Result<()> {
                             e.command(r#"{"type":"abort"}"#).await.ok();
                         }
                     }
+                    Ok(ToNode::ScreenOpen { stream }) => {
+                        match open_screen(cfg, stream, screen_tx.clone(), out_tx.clone()).await {
+                            Ok(pipe) => { screens.insert(stream, pipe); }
+                            Err(e) => {
+                                let _ = out_tx.send(FromNode::ScreenClosed { stream, error: Some(format!("{e:#}")) }).await;
+                            }
+                        }
+                    }
+                    Ok(ToNode::ScreenClose { stream }) => { screens.remove(&stream); }
                     Ok(ToNode::Challenge { .. } | ToNode::Enrolled { .. }) => {}
                     Err(e) => warn!("unreadable frame from server: {e}"),
                 }
             }
             Some(frame) = out_rx.recv() => {
                 sink.send(Message::text(serde_json::to_string(&frame)?)).await?;
+            }
+            Some(frame) = screen_rx.recv() => {
+                sink.send(Message::binary(frame)).await?;
             }
         }
     }
@@ -206,6 +234,50 @@ async fn session(cfg: &Config, key: &NodeKey) -> anyhow::Result<()> {
         e.command(r#"{"type":"abort"}"#).await.ok();
     }
     Ok(())
+}
+
+/// Starts piping the computer's screen for `stream`: its output goes up as binary
+/// frames, and the returned pipe takes the viewer's input.
+async fn open_screen(
+    cfg: &Config,
+    stream: u64,
+    frames: mpsc::Sender<Vec<u8>>,
+    out: mpsc::Sender<FromNode>,
+) -> anyhow::Result<(Child, ChildStdin)> {
+    let Some(runtime) = &cfg.runtime else {
+        bail!(
+            "This node runs tools without a computer (ORPHUSBOT_RUNTIME=none), so there's no screen"
+        );
+    };
+    let spec = computer::Spec {
+        runtime,
+        image: &cfg.image,
+        bot: "orphus",
+    };
+    let mut child = spec.open_screen().await?;
+    let pipe = child.stdin.take().context("screen stdin")?;
+    let mut screen = child.stdout.take().context("screen stdout")?;
+    let mut errors = child.stderr.take().context("screen stderr")?;
+    tokio::spawn(async move {
+        let mut buf = vec![0u8; 16 * 1024];
+        while let Ok(n @ 1..) = screen.read(&mut buf).await {
+            if frames.send(screen_frame(stream, &buf[..n])).await.is_err() {
+                return;
+            }
+        }
+        let mut why = String::new();
+        let _ = errors.read_to_string(&mut why).await;
+        // socat missing (a plain image) or nothing listening: there's no screen to show.
+        let error = (!why.trim().is_empty()).then(|| {
+            if why.contains("not found") || why.contains("Connection refused") {
+                "This bot's computer has no screen (its image has no VNC server)".to_owned()
+            } else {
+                why.trim().to_owned()
+            }
+        });
+        let _ = out.send(FromNode::ScreenClosed { stream, error }).await;
+    });
+    Ok((child, pipe))
 }
 
 /// The Orphus extension that sends every tool call to OrphusBot for approval.

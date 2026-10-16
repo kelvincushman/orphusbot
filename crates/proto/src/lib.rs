@@ -215,6 +215,13 @@ pub enum ThreadEvent {
     DialogOpened {
         dialog: Dialog,
     },
+    /// System 1 sent an inbox message to another bot (`to` is its slug, `name` its
+    /// name, `sure` the confidence in percent).
+    Routed {
+        to: String,
+        name: String,
+        sure: u8,
+    },
     /// The dialog was answered, or expired because its run ended or moved on.
     DialogClosed {
         id: String,
@@ -260,6 +267,7 @@ impl ThreadEvent {
                 | Self::RunEnded { .. }
                 | Self::DialogOpened { .. }
                 | Self::DialogClosed { .. }
+                | Self::Routed { .. }
         )
     }
 }

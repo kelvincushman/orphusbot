@@ -1,0 +1,129 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select id, catalogue, state, abstained, threshold, confidence, model, latency_ms, outcome,\n                  created_at::text as \"created_at!\"\n           from decision order by id desc limit 100",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "decision",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "catalogue",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "decision",
+            "name": "catalogue"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "state",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "decision",
+            "name": "state"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "abstained",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "decision",
+            "name": "abstained"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "threshold",
+        "type_info": "Float4",
+        "origin": {
+          "Table": {
+            "table": "decision",
+            "name": "threshold"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "confidence",
+        "type_info": "Float4",
+        "origin": {
+          "Table": {
+            "table": "decision",
+            "name": "confidence"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "model",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "decision",
+            "name": "model"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "latency_ms",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "decision",
+            "name": "latency_ms"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "outcome",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "decision",
+            "name": "outcome"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "cd6187fc9586ebd57b1a6cc04c2b76152da9f5fb9e647c953a24ca809e33703b"
+}

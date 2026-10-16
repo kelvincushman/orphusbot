@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select exists (select 1 from run where thread_id = $1 and status in ('queued', 'running')) as \"busy!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "busy!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "aba959d849df2968b6f231032ed14a5f0470f9aea2b26df667a42adbed234340"
+}

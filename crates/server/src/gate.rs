@@ -1,13 +1,17 @@
 //! The approval gate: may this tool call run? (DESIGN §7.4, PRD B-DEC-06/07)
 //!
-//! M1 has no System 1 yet, so the order is: read-only tools run; the effect
-//! ledger blocks repeats of calls that already completed in an earlier
-//! attempt; the owner's rules decide; everything else asks the owner.
+//! The order: read-only tools run; the effect ledger blocks repeats of calls
+//! that already completed in an earlier attempt; the owner's rules decide;
+//! System 1 may let a *reversible* call through (a file write or edit inside the
+//! bot's computer); everything else asks the owner. System 1 is never asked
+//! about anything else, so it can't approve an irreversible action.
 
 use orphusbot_proto::Attempt;
 use serde_json::Value;
 use sqlx::PgPool;
 use sqlx::types::Json;
+
+use crate::system1::System1;
 
 /// Tools that run without asking and aren't ledgered: they only read, or (like
 /// `request_takeover`) only ask the owner something.
@@ -37,9 +41,33 @@ pub struct Call<'a> {
     pub tool_call_id: &'a str,
     pub tool: &'a str,
     pub input: &'a Value,
+    /// The call runs inside the bot's computer, not on the node itself.
+    pub in_computer: bool,
 }
 
-pub async fn decide(db: &PgPool, call: &Call<'_>) -> sqlx::Result<Verdict> {
+/// Reversible by construction (DESIGN §7.4): file changes inside the bot's computer.
+/// Bash isn't, since a command can reach the network and act outside it.
+fn reversible(call: &Call<'_>) -> bool {
+    call.in_computer && matches!(call.tool, "write" | "edit")
+}
+
+/// What System 1 sees: the task, the bot's remit and the call.
+async fn gate_state(db: &PgPool, call: &Call<'_>) -> sqlx::Result<String> {
+    let ctx = sqlx::query!(
+        "select r.prompt, b.remit from run r join thread t on t.id = r.thread_id
+         join bot b on b.id = t.bot_id where r.id = $1",
+        call.attempt.run
+    )
+    .fetch_one(db)
+    .await?;
+    let task: String = ctx.prompt.chars().take(1_000).collect();
+    Ok(serde_json::json!({
+        "task": task, "bot_remit": ctx.remit, "tool": call.tool, "args": call.input,
+    })
+    .to_string())
+}
+
+pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Result<Verdict> {
     if READ_ONLY.contains(&call.tool) {
         return Ok(Verdict::Allow);
     }
@@ -90,6 +118,16 @@ pub async fn decide(db: &PgPool, call: &Call<'_>) -> sqlx::Result<Verdict> {
             )))
         }
         None => {
+            if reversible(call) {
+                let state = gate_state(db, call).await?;
+                if system1
+                    .pass(db, &state, call.attempt.run, call.tool_call_id)
+                    .await
+                {
+                    record(db, call, "approved", Some("system1")).await?;
+                    return Ok(Verdict::Allow);
+                }
+            }
             record(db, call, "pending", None).await?;
             Ok(Verdict::Ask { uncertain: false })
         }
@@ -210,7 +248,12 @@ mod tests {
             tool_call_id: id,
             tool,
             input,
+            in_computer: false,
         }
+    }
+
+    async fn decide(db: &PgPool, call: &Call<'_>) -> sqlx::Result<Verdict> {
+        super::decide(db, &System1::off(), call).await
     }
 
     #[sqlx::test]
@@ -263,6 +306,58 @@ mod tests {
                 .await
                 .unwrap(),
             Verdict::Ask { uncertain: true }
+        );
+    }
+
+    #[sqlx::test]
+    async fn system1_may_pass_only_reversible_calls_in_the_computer(db: PgPool) {
+        let (_, a) = run_with_attempts(&db).await;
+        let laya = crate::system1::tests::fake_laya("verdict", "pass", 0.99).await;
+        let input = json!({"path": "notes.txt"});
+        let in_computer = |id, tool| Call {
+            in_computer: true,
+            ..call(a, id, tool, &input)
+        };
+        assert_eq!(
+            super::decide(&db, &laya, &in_computer("c1", "write"))
+                .await
+                .unwrap(),
+            Verdict::Allow
+        );
+        // Bash can act outside the computer, and host files aren't reversible: both ask.
+        assert_eq!(
+            super::decide(&db, &laya, &in_computer("c2", "bash"))
+                .await
+                .unwrap(),
+            Verdict::Ask { uncertain: false }
+        );
+        assert_eq!(
+            super::decide(&db, &laya, &call(a, "c3", "write", &input))
+                .await
+                .unwrap(),
+            Verdict::Ask { uncertain: false }
+        );
+        let by: Vec<Option<String>> =
+            sqlx::query_scalar!("select decided_by from effect order by id")
+                .fetch_all(&db)
+                .await
+                .unwrap();
+        assert_eq!(by, [Some("system1".to_owned()), None, None]);
+        let receipts: i64 = sqlx::query_scalar!(
+            r#"select count(*) as "n!" from decision where catalogue = 'gate'"#
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(receipts, 1, "only the reversible call was put to System 1");
+
+        // Not confident enough: ask.
+        let unsure = crate::system1::tests::fake_laya("verdict", "pass", 0.9).await;
+        assert_eq!(
+            super::decide(&db, &unsure, &in_computer("c4", "edit"))
+                .await
+                .unwrap(),
+            Verdict::Ask { uncertain: false }
         );
     }
 }

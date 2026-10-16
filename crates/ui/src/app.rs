@@ -771,6 +771,40 @@ fn BotScreen() -> impl IntoView {
     }
 }
 
+/// A System 1 receipt (DESIGN §7.6).
+#[derive(Clone, Deserialize, PartialEq)]
+struct Decision {
+    id: i64,
+    catalogue: String,
+    state: Option<String>,
+    abstained: bool,
+    threshold: f32,
+    confidence: Option<f32>,
+    latency_ms: i32,
+    outcome: String,
+    created_at: String,
+}
+
+impl Decision {
+    /// "Sent to Researcher · 92% sure (needs 85%) · 0.4 s".
+    fn summary(&self) -> String {
+        let sure = match (self.abstained, self.confidence) {
+            (true, _) => "abstained".to_owned(),
+            (false, Some(c)) => format!(
+                "{:.0}% sure (needs {:.0}%)",
+                c * 100.0,
+                self.threshold * 100.0
+            ),
+            (false, None) => "no confidence".to_owned(),
+        };
+        format!(
+            "{} · {sure} · {:.1} s",
+            self.outcome,
+            f64::from(self.latency_ms) / 1000.0
+        )
+    }
+}
+
 #[derive(Clone, Deserialize, PartialEq)]
 struct Passkey {
     id: i64,
@@ -814,6 +848,7 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
     let ctx = expect_context::<Ctx>();
     let passkeys = RwSignal::new(Vec::<Passkey>::new());
     let nodes = RwSignal::new(Vec::<Node>::new());
+    let decisions = RwSignal::new(Vec::<Decision>::new());
     let name = RwSignal::new("This device".to_owned());
     let command = RwSignal::new(None::<String>);
 
@@ -821,6 +856,7 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
         ctx.run(async move {
             passkeys.set(api::get("/api/passkeys").await?);
             nodes.set(api::get("/api/nodes").await?);
+            decisions.set(api::get("/api/decisions").await?);
             Ok(())
         })
     };
@@ -953,6 +989,23 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
                         <pre>{c}</pre>
                         <button on:click=copy>"Copy"</button>
                     })}
+                </div>
+                <div>
+                    <h3>"Decisions"</h3>
+                    <p class="muted">"What System 1 (Laya) decided, newest first. It only acts when it's sure enough; otherwise you're asked."</p>
+                    <ul class="decisions">
+                        <For each=move || decisions.get().into_iter().take(20) key=|d| d.id children=move |d| {
+                            let what = if d.catalogue == "triage" { "Routing" } else { "Tool call" };
+                            let state: String = d.state.clone().unwrap_or_default().chars().take(90).collect();
+                            view! {
+                                <li>
+                                    <span>{format!("{what}: {}", d.summary())}
+                                        <small>{format!("{} · {state}", day(&d.created_at))}</small></span>
+                                </li>
+                            }
+                        } />
+                    </ul>
+                    {move || decisions.with(Vec::is_empty).then(|| view! { <p class="muted">"No decisions yet."</p> })}
                 </div>
                 <div>
                     <h3>"Link a device"</h3>

@@ -274,6 +274,7 @@ Receipts( Fallback( OrtLaya?, HttpLaya(gpu-box), NullModel ), sink = Postgres + 
 - **v1** runs `HttpLaya` → laya-serve on the GPU box (`LAYA_PRELOAD=1`, bound to 127.0.0.1 because the server is on the same box). Timeouts: 1.5 s for triage, 1 s for the gate.
 - **M5** adds `OrtLaya` in-process. It is enabled only when `decide`'s parity test passes against Laya's committed golden fixtures for the exact `laya.onnx` + `tokenizer.json` + `rl_agent_config.json` hash being loaded.
 - `NullModel` always abstains. If everything fails, every decision takes its safe default.
+- **Built (M3.2):** `server::system1` calls laya-serve's `POST /v1/systemone` with `reqwest` (`ORPHUSBOT_LAYA_URL`; no URL means it always abstains). Each ask is bounded by `ORPHUSBOT_LAYA_TIMEOUT_MS` (default 1500); a timeout, an error or an unreadable answer abstains. The confidence used is Laya's calibrated `answer_confidence`. The `decide` crate and the `DecisionModel` trait arrive when a second model does (in-process ONNX, M5).
 
 ### 7.2 Question catalogue
 
@@ -288,6 +289,8 @@ Questions are data, not code: `decide/questions/*.toml`, versioned, with the ver
 | `capture` | `kind` (choice: commitment / task / appointment / follow-up / idea / remember / none), `owner_commitment` (noul), `urgency` (score), `needs_kelvin` (noul) | none (nothing filed) |
 
 The roster choice uses each bot's name plus its one-line remit. If there are more than 16 bots, a first pass picks a shortlist of 8 by remit category.
+
+**Built (M3.2):** `triage.bot` only. A new message to the inbox (when the inbox has no queued or running run) is put to System 1 in the background with the enabled bots' remits as the choices. At or above the route threshold, and if the answer isn't the inbox, the message moves to that bot's thread and the inbox records a persisted `routed` event ("Sent to Researcher (System 1 was 92% sure)"); otherwise the inbox runs it. A follow-up to a busy inbox joins or steers its run as before.
 
 ### 7.3 State building
 
@@ -314,12 +317,15 @@ if class == reversible and ans.verdict == pass         → allow
 → ask
 ```
 
+**Built (M3.2):** the gate asks System 1 only when no rule decided and the call is reversible by construction: `write` or `edit` running inside the bot's computer (the bridge sends `inComputer`). Bash is not reversible (a command can reach the network), nor is anything on the host. A pass at or above the gate threshold approves the call and the ledger records `decided_by = system1`; anything else asks the owner. The state is `{task, bot_remit, tool, args}`.
+
 - **`reversible`** is a short whitelist: read-only MCP tools, file ops inside the bot's computer, creating drafts (mail, PR, calendar *tentative*), and notes in the bot's own workspace.
 - **`irreversible`** covers send, pay, delete outside the computer, merge, publish, and anything on a connector whose name matches mutating verbs, unless whitelisted.
 
 ### 7.5 Thresholds and calibration
 
 - `decision_model` rows hold `{checkpoint, question_catalogue_version, thresholds per (question, bucket), fitted_at, applied_at}`. Exactly one row is `active`.
+- **Built (M3.2):** `ORPHUSBOT_ROUTE_THRESHOLD` (default 0.85) and `ORPHUSBOT_GATE_THRESHOLD` (default 0.95, never below 0.9) until fitted thresholds exist.
 - **Defaults until fitted:**
   - `act_now` ≥ 0.95 on calibrated `answer_confidence`;
   - `gate.verdict = pass` ≥ 0.95;
@@ -336,6 +342,7 @@ if class == reversible and ans.verdict == pass         → allow
 ### 7.6 Receipts
 
 - Postgres `decision`: id, catalogue, question version, state hash, answers JSON (probabilities, `answer_confidence`, `jev_confidence`, abstained), thresholds, model id, latency, run / task / effect / capture links.
+- **Built (M3.2):** `decision` holds catalogue (`triage`, `gate`), SHA-256 state hash, the state (cleared after 30 days), answers, abstained, threshold, confidence, model, latency, outcome in words, run and tool call. `GET /api/decisions` lists the latest 100; Settings shows the latest 20. The JSONL mirror comes with the Decisions view (M3.6).
 - Mirrored as JSONL in Orphus systemone's receipt shape to `~/.local/share/orphusbot/receipts/`, so orphus-desktop can read them.
 
 ---
@@ -742,6 +749,7 @@ M0 implemented the smallest slice of §3 and §4 that carries a message from a b
 | Engine | One `orphus --mode rpc --session-dir …` per link, started on the first turn; text deltas, final assistant messages, rejected prompts and model errors are mapped to frames | §4.2 |
 | Sign-in (M1.3) | `webauthn-rs` passkeys for one owner. While no passkey exists, `ORPHUSBOT_SETUP_TOKEN` gives a one-hour setup session that can only be used to add one; adding it upgrades that session and ends any other setup session. Sessions are 32 random bytes in an HttpOnly `SameSite=Strict` cookie (`Secure` on HTTPS), stored as SHA-256 hashes, 30 days fixed. Removing a passkey ends its sessions; removing all of them reopens setup (the recovery path). The relying-party ID is the host of `ORPHUSBOT_ORIGIN`; deployment behind Caddy with a DNS-01 certificate (D-016, [DEPLOY.md](DEPLOY.md)) | Device tokens for Android (§12) |
 | Computers (M2.1) | Per-bot rootless Podman container (`node::computer`), fenced as in §4.4; the bridge runs `read`, `write`, `edit`, `bash` in it with `podman exec` and allows no other tool (§5). `ORPHUSBOT_RUNTIME=none` keeps M1 behaviour (tools on the host, still gated), with a warning | Desktop image, screens and takeover (M2.2), placement (M2.3) |
+| System 1 (M3.2) | `server::system1` against laya-serve: inbox triage and the gate's reversible-call verdict, with strict thresholds and a receipt for every ask (§7.1–§7.6, D-023) | More triage questions (urgency, act now, untrusted), calibration (M5) |
 | Bots (M3.1) | `bot` table: slug (fixed; names the engine session, computer and home volume), name, remit, instructions, model, thinking, excluded tools, team or private, disabled. The `inbox` bot always exists. `GET/POST /api/bots`, `POST /api/bots/update`; `POST /api/messages` and `/api/runs/cancel` take `bot`. The node runs one engine per bot (`--session-id <slug>`, `--model`, `--thinking`, `--append-system-prompt`, `--exclude-tools`) and restarts it when its settings change. Placement runs per queued run with that bot's home; a disabled bot's runs wait | System 1 routing to bots (M3.2), preferred node, team folders |
 | Placement (M2.3) | `server::placement` (§6.3, built rules); the run's node and rule are on `run_started`, a waiting run's reason on `run_queued`; screens open on the node holding the computer | System 1, GPU and E2B rules |
 | Screens and takeover (M2.2) | `images/desktop`; `/api/screen` relayed over the node link into `podman exec … socat`; noVNC 1.7.0 vendored unmodified in `crates/ui/novnc`; the screen panel (view, Take control); `request_takeover` and its card (§4.4) | Screens for E2B computers (M4) |

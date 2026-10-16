@@ -73,6 +73,8 @@ export default function (pi: ExtensionAPI) {
       toolCallId: event.toolCallId,
       tool: event.toolName,
       input: event.input,
+      // Lets the server tell a file edit inside the computer (reversible) from one on the host.
+      inComputer: !!computer,
     });
     const answer = await ctx.ui.input(GATE_TITLE, request);
     if (answer === "allow") return;

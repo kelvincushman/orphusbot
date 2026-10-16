@@ -50,9 +50,10 @@ This guide uses Cloudflare for DNS and [Caddy](https://caddyserver.com) for HTTP
 
    With an `https` origin, session cookies are also marked `Secure`.
 
-6. **Nodes** connect through Caddy with TLS: `ORPHUSBOT_SERVER=wss://bots.example.com/node`. Enrol each machine once with a code from **Add a node** on the page (`orphusbot-node enrol <code>`); the GPU box's own node enrols the same way.
+6. **System 1 (optional).** Run laya-serve on the GPU box bound to loopback (`LAYA_HOST=127.0.0.1`, see [DEVELOPMENT.md](DEVELOPMENT.md#system-1-laya)) and set `ORPHUSBOT_LAYA_URL=http://127.0.0.1:7600` for the server.
+7. **Nodes** connect through Caddy with TLS: `ORPHUSBOT_SERVER=wss://bots.example.com/node`. Enrol each machine once with a code from **Add a node** on the page (`orphusbot-node enrol <code>`); the GPU box's own node enrols the same way.
 
-7. **First sign-in.** Open `https://bots.example.com` from a device on NetBird, enter the setup token (`ORPHUSBOT_SETUP_TOKEN`), and add a passkey when asked. From then on, sign in with the passkey. Add one passkey per device, or use a passkey manager that syncs them.
+8. **First sign-in.** Open `https://bots.example.com` from a device on NetBird, enter the setup token (`ORPHUSBOT_SETUP_TOKEN`), and add a passkey when asked. From then on, sign in with the passkey. Add one passkey per device, or use a passkey manager that syncs them.
 
 ## Troubleshooting
 

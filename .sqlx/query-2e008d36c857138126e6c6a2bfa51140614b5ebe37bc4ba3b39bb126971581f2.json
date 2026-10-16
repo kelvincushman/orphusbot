@@ -1,21 +1,32 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select seq, body as \"body: Json<ThreadEvent>\" from event\n           where thread_id = $1 and seq > $2 order by seq",
+  "query": "select e.id, b.slug, e.body as \"body: Json<ThreadEvent>\" from event e\n           join thread t on t.id = e.thread_id join bot b on b.id = t.bot_id\n           where e.id > $1 order by e.id",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "seq",
+        "name": "id",
         "type_info": "Int8",
         "origin": {
           "Table": {
             "table": "event",
-            "name": "seq"
+            "name": "id"
           }
         }
       },
       {
         "ordinal": 1,
+        "name": "slug",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "slug"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
         "name": "body: Json<ThreadEvent>",
         "type_info": "Jsonb",
         "origin": {
@@ -28,14 +39,14 @@
     ],
     "parameters": {
       "Left": [
-        "Int8",
         "Int8"
       ]
     },
     "nullable": [
       false,
+      false,
       false
     ]
   },
-  "hash": "47bc59d6455515d92c90fb5c77185dde093012e3f4c2a11506f011ba4245a8e4"
+  "hash": "2e008d36c857138126e6c6a2bfa51140614b5ebe37bc4ba3b39bb126971581f2"
 }

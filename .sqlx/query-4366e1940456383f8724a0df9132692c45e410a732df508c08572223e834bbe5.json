@@ -1,0 +1,122 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled\n         from bot order by disabled, slug <> 'inbox', name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "slug",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "slug"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "remit",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "remit"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "instructions",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "instructions"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "model",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "model"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "thinking",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "thinking"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "exclude_tools",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "exclude_tools"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "scope",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "scope"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "disabled",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "disabled"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4366e1940456383f8724a0df9132692c45e410a732df508c08572223e834bbe5"
+}

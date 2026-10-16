@@ -19,9 +19,9 @@ export async function createPasskey(options) {
   const publicKey = PublicKeyCredential.parseCreationOptionsFromJSON(JSON.parse(options).publicKey);
   return JSON.stringify((await navigator.credentials.create({ publicKey })).toJSON());
 }
-export function openScreen(el, viewOnly, onEnd) {
+export function openScreen(el, bot, viewOnly, onEnd) {
   const scheme = location.protocol === "https:" ? "wss://" : "ws://";
-  const rfb = new window.OrphusRFB(el, scheme + location.host + "/api/screen");
+  const rfb = new window.OrphusRFB(el, scheme + location.host + "/api/screen?bot=" + encodeURIComponent(bot));
   rfb.viewOnly = viewOnly;
   rfb.scaleViewport = true;
   rfb.addEventListener("disconnect", () => onEnd());
@@ -43,6 +43,7 @@ extern "C" {
     #[wasm_bindgen(js_name = openScreen)]
     pub fn open_screen(
         el: &web_sys::HtmlElement,
+        bot: &str,
         view_only: bool,
         on_end: &js_sys::Function,
     ) -> JsValue;

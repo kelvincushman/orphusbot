@@ -36,6 +36,8 @@ pub struct Spec<'a> {
     pub image: &'a str,
     /// Container and volume names derive from this.
     pub bot: &'a str,
+    /// Also mount the shared team folder at `/shared` (DESIGN §4.4, Team vs Private).
+    pub team: bool,
 }
 
 impl Spec<'_> {
@@ -64,24 +66,44 @@ impl Spec<'_> {
     /// Makes sure the computer is running and fenced in; returns its name.
     pub async fn ensure(&self) -> anyhow::Result<String> {
         let name = self.container();
+        let team = if self.team { "1" } else { "0" };
         let state = self
-            .podman(&["container", "inspect", "-f", "{{.State.Running}}", &name])
+            .podman(&[
+                "container",
+                "inspect",
+                "-f",
+                "{{.State.Running}} {{index .Config.Labels \"orphusbot.team\"}}",
+                &name,
+            ])
             .await
             .ok();
-        match state.as_deref() {
+        // A bot that moved between team and private needs its mounts changed, which
+        // means a new container; its home volume carries over.
+        let state = match state {
+            Some(s) if !s.ends_with(team) => {
+                self.podman(&["rm", "-f", "-t", "0", &name]).await?;
+                None
+            }
+            other => other,
+        };
+        match state.as_deref().and_then(|s| s.split_whitespace().next()) {
             Some("true") => return Ok(name),
             Some(_) => {
                 self.podman(&["start", &name]).await?;
             }
             None => {
+                let label = format!("orphusbot.team={team}");
                 let home = format!("orphusbot-home-{}:{HOME}", self.bot);
-                self.podman(&[
+                let env = format!("HOME={HOME}");
+                let mut args = vec![
                     "run",
                     "--detach",
                     "--name",
                     &name,
                     "--label",
                     "orphusbot.bot",
+                    "--label",
+                    &label,
                     "--cap-drop=ALL",
                     "--security-opt=no-new-privileges",
                     "--read-only",
@@ -94,12 +116,13 @@ impl Spec<'_> {
                     "--workdir",
                     HOME,
                     "--env",
-                    &format!("HOME={HOME}"),
-                    self.image,
-                    "sleep",
-                    "infinity",
-                ])
-                .await?;
+                    &env,
+                ];
+                if self.team {
+                    args.extend(["--volume", "orphusbot-team:/shared"]);
+                }
+                args.extend([self.image, "sleep", "infinity"]);
+                self.podman(&args).await?;
                 info!(%name, image = self.image, "computer created");
             }
         }
@@ -115,7 +138,7 @@ impl Spec<'_> {
     /// A raw VNC stream to the computer's screen, on the child's stdin and stdout.
     /// The VNC server listens only inside the container (images/desktop).
     pub async fn open_screen(&self) -> anyhow::Result<Child> {
-        let name = self.ensure().await?;
+        let name = self.start_existing().await?;
         Command::new(self.runtime)
             .args(["exec", "-i", &name, "socat", "STDIO", "TCP:127.0.0.1:5900"])
             .stdin(Stdio::piped())
@@ -124,6 +147,24 @@ impl Spec<'_> {
             .kill_on_drop(true)
             .spawn()
             .context("starting the screen stream")
+    }
+
+    /// Starts the bot's computer if it's stopped, without creating or changing it
+    /// (a screen request doesn't know the bot's settings; its runs do).
+    async fn start_existing(&self) -> anyhow::Result<String> {
+        let name = self.container();
+        let running = self
+            .podman(&["container", "inspect", "-f", "{{.State.Running}}", &name])
+            .await
+            .map_err(|_| anyhow::anyhow!("This bot has no computer on this node yet"))?;
+        if running != "true" {
+            self.podman(&["start", &name]).await?;
+            if let Err(e) = self.fence(&name).await {
+                let _ = self.podman(&["stop", "--time", "0", &name]).await;
+                return Err(e.context("blocking local networks for the computer"));
+            }
+        }
+        Ok(name)
     }
 
     async fn fence(&self, name: &str) -> anyhow::Result<()> {
@@ -162,6 +203,7 @@ mod tests {
             runtime: "podman",
             image: "docker.io/library/debian:trixie-slim",
             bot: "fence-test",
+            team: true,
         };
         let name = spec.ensure().await.unwrap();
         let ok = |args: &[&str]| {
@@ -190,6 +232,7 @@ mod tests {
         ]);
         let root_writable = ok(&["exec", &name, "touch", "/x"]);
         let home_writable = ok(&["exec", &name, "touch", "/home/bot/x"]);
+        let shared_writable = ok(&["exec", &name, "touch", "/shared/x"]);
         let caps = spec
             .podman(&["exec", &name, "grep", "CapEff", "/proc/self/status"])
             .await
@@ -207,6 +250,7 @@ mod tests {
         );
         assert!(!root_writable, "root is read-only");
         assert!(home_writable, "home is writable");
+        assert!(shared_writable, "a team bot gets the shared folder");
         assert!(
             caps.ends_with("0000000000000000"),
             "no capabilities: {caps}"

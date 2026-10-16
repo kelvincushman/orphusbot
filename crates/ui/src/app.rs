@@ -4,9 +4,11 @@
 use leptos::ev::{KeyboardEvent, SubmitEvent};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
+use std::collections::HashMap;
+
 use orphusbot_proto::view::{Item, RunState, ThreadView};
-use orphusbot_proto::{Dialog, DialogKind, Role, ThreadEvent};
-use serde::Deserialize;
+use orphusbot_proto::{Dialog, DialogKind, Envelope, NodeView, Role, ThreadEvent};
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use wasm_bindgen::prelude::*;
 use web_sys::{EventSource, MessageEvent};
@@ -203,17 +205,32 @@ fn SignIn(setup_open: bool) -> impl IntoView {
 }
 
 /// Streams the thread's events into `view` (DESIGN §12, sync).
-fn connect(view: RwSignal<ThreadView>, ctx: Ctx) {
+fn connect(desk: Desk, ctx: Ctx) {
     let Ok(source) = EventSource::new("/api/events") else {
         return ctx.toast.set("This browser can't stream events".into());
     };
     let on_message = Closure::<dyn Fn(MessageEvent)>::new(move |m: MessageEvent| {
-        let event = m
+        let envelope = m
             .data()
             .as_string()
-            .and_then(|d| serde_json::from_str::<ThreadEvent>(&d).ok());
-        if let Some(event) = event {
-            view.update(|v| v.apply(event));
+            .and_then(|d| serde_json::from_str::<Envelope>(&d).ok());
+        let Some(Envelope { bot, event }) = envelope else {
+            return;
+        };
+        match (bot, event) {
+            (_, ThreadEvent::Nodes { nodes }) => desk.nodes.set(nodes),
+            (Some(bot), event) => {
+                // A bot made on another device: fetch the roster again.
+                if !desk
+                    .bots
+                    .with_untracked(|b| b.iter().any(|b| b.slug == bot))
+                {
+                    desk.load_bots(ctx);
+                }
+                desk.threads
+                    .update(|t| t.entry(bot).or_default().apply(event));
+            }
+            (None, _) => {}
         }
     });
     let retrying = source.clone();
@@ -235,52 +252,136 @@ fn connect(view: RwSignal<ThreadView>, ctx: Ctx) {
     on_error.forget();
 }
 
+/// A bot, as the server lists it (server `bots::Bot`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+struct Bot {
+    slug: String,
+    name: String,
+    remit: String,
+    instructions: String,
+    model: Option<String>,
+    thinking: Option<String>,
+    exclude_tools: Vec<String>,
+    scope: String,
+    disabled: bool,
+}
+
+/// Everything the signed-in screens share: the bots, which one is open, every
+/// bot's thread, and the nodes.
+#[derive(Clone, Copy)]
+struct Desk {
+    bots: RwSignal<Vec<Bot>>,
+    selected: RwSignal<String>,
+    threads: RwSignal<HashMap<String, ThreadView>>,
+    nodes: RwSignal<Vec<NodeView>>,
+}
+
+impl Desk {
+    fn load_bots(self, ctx: Ctx) {
+        ctx.run(async move {
+            self.bots.set(api::get("/api/bots").await?);
+            Ok(())
+        });
+    }
+
+    /// The open bot's thread.
+    fn thread(self) -> Memo<ThreadView> {
+        Memo::new(move |_| {
+            let bot = self.selected.get();
+            self.threads
+                .with(|t| t.get(&bot).cloned().unwrap_or_default())
+        })
+    }
+
+    fn bot(self) -> Memo<Bot> {
+        Memo::new(move |_| {
+            let slug = self.selected.get();
+            self.bots
+                .with(|b| b.iter().find(|b| b.slug == slug).cloned())
+                .unwrap_or_default()
+        })
+    }
+}
+
+/// The first letter of a bot's name, for its avatar.
+fn initial(name: &str) -> String {
+    name.chars()
+        .next()
+        .map(|c| c.to_uppercase().to_string())
+        .unwrap_or_default()
+}
+
 #[component]
 fn Shell() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
-    let thread = RwSignal::new(ThreadView::default());
+    let desk = Desk {
+        bots: RwSignal::new(Vec::new()),
+        selected: RwSignal::new("inbox".to_owned()),
+        threads: RwSignal::new(HashMap::new()),
+        nodes: RwSignal::new(Vec::new()),
+    };
+    provide_context(desk);
+    desk.load_bots(ctx);
     let settings = RwSignal::new(false);
     let menu = RwSignal::new(false);
+    // `None`: closed; `Some(None)`: a new bot; `Some(Some(bot))`: editing it.
+    let editing = RwSignal::new(None::<Option<Bot>>);
     // Opened from a device's link (`/?link=CODE`): go straight to approving it.
     let link_code = RwSignal::new(take_link_param().unwrap_or_default());
     if !link_code.get_untracked().is_empty() {
         settings.set(true);
     }
-    connect(thread, ctx);
-    let status = Memo::new(move |_| thread.with(|v| v.status()));
-    let waiting = Memo::new(move |_| thread.with(|v| v.waiting()));
-    let preview = Memo::new(move |_| {
-        thread.with(|v| {
-            let last = v.last_message().unwrap_or("No messages yet");
-            last.chars().take(80).collect::<String>()
-        })
-    });
+    connect(desk, ctx);
+    let thread = desk.thread();
+    let bot = desk.bot();
+    let status = Memo::new(move |_| desk.nodes.with(|n| thread.with(|v| v.status(n))));
     view! {
         <div class="shell">
             <nav class="sidebar" class:open=move || menu.get() aria-label="Bots">
                 <div class="brand">"OrphusBot"</div>
-                // ponytail: one bot until M3 adds bots; this list grows then.
-                <button class="bot active" aria-current="page" on:click=move |_| menu.set(false)>
-                    <span class="avatar" aria-hidden="true">"O"</span>
-                    <span class="text">
-                        <strong>"Orphus"</strong>
-                        <small>{move || preview.get()}</small>
-                    </span>
-                    <Show when=move || { waiting.get() > 0 }>
-                        <span class="badge" title="Waiting for you">{move || waiting.get()}</span>
-                    </Show>
-                </button>
+                <For each=move || desk.bots.get() key=|b| (b.slug.clone(), b.name.clone(), b.disabled) children=move |b| {
+                    let slug = b.slug.clone();
+                    let select = slug.clone();
+                    let current = slug.clone();
+                    let badge = slug.clone();
+                    let waiting = Memo::new(move |_| desk.threads.with(|t| t.get(&badge).map_or(0, ThreadView::waiting)));
+                    let preview = Memo::new(move |_| {
+                        desk.threads.with(|t| {
+                            let last = t.get(&slug).and_then(|v| v.last_message().map(str::to_owned));
+                            last.unwrap_or_else(|| "No messages yet".into()).chars().take(80).collect::<String>()
+                        })
+                    });
+                    view! {
+                        <button class="bot" class:active=move || desk.selected.get() == current class:disabled=b.disabled
+                            aria-current=move || (desk.selected.get() == select).then_some("page")
+                            on:click={
+                                let slug = b.slug.clone();
+                                move |_| { desk.selected.set(slug.clone()); menu.set(false); }
+                            }>
+                            <span class="avatar" aria-hidden="true">{initial(&b.name)}</span>
+                            <span class="text">
+                                <strong>{b.name.clone()}</strong>
+                                <small>{move || preview.get()}</small>
+                            </span>
+                            <Show when=move || { waiting.get() > 0 }>
+                                <span class="badge" title="Waiting for you">{move || waiting.get()}</span>
+                            </Show>
+                        </button>
+                    }
+                } />
+                <button class="new-bot" on:click=move |_| { editing.set(Some(None)); menu.set(false); }>"+ New bot"</button>
                 <div class="spacer"></div>
                 <button on:click=move |_| settings.set(true)>"Settings"</button>
             </nav>
             <main class="chat">
                 <header>
                     <button class="menu" aria-label="Show bots" on:click=move |_| menu.update(|m| *m = !*m)>"☰"</button>
-                    <span class="avatar" aria-hidden="true">"O"</span>
+                    <span class="avatar" aria-hidden="true">{move || initial(&bot.get().name)}</span>
                     <div class="title">
-                        <h1>"Orphus"</h1>
+                        <h1>{move || bot.get().name}</h1>
                         <span class="status" role="status">{move || status.get()}</span>
                     </div>
+                    <button aria-label="Edit this bot" on:click=move |_| editing.set(Some(Some(bot.get_untracked())))>"Edit"</button>
                     <button aria-label="Show the bot's screen" on:click=move |_| ctx.bot_screen.set(true)>"Screen"</button>
                     <button aria-label="Settings" on:click=move |_| settings.set(true)>"⚙"</button>
                 </header>
@@ -289,6 +390,9 @@ fn Shell() -> impl IntoView {
                         <span>"You're signed in with the setup token for one hour. Add a passkey to keep access."</span>
                         <button class="primary" on:click=move |_| settings.set(true)>"Add a passkey"</button>
                     </div>
+                </Show>
+                <Show when=move || bot.get().disabled>
+                    <div class="banner">"This bot is disabled. Edit it to turn it back on."</div>
                 </Show>
                 <Log thread />
                 <Composer thread />
@@ -299,12 +403,111 @@ fn Shell() -> impl IntoView {
             <Show when=move || ctx.bot_screen.get()>
                 <BotScreen />
             </Show>
+            {move || editing.get().map(|bot| view! { <BotSheet bot editing /> })}
+        </div>
+    }
+}
+
+/// Create a bot, or edit one (PRD B-BOT-01).
+#[component]
+fn BotSheet(bot: Option<Bot>, editing: RwSignal<Option<Option<Bot>>>) -> impl IntoView {
+    let ctx = expect_context::<Ctx>();
+    let desk = expect_context::<Desk>();
+    let is_new = bot.is_none();
+    let bot = bot.unwrap_or_else(|| Bot {
+        scope: "private".into(),
+        ..Bot::default()
+    });
+    let is_inbox = bot.slug == "inbox";
+    let name = RwSignal::new(bot.name.clone());
+    let remit = RwSignal::new(bot.remit.clone());
+    let instructions = RwSignal::new(bot.instructions.clone());
+    let model = RwSignal::new(bot.model.clone().unwrap_or_default());
+    let thinking = RwSignal::new(bot.thinking.clone().unwrap_or_default());
+    let team = RwSignal::new(bot.scope == "team");
+    let disabled = RwSignal::new(bot.disabled);
+    let save = move |ev: SubmitEvent| {
+        ev.prevent_default();
+        let model = model.get_untracked();
+        let thinking = thinking.get_untracked();
+        let edited = Bot {
+            name: name.get_untracked(),
+            remit: remit.get_untracked(),
+            instructions: instructions.get_untracked(),
+            model: (!model.trim().is_empty()).then_some(model),
+            thinking: (!thinking.is_empty()).then_some(thinking),
+            scope: if team.get_untracked() {
+                "team"
+            } else {
+                "private"
+            }
+            .into(),
+            disabled: disabled.get_untracked(),
+            ..bot.clone()
+        };
+        ctx.run(async move {
+            let path = if is_new {
+                "/api/bots"
+            } else {
+                "/api/bots/update"
+            };
+            let saved: Bot = api::post(
+                path,
+                &serde_json::to_value(&edited).map_err(|e| e.to_string())?,
+            )
+            .await?
+            .json()
+            .await
+            .map_err(|e| e.to_string())?;
+            desk.load_bots(ctx);
+            desk.selected.set(saved.slug);
+            editing.set(None);
+            Ok(())
+        });
+    };
+    let thinking_levels = [
+        "", "off", "minimal", "low", "medium", "high", "xhigh", "max",
+    ];
+    view! {
+        <div class="overlay" on:keydown=move |ev: KeyboardEvent| if ev.key() == "Escape" { editing.set(None) }>
+            <form class="sheet" role="dialog" aria-modal="true" aria-labelledby="bot-title" on:submit=save>
+                <header>
+                    <h2 id="bot-title">{if is_new { "New bot" } else { "Edit bot" }}</h2>
+                    <button type="button" on:click=move |_| editing.set(None)>"Cancel"</button>
+                </header>
+                <label>"Name"<input required maxlength="40" bind:value=name autofocus /></label>
+                <label>"What it's for (one line; used to route work to it)"
+                    <input maxlength="200" bind:value=remit placeholder="Researches topics and writes short briefs" /></label>
+                <label>"Instructions"<textarea rows=5 maxlength="8000" bind:value=instructions
+                    placeholder="How it should work, what to avoid, who it works for"></textarea></label>
+                <div class="row two">
+                    <label>"Model"<input maxlength="100" bind:value=model placeholder="Orphus default" /></label>
+                    <label>"Thinking"
+                        <select on:change=move |ev| thinking.set(event_target_value(&ev)) prop:value=move || thinking.get()>
+                            {thinking_levels.map(|t| view! { <option value=t>{if t.is_empty() { "Default" } else { t }}</option> })}
+                        </select>
+                    </label>
+                </div>
+                <fieldset>
+                    <legend>"Computer"</legend>
+                    <label class="inline"><input type="radio" name="scope" prop:checked=move || !team.get()
+                        on:change=move |_| team.set(false) />"Private: its own home"</label>
+                    <label class="inline"><input type="radio" name="scope" prop:checked=move || team.get()
+                        on:change=move |_| team.set(true) />"Team: also shares the team folder"</label>
+                </fieldset>
+                {(!is_new && !is_inbox).then(|| view! {
+                    <label class="inline"><input type="checkbox" bind:checked=disabled />"Disabled: takes no new work"</label>
+                })}
+                <div class="row">
+                    <button class="primary">{if is_new { "Create bot" } else { "Save" }}</button>
+                </div>
+            </form>
         </div>
     }
 }
 
 #[component]
-fn Log(thread: RwSignal<ThreadView>) -> impl IntoView {
+fn Log(thread: Memo<ThreadView>) -> impl IntoView {
     let items = Memo::new(move |_| thread.with(|v| v.items.clone()));
     let streaming = Memo::new(move |_| thread.with(|v| v.streaming.clone()));
     let log = NodeRef::<leptos::html::Div>::new();
@@ -361,6 +564,7 @@ fn choice(label: impl Into<String>, body: Value, class: &'static str) -> impl In
 #[component]
 fn Card(dialog: Dialog, outcome: Option<String>) -> impl IntoView {
     let ctx = expect_context::<Ctx>();
+    let desk = expect_context::<Desk>();
     let id = dialog.id;
     let open = outcome.is_none();
     let body = match dialog.kind {
@@ -369,7 +573,7 @@ fn Card(dialog: Dialog, outcome: Option<String>) -> impl IntoView {
             input,
             uncertain,
         } => view! {
-            <h2>{format!("Allow Orphus to use {tool}?")}</h2>
+            <h2>{format!("Allow {} to use {tool}?", desk.bot().get_untracked().name)}</h2>
             {uncertain.then(|| view! {
                 <p class="warn">"An interrupted attempt may already have run this. Check before allowing it again."</p>
             })}
@@ -384,7 +588,7 @@ fn Card(dialog: Dialog, outcome: Option<String>) -> impl IntoView {
         }
         .into_any(),
         DialogKind::Takeover { reason } => view! {
-            <h2>"Orphus needs you on its screen"</h2>
+            <h2>{move || format!("{} needs you on its screen", desk.bot().get().name)}</h2>
             <p>{reason}</p>
             {open.then(|| view! {
                 <div class="row">
@@ -449,8 +653,9 @@ fn Card(dialog: Dialog, outcome: Option<String>) -> impl IntoView {
 }
 
 #[component]
-fn Composer(thread: RwSignal<ThreadView>) -> impl IntoView {
+fn Composer(thread: Memo<ThreadView>) -> impl IntoView {
     let ctx = expect_context::<Ctx>();
+    let desk = expect_context::<Desk>();
     let text = RwSignal::new(String::new());
     let busy = RwSignal::new(false);
     let running = Memo::new(move |_| thread.with(|v| v.run != RunState::Idle));
@@ -460,23 +665,30 @@ fn Composer(thread: RwSignal<ThreadView>) -> impl IntoView {
             return;
         }
         busy.set(true);
+        let bot = desk.selected.get_untracked();
         ctx.run(async move {
-            let sent = api::post("/api/messages", &json!({ "text": t })).await;
+            let sent = api::post("/api/messages", &json!({ "bot": bot, "text": t })).await;
             busy.set(false);
             sent?;
             text.set(String::new());
             Ok(())
         });
     };
-    let stop =
-        move |_| ctx.run(async { api::post("/api/runs/cancel", &json!({})).await.map(drop) });
+    let stop = move |_| {
+        let bot = desk.selected.get_untracked();
+        ctx.run(async move {
+            api::post("/api/runs/cancel", &json!({ "bot": bot }))
+                .await
+                .map(drop)
+        })
+    };
     view! {
         <div class="composer">
             <form on:submit=move |ev: SubmitEvent| {
                 ev.prevent_default();
                 send();
             }>
-                <textarea rows=1 aria-label="Message" placeholder="Message Orphus" title="Enter to send, Shift+Enter for a new line"
+                <textarea rows=1 aria-label="Message" placeholder=move || format!("Message {}", desk.bot().get().name) title="Enter to send, Shift+Enter for a new line"
                     bind:value=text
                     on:keydown=move |ev: KeyboardEvent| {
                         if ev.key() == "Enter" && !ev.shift_key() {
@@ -497,6 +709,8 @@ fn Composer(thread: RwSignal<ThreadView>) -> impl IntoView {
 #[component]
 fn BotScreen() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
+    let desk = expect_context::<Desk>();
+    let bot = desk.bot();
     let control = RwSignal::new(false);
     let ended = RwSignal::new(false);
     let host = NodeRef::<leptos::html::Div>::new();
@@ -507,7 +721,8 @@ fn BotScreen() -> impl IntoView {
             return;
         }
         let on_end = Closure::<dyn Fn()>::new(move || ended.set(true));
-        let screen = api::open_screen(&el, true, on_end.as_ref().unchecked_ref());
+        let slug = bot.get_untracked().slug;
+        let screen = api::open_screen(&el, &slug, true, on_end.as_ref().unchecked_ref());
         // ponytail: one small closure per opened panel is left for the page's lifetime.
         on_end.forget();
         rfb.set_value(Some(screen));
@@ -532,7 +747,7 @@ fn BotScreen() -> impl IntoView {
         <div class="overlay">
             <section class="sheet screen" role="dialog" aria-modal="true" aria-labelledby="screen-title">
                 <header>
-                    <h2 id="screen-title">"Orphus's screen"</h2>
+                    <h2 id="screen-title">{move || format!("{}'s screen", bot.get().name)}</h2>
                     <div class="row">
                         <button class:primary=move || control.get() aria-pressed=move || control.get().to_string()
                             on:click=move |_| control.update(|c| *c = !*c)>

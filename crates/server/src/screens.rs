@@ -5,31 +5,41 @@
 //! frames tagged with a stream number, and the node pipes it into the bot's
 //! computer. Clients never connect to a node, and the computer publishes no port.
 
-use axum::extract::State;
 use axum::extract::ws::{CloseFrame, Message as WsMessage, WebSocket, WebSocketUpgrade};
+use axum::extract::{Query, State};
 use axum::response::Response;
 use futures_util::{SinkExt, StreamExt};
 use orphusbot_proto::{ToNode, screen_frame, split_screen_frame};
 use tokio::sync::mpsc;
 use tracing::warn;
 
-use crate::{App, BOT, Shared, db, lock};
+use crate::{App, Shared, db, lock};
 
 /// Bytes for a viewer, or the reason its stream ended.
 pub type ToViewer = Result<Vec<u8>, String>;
 
-pub async fn open(State(app): State<Shared>, ws: WebSocketUpgrade) -> Response {
-    // noVNC asks for the "binary" subprotocol.
-    ws.protocols(["binary"])
-        .on_upgrade(move |socket| relay(app, socket))
+#[derive(serde::Deserialize)]
+pub struct Which {
+    #[serde(default = "crate::inbox")]
+    bot: String,
 }
 
-async fn relay(app: Shared, socket: WebSocket) {
+pub async fn open(
+    State(app): State<Shared>,
+    Query(which): Query<Which>,
+    ws: WebSocketUpgrade,
+) -> Response {
+    // noVNC asks for the "binary" subprotocol.
+    ws.protocols(["binary"])
+        .on_upgrade(move |socket| relay(app, which.bot, socket))
+}
+
+async fn relay(app: Shared, bot: String, socket: WebSocket) {
     let (mut sink, mut source) = socket.split();
     // ponytail: a viewer that reads slowly slows the whole node link; per-stream flow control if it bites.
     let (to_viewer, mut from_node) = mpsc::channel::<ToViewer>(256);
     // The screen is on whichever node holds the bot's computer.
-    let home = db::computer_home(&app.db, BOT).await.ok().flatten();
+    let home = db::computer_home(&app.db, &bot).await.ok().flatten();
     let (stream, link) = {
         let mut rt = lock(&app.rt);
         rt.next_screen += 1;
@@ -46,22 +56,33 @@ async fn relay(app: Shared, socket: WebSocket) {
             ended = "The bot has no computer yet; it gets one with its first task".into()
         }
         None => ended = "The node with the bot's computer isn't connected".into(),
-        Some(link) if link.tx.send(ToNode::ScreenOpen { stream }).await.is_ok() => loop {
-            tokio::select! {
-                data = from_node.recv() => match data {
-                    Some(Ok(data)) => if sink.send(WsMessage::Binary(data.into())).await.is_err() { break },
-                    Some(Err(reason)) => { ended = reason; break }
-                    None => break,
-                },
-                msg = source.next() => match msg {
-                    Some(Ok(WsMessage::Binary(data))) => {
-                        if link.screen.send(screen_frame(stream, &data)).await.is_err() { break }
-                    }
-                    Some(Ok(WsMessage::Close(_)) | Err(_)) | None => break,
-                    Some(Ok(_)) => {}
-                },
+        Some(link)
+            if link
+                .tx
+                .send(ToNode::ScreenOpen {
+                    stream,
+                    bot: bot.clone(),
+                })
+                .await
+                .is_ok() =>
+        {
+            loop {
+                tokio::select! {
+                    data = from_node.recv() => match data {
+                        Some(Ok(data)) => if sink.send(WsMessage::Binary(data.into())).await.is_err() { break },
+                        Some(Err(reason)) => { ended = reason; break }
+                        None => break,
+                    },
+                    msg = source.next() => match msg {
+                        Some(Ok(WsMessage::Binary(data))) => {
+                            if link.screen.send(screen_frame(stream, &data)).await.is_err() { break }
+                        }
+                        Some(Ok(WsMessage::Close(_)) | Err(_)) | None => break,
+                        Some(Ok(_)) => {}
+                    },
+                }
             }
-        },
+        }
         Some(_) => ended = "The node went away".into(),
     }
     lock(&app.rt).screens.remove(&stream);

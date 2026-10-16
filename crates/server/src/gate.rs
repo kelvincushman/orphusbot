@@ -179,10 +179,19 @@ mod tests {
     use serde_json::json;
 
     async fn run_with_attempts(db: &PgPool) -> (Attempt, Attempt) {
-        crate::runs::submit(db, "work").await.unwrap();
-        let first = crate::runs::claim(db, "laptop").await.unwrap().unwrap();
+        let crate::runs::Submitted::Queued(run) = crate::runs::submit(db, 1, "work").await.unwrap()
+        else {
+            panic!("expected a new run")
+        };
+        let first = crate::runs::claim(db, run, "laptop")
+            .await
+            .unwrap()
+            .unwrap();
         crate::runs::release(db, Some("laptop")).await.unwrap();
-        let second = crate::runs::claim(db, "laptop").await.unwrap().unwrap();
+        let second = crate::runs::claim(db, run, "laptop")
+            .await
+            .unwrap()
+            .unwrap();
         (
             Attempt {
                 run: first.run,

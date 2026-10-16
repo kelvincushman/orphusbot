@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select t.title from proposal p join ticket t on t.id = p.ticket_id\n         where p.state = 'accepted' and p.kind in ('commitment', 'task') and t.status <> 'done'\n         order by p.id limit 5",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ticket",
+            "name": "title"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f56fb5cc6d3ea11e29b86f814b300779337b70d77ef96cbfacb95f17988bf604"
+}

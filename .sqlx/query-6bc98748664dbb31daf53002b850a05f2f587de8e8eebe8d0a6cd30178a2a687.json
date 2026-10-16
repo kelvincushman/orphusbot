@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select minutes from nudge",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "minutes",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "nudge",
+            "name": "minutes"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6bc98748664dbb31daf53002b850a05f2f587de8e8eebe8d0a6cd30178a2a687"
+}

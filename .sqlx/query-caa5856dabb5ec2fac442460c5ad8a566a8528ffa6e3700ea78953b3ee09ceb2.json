@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select state from proposal where kind = 'commitment'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "proposal",
+            "name": "state"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "caa5856dabb5ec2fac442460c5ad8a566a8528ffa6e3700ea78953b3ee09ceb2"
+}

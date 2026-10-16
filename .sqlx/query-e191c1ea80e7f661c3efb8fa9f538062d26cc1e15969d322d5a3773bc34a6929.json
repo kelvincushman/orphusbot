@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select kind, title, detail, who, due, quote from proposal where id = $1 and state = 'proposed'",
+  "query": "select kind, title, detail, who, due, quote, due_at from proposal where id = $1 and state = 'proposed'",
   "describe": {
     "columns": [
       {
@@ -68,6 +68,17 @@
             "name": "quote"
           }
         }
+      },
+      {
+        "ordinal": 6,
+        "name": "due_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "proposal",
+            "name": "due_at"
+          }
+        }
       }
     ],
     "parameters": {
@@ -81,8 +92,9 @@
       false,
       false,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "a6c27621037e9a50f0c3230591ea3fd9bac4cd7302cefffbe6bdedb62fb4b2b7"
+  "hash": "e191c1ea80e7f661c3efb8fa9f538062d26cc1e15969d322d5a3773bc34a6929"
 }

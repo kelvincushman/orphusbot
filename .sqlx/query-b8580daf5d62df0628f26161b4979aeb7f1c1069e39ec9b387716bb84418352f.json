@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update proposal set state = 'proposed', resurfaced = true, decided_at = null\n             where state = 'dismissed' and kind in ('commitment', 'task') and not resurfaced\n               and not auto_filed and decided_at < $1::timestamptz - interval '3 days'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b8580daf5d62df0628f26161b4979aeb7f1c1069e39ec9b387716bb84418352f"
+}

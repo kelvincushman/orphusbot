@@ -19,6 +19,9 @@
 
 use std::time::Duration;
 
+use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+use chrono_tz::Tz;
+
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -48,8 +51,9 @@ asked of the owner, or a follow-up they owe the owner (\"Sam said they'd send th
 Output a JSON array and nothing else. Each item: {\"kind\": one of commitment | task | appointment | \
 follow-up | idea | remember, \"title\": a short, concrete action (max 80 characters, no guilt wording), \
 \"detail\": one sentence, \"who\": the other person if any, \"due\": the time it's due as said (\"Thursday\", \
-\"tomorrow 3pm\") or \"\", \"quote\": the exact words it came from (max 200 characters)}. If there is \
-nothing worth keeping, output [].";
+\"tomorrow 3pm\") or \"\", \"due_at\": that time as YYYY-MM-DDTHH:MM in the owner's local time when the \
+words give a day and a time (use the `Now:` line at the top), else \"\", \"quote\": the exact words it came \
+from (max 200 characters)}. If there is nothing worth keeping, output [].";
 
 fn allowed() -> bool {
     std::env::var("ORPHUSBOT_HANDS_FREE_ALLOWED").map_or(true, |v| v != "false" && v != "0")
@@ -159,12 +163,15 @@ async fn mine_due(app: &App) -> sqlx::Result<()> {
                 crate::placement::Placement::Wait { .. } => None,
             }
         };
+        // The extractor needs the owner's clock to turn "tomorrow 3pm" into a time.
+        let tz = crate::profiles::current(&app.db).await.tz;
+        let now = Utc::now().with_timezone(&tz).format("%Y-%m-%dT%H:%M (%A)");
         let sent = match node {
             Some(tx) => tx
                 .send(ToNode::Extract {
                     id: w.id,
                     system: EXTRACT_PROMPT.to_owned(),
-                    text: w.text,
+                    text: format!("Now: {now} in {tz}\n\n{}", w.text),
                 })
                 .await
                 .is_ok(),
@@ -195,24 +202,17 @@ pub async fn extracted(app: &App, id: i64, text: Option<String>, error: Option<S
         .await;
         return;
     };
-    let items = parse(&text);
+    let profile = crate::profiles::current(&app.db).await;
+    let items: Vec<Proposed> = parse(&text, profile.tz)
+        .into_iter()
+        .filter(|p| profile.keeps(&p.kind))
+        .collect();
     let mut filed = 0;
     for p in &items {
-        let saved = sqlx::query!(
-            "insert into proposal (window_id, kind, title, detail, who, due, quote)
-             values ($1, $2, $3, $4, $5, $6, $7)",
-            id,
-            p.kind,
-            p.title,
-            p.detail,
-            p.who,
-            p.due,
-            p.quote
-        )
-        .execute(&app.db)
-        .await;
-        match saved {
-            Ok(_) => filed += 1,
+        let auto = profile.auto_files(&p.kind);
+        match store(app, id, p, auto).await {
+            Ok(()) if !auto => filed += 1,
+            Ok(()) => {}
             Err(e) => warn!("storing a proposal: {e}"),
         }
     }
@@ -223,7 +223,8 @@ pub async fn extracted(app: &App, id: i64, text: Option<String>, error: Option<S
     .execute(&app.db)
     .await;
     info!(window = id, filed, "capture mined");
-    if filed > 0 {
+    // Standard waits for the digest; Focus support also says so straight away.
+    if filed > 0 && profile.focus {
         app.notifier.send(crate::notify::Push {
             title: format!(
                 "{filed} thing{} from your conversation",
@@ -231,6 +232,7 @@ pub async fn extracted(app: &App, id: i64, text: Option<String>, error: Option<S
             ),
             body: items
                 .iter()
+                .filter(|p| !profile.auto_files(&p.kind))
                 .map(|p| p.title.clone())
                 .collect::<Vec<_>>()
                 .join("\n"),
@@ -241,6 +243,59 @@ pub async fn extracted(app: &App, id: i64, text: Option<String>, error: Option<S
     }
 }
 
+/// Saves a proposal; one that files itself (Focus support's notes) gets its ticket now.
+async fn store(app: &App, window: i64, p: &Proposed, auto: bool) -> sqlx::Result<()> {
+    let mut tx = app.db.begin().await?;
+    let ticket = match auto {
+        false => None,
+        true => Some(file_ticket(&mut tx, p).await?),
+    };
+    sqlx::query!(
+        "insert into proposal (window_id, kind, title, detail, who, due, quote, due_at, state, auto_filed, ticket_id, decided_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, case when $9 then 'accepted' else 'proposed' end, $9, $10,
+                 case when $9 then now() end)",
+        window,
+        p.kind,
+        p.title,
+        p.detail,
+        p.who,
+        p.due,
+        p.quote,
+        p.due_at,
+        auto,
+        ticket
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await
+}
+
+/// The unassigned ticket a proposal becomes (DESIGN §10.4); nothing starts by itself.
+async fn file_ticket(tx: &mut sqlx::PgConnection, p: &Proposed) -> sqlx::Result<i64> {
+    let title: String = match p.kind.as_str() {
+        "follow-up" => format!("Follow up: {}", p.title),
+        "appointment" => format!("Appointment: {}", p.title),
+        "idea" | "remember" => format!("Note: {}", p.title),
+        _ => p.title.clone(),
+    }
+    .chars()
+    .take(200)
+    .collect();
+    let mut body = p.detail.clone();
+    for (label, value) in [("Who", &p.who), ("Due", &p.due), ("Said", &p.quote)] {
+        if !value.is_empty() {
+            body.push_str(&format!("\n{label}: {value}"));
+        }
+    }
+    sqlx::query_scalar!(
+        "insert into ticket (title, body) values ($1, $2) returning id",
+        title,
+        body.trim()
+    )
+    .fetch_one(tx)
+    .await
+}
+
 #[derive(Debug, PartialEq, Eq)]
 struct Proposed {
     kind: String,
@@ -249,10 +304,25 @@ struct Proposed {
     who: String,
     due: String,
     quote: String,
+    due_at: Option<DateTime<Utc>>,
+}
+
+/// "2026-10-20T15:00" in the owner's zone (or with an offset), else nothing.
+fn due_at(text: &str, tz: Tz) -> Option<DateTime<Utc>> {
+    let text = text.trim();
+    if let Ok(t) = DateTime::parse_from_rfc3339(text) {
+        return Some(t.with_timezone(&Utc));
+    }
+    let local = NaiveDateTime::parse_from_str(text, "%Y-%m-%dT%H:%M")
+        .or_else(|_| NaiveDateTime::parse_from_str(text, "%Y-%m-%dT%H:%M:%S"))
+        .ok()?;
+    tz.from_local_datetime(&local)
+        .earliest()
+        .map(|t| t.with_timezone(&Utc))
 }
 
 /// The extractor's JSON array, checked and trimmed; anything malformed is skipped.
-fn parse(text: &str) -> Vec<Proposed> {
+fn parse(text: &str, tz: Tz) -> Vec<Proposed> {
     let (Some(start), Some(end)) = (text.find('['), text.rfind(']')) else {
         return Vec::new();
     };
@@ -280,6 +350,7 @@ fn parse(text: &str) -> Vec<Proposed> {
                 who: field(v, "who", 100),
                 due: field(v, "due", 100),
                 quote: field(v, "quote", 200),
+                due_at: due_at(&field(v, "due_at", 40), tz),
             })
         })
         .take(10)
@@ -289,7 +360,9 @@ fn parse(text: &str) -> Vec<Proposed> {
 /// Proposals waiting for the owner and the latest decided ones, plus hands-free state.
 pub async fn list(State(app): State<Shared>) -> Result<Json<Value>, ApiError> {
     let proposals = sqlx::query!(
-        r#"select id, kind, title, detail, who, due, quote, state, ticket_id, created_at::text as "at!"
+        r#"select id, kind, title, detail, who, due, quote, state, ticket_id, created_at::text as "at!",
+                  auto_filed and decided_at > now() - interval '24 hours' as "undoable!", resurfaced,
+                  due_at::text as due_at
            from proposal order by state <> 'proposed', id desc limit 50"#
     )
     .fetch_all(&app.db)
@@ -305,6 +378,7 @@ pub async fn list(State(app): State<Shared>) -> Result<Json<Value>, ApiError> {
         "proposals": proposals.into_iter().map(|p| json!({
             "id": p.id, "kind": p.kind, "title": p.title, "detail": p.detail, "who": p.who, "due": p.due,
             "quote": p.quote, "state": p.state, "ticket": p.ticket_id, "at": p.at,
+            "undoable": p.undoable, "resurfaced": p.resurfaced, "due_at": p.due_at,
         })).collect::<Vec<_>>(),
     })))
 }
@@ -320,41 +394,30 @@ pub async fn accept(
     Json(by): Json<ById>,
 ) -> Result<StatusCode, ApiError> {
     let p = sqlx::query!(
-        "select kind, title, detail, who, due, quote from proposal where id = $1 and state = 'proposed'",
+        "select kind, title, detail, who, due, quote, due_at from proposal where id = $1 and state = 'proposed'",
         by.id
     )
     .fetch_optional(&app.db)
     .await
     .map_err(|e| internal("reading a proposal", e))?
     .ok_or((StatusCode::GONE, "That proposal was already handled"))?;
-    let title: String = match p.kind.as_str() {
-        "follow-up" => format!("Follow up: {}", p.title),
-        "appointment" => format!("Appointment: {}", p.title),
-        "idea" | "remember" => format!("Note: {}", p.title),
-        _ => p.title.clone(),
-    }
-    .chars()
-    .take(200)
-    .collect();
-    let mut body = p.detail.clone();
-    for (label, value) in [("Who", &p.who), ("Due", &p.due), ("Said", &p.quote)] {
-        if !value.is_empty() {
-            body.push_str(&format!("\n{label}: {value}"));
-        }
-    }
+    let p = Proposed {
+        kind: p.kind,
+        title: p.title,
+        detail: p.detail,
+        who: p.who,
+        due: p.due,
+        quote: p.quote,
+        due_at: p.due_at,
+    };
     let mut tx = app
         .db
         .begin()
         .await
         .map_err(|e| internal("accepting a proposal", e))?;
-    let ticket = sqlx::query_scalar!(
-        "insert into ticket (title, body) values ($1, $2) returning id",
-        title,
-        body.trim()
-    )
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(|e| internal("accepting a proposal", e))?;
+    let ticket = file_ticket(&mut tx, &p)
+        .await
+        .map_err(|e| internal("accepting a proposal", e))?;
     sqlx::query!(
         "update proposal set state = 'accepted', ticket_id = $2, decided_at = now() where id = $1",
         by.id,
@@ -419,17 +482,34 @@ mod tests {
  {"kind":"Follow-Up","title":"Supplier to confirm delivery date","quote":"we'll confirm the delivery date tomorrow"},
  {"kind":"gossip","title":"not a kind"},
  {"kind":"task","title":""}]"#;
-        let got = parse(reply);
+        let got = parse(reply, Tz::Europe__London);
         assert_eq!(got.len(), 2);
         assert_eq!(got[0].title, "Send the drawings");
         assert_eq!(got[0].due, "Thursday");
         assert_eq!(got[1].kind, "follow-up");
-        assert!(parse("nothing worth keeping").is_empty());
-        assert!(parse("[]").is_empty());
+        assert!(parse("nothing worth keeping", Tz::UTC).is_empty());
+        assert!(parse("[]", Tz::UTC).is_empty());
+        // A due time in London summer time is stored in UTC.
+        let timed = parse(
+            r#"[{"kind":"appointment","title":"Dentist","due_at":"2026-07-01T15:00"}]"#,
+            Tz::Europe__London,
+        );
+        assert_eq!(
+            timed[0].due_at.map(|t| t.to_rfc3339()).as_deref(),
+            Some("2026-07-01T14:00:00+00:00")
+        );
+        assert_eq!(
+            parse(r#"[{"kind":"idea","title":"x","due_at":"soon"}]"#, Tz::UTC)[0].due_at,
+            None
+        );
         let long = format!(
             r#"[{{"kind":"idea","title":"x","quote":"{}"}}]"#,
             "q".repeat(500)
         );
-        assert_eq!(parse(&long)[0].quote.len(), 200, "quotes are capped");
+        assert_eq!(
+            parse(&long, Tz::UTC)[0].quote.len(),
+            200,
+            "quotes are capped"
+        );
     }
 }

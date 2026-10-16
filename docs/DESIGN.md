@@ -591,6 +591,8 @@ Profiles are presets over the same settings:
 
 Cards and cues follow the wearable's existing tiers. Nothing escalates to red for a missed personal task; red is reserved for system errors.
 
+**Built (M4.7):** `server::profiles` with one owner-wide `capture_settings` row (profile and time zone, chosen under Captures). Extraction is told the owner's local time and may give `due_at`; results are filtered to the profile's kinds. Focus support files ideas and things to remember as tickets straight away (`auto_filed`, **Undo** for 24 h removes the ticket if nothing has started on it) and still pushes per window; Standard waits for its digest. A minute loop sends digests at the profile's local times (push plus a notice in the inbox: "N to look at", "Still open", never "overdue"), brings a dismissed commitment back once after three days (`resurfaced`, shown as "Came back: still open"), and nudges accepted appointments that have a `due_at` 30 and 10 minutes before and at the start, once each (`nudge` table), by push and the wrist's new `nudge` alert (blue flash, double buzz, built from shipped LED and haptic commands, so no firmware change). Not yet: the "now" nudge as an ask with snooze (it's an inform), auto-filed notes going to Obsidian, and custom digest times.
+
 ### 10.6 Built (M4.3)
 
 - **Intake:** overheard text on `/api/device/text` (or text without a recent button press) is captured only while the device's hands-free is on **and** `ORPHUSBOT_HANDS_FREE_ALLOWED` isn't `false` (the kill switch); otherwise it's dropped unread. Lines are `speaker: words`, using the app's `talker` label.
@@ -599,7 +601,7 @@ Cards and cues follow the wearable's existing tiers. Nothing escalates to red fo
 - **Proposals** (`proposal`) wait under **Captures**; a push says how many. **Accept** makes an unassigned ticket (follow-ups, appointments and notes are titled as such); **Dismiss** closes it. Nothing starts a run.
 - **Retention:** window text is cleared after `ORPHUSBOT_CAPTURE_RETENTION_DAYS` (default 7). No audio reaches the server on this path.
 - **Visibility:** while any device listens, every screen shows a banner with **Pause**; Captures toggles hands-free per device.
-- **Not yet:** the audio WebSocket and server STT, voice profiles, profiles (digests, nudges, auto-filed notes, re-surfacing), calendar drafts and Obsidian notes on accept, and labels from accept/dismiss.
+- **Not yet:** the audio WebSocket and server STT, voice profiles, calendar drafts and Obsidian notes on accept, and labels from accept/dismiss.
 
 ---
 

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select id, kind, title, detail, who, due, quote, state, ticket_id, created_at::text as \"at!\"\n           from proposal order by state <> 'proposed', id desc limit 50",
+  "query": "select id, kind, title, detail, who, due, quote, state, ticket_id, created_at::text as \"at!\",\n                  auto_filed and decided_at > now() - interval '24 hours' as \"undoable!\", resurfaced,\n                  due_at::text as due_at\n           from proposal order by state <> 'proposed', id desc limit 50",
   "describe": {
     "columns": [
       {
@@ -107,6 +107,29 @@
         "name": "at!",
         "type_info": "Text",
         "origin": "Expression"
+      },
+      {
+        "ordinal": 10,
+        "name": "undoable!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 11,
+        "name": "resurfaced",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "proposal",
+            "name": "resurfaced"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "due_at",
+        "type_info": "Text",
+        "origin": "Expression"
       }
     ],
     "parameters": {
@@ -122,8 +145,11 @@
       false,
       false,
       true,
+      null,
+      null,
+      false,
       null
     ]
   },
-  "hash": "36ab1307c6db340e99f5d0443df6830ae767bd88e4457988e34d10e2f605291f"
+  "hash": "88968fa84d9fa1c95afaa2b42dddceb23380ac0785b8d22bdbb9bc9f4d75bf2a"
 }

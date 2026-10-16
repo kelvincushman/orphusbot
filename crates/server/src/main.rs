@@ -19,6 +19,7 @@ mod links;
 mod nodes;
 mod notify;
 mod placement;
+mod profiles;
 mod routines;
 mod runs;
 mod screens;
@@ -233,6 +234,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(routines::schedule_forever(app.clone()));
     tokio::spawn(device::expire_forever(app.clone()));
     tokio::spawn(capture::mine_forever(app.clone()));
+    tokio::spawn(profiles::tend_forever(app.clone()));
 
     let router = router(app);
 
@@ -283,6 +285,11 @@ fn router(app: Shared) -> Router {
         .route("/api/captures", get(capture::list))
         .route("/api/proposals/accept", post(capture::accept))
         .route("/api/proposals/dismiss", post(capture::dismiss))
+        .route("/api/proposals/undo", post(profiles::undo))
+        .route(
+            "/api/captures/profile",
+            get(profiles::get).post(profiles::set),
+        )
         .route("/api/screen", get(screens::open))
         .route("/api/links/{code}", get(links::lookup))
         .route("/api/links/approve", post(links::approve))

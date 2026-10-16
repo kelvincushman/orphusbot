@@ -313,9 +313,7 @@ class _ChatScreenState extends State<ChatScreen> {
           : MarkdownBlock(
               data: text,
               selectable: true,
-              config: dark
-                  ? MarkdownConfig.darkConfig
-                  : MarkdownConfig.defaultConfig,
+              config: _markdown(dark, scheme),
             ),
     );
     return Align(
@@ -353,6 +351,74 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// How replies look: clear headings and body text, highlighted code blocks
+  /// with their language and a copy button, and tinted inline code.
+  MarkdownConfig _markdown(bool dark, ColorScheme scheme) {
+    final body = TextStyle(fontSize: 15, height: 1.45, color: scheme.onSurface);
+    TextStyle heading(double size) => TextStyle(
+      fontSize: size,
+      height: 1.3,
+      fontWeight: FontWeight.w700,
+      color: scheme.onSurface,
+    );
+    final pre = (dark ? PreConfig.darkConfig : const PreConfig()).copy(
+      textStyle: const TextStyle(
+        fontFamily: 'monospace',
+        fontSize: 13.5,
+        height: 1.4,
+      ),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      wrapper: (child, code, language) => Stack(
+        children: [
+          child,
+          Positioned(
+            top: 2,
+            right: 2,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (language.isNotEmpty)
+                  Text(
+                    language,
+                    style: TextStyle(fontSize: 11, color: scheme.outline),
+                  ),
+                IconButton(
+                  tooltip: 'Copy code',
+                  iconSize: 16,
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.copy),
+                  onPressed: () => Clipboard.setData(ClipboardData(text: code)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    final base = dark
+        ? MarkdownConfig.darkConfig
+        : MarkdownConfig.defaultConfig;
+    return base.copy(
+      configs: [
+        pre,
+        PConfig(textStyle: body),
+        H1Config(style: heading(21)),
+        H2Config(style: heading(18)),
+        H3Config(style: heading(16)),
+        CodeConfig(
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 13.5,
+            backgroundColor: scheme.surfaceContainerHighest,
+          ),
+        ),
+      ],
     );
   }
 

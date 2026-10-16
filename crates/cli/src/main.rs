@@ -382,12 +382,47 @@ fn last_said(view: &ThreadView, role: Role) -> String {
         Item::Message { role: r, text } if *r == role => Some(text.as_str()),
         _ => None,
     });
-    let text = text.unwrap_or_default().trim();
+    let text = plain(text.unwrap_or_default());
+    let text = text.trim();
     if text.chars().count() > 400 {
         format!("{}…", text.chars().take(400).collect::<String>())
     } else {
         text.to_owned()
     }
+}
+
+/// Markdown as plain text, for the bar and notifications: no `#`, `*`, backticks,
+/// fences or link targets; list items become "• ".
+// ponytail: line-by-line rules, not a Markdown parser; covers what the house style produces.
+fn plain(md: &str) -> String {
+    let mut out = Vec::new();
+    for line in md.lines() {
+        let t = line.trim_start();
+        if t.starts_with("```")
+            || t.chars().all(|c| matches!(c, '|' | '-' | ':' | ' ')) && t.contains("--")
+        {
+            continue;
+        }
+        let t = t.trim_start_matches('#').trim_start();
+        let t = match t.strip_prefix("- ").or_else(|| t.strip_prefix("* ")) {
+            Some(rest) => format!("• {rest}"),
+            None => t.to_owned(),
+        };
+        let mut s = t.replace("**", "").replace("__", "").replace('`', "");
+        // [text](url) → text
+        while let (Some(a), Some(b)) = (s.find("]("), s.find('[')) {
+            let Some(close) = s[a..].find(')').map(|c| a + c) else {
+                break;
+            };
+            if b > a {
+                break;
+            }
+            s = format!("{}{}{}", &s[..b], &s[b + 1..a], &s[close + 1..]);
+        }
+        let s = s.trim_matches('|').trim().replace(" | ", " · ");
+        out.push(s);
+    }
+    out.join("\n").trim().to_owned()
 }
 
 /// A desktop notification through `notify-send` (mako on Omarchy). Best effort.
@@ -401,6 +436,15 @@ fn desktop(title: &str, body: &str, urgency: &str) {
 mod tests {
     use super::*;
     use orphusbot_proto::Dialog;
+
+    #[test]
+    fn markdown_becomes_plain_text() {
+        let md = "## Result\n\nThe **build** passed. See [the log](https://x.example/log).\n\n- `cargo test` ok\n* lint ok\n\n```sh\nmake\n```\n| a | b |\n|---|---|\n| 1 | 2 |";
+        assert_eq!(
+            plain(md),
+            "Result\n\nThe build passed. See the log.\n\n• cargo test ok\n• lint ok\n\nmake\na · b\n1 · 2"
+        );
+    }
 
     #[test]
     fn status_counts_running_bots_and_waiting_cards() {

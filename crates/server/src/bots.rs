@@ -13,6 +13,18 @@ use sqlx::PgPool;
 
 use crate::{ApiError, Shared, internal};
 
+/// How every bot formats its replies (DESIGN §3.6). Added to its instructions
+/// when a run starts; a bot's own instructions can override it.
+pub const HOUSE_STYLE: &str = "\n\nHow to write replies (they are shown as Markdown in the chat):\n\
+- Lead with the answer or the result in the first line. No preamble, no restating the question, no sign-off.\n\
+- Plain, friendly British English. Short paragraphs of one to three sentences.\n\
+- Bullet lists for options, findings and several points; numbered lists for steps in order.\n\
+- Headings (##) only for long replies with distinct parts; never for a short answer.\n\
+- Code, commands, paths and file names in backticks; longer code in fenced blocks with the language named.\n\
+- A table when comparing several things on the same points.\n\
+- Bold sparingly, for the one or two things that must not be missed.\n\
+- Links as [what it is](url), not bare URLs. Say when you are unsure, and what would settle it.";
+
 const THINKING: &[&str] = &["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

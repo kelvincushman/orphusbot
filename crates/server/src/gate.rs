@@ -23,6 +23,9 @@ const READ_ONLY: &[&str] = &[
     "search",
     "glob",
     "request_takeover",
+    // The MCP gateway when it only searches or describes tools; a call that
+    // names a tool arrives as `mcp:<tool>` (see `main.rs` `on_dialog`) and asks.
+    "mcp",
 ];
 
 #[derive(Debug, PartialEq, Eq)]
@@ -275,6 +278,38 @@ mod tests {
         assert_eq!(
             decide(&db, &call(a, "c3", "write", &input)).await.unwrap(),
             Verdict::Allow
+        );
+    }
+
+    #[sqlx::test]
+    async fn mcp_searches_run_and_each_mcp_tool_is_ruled_on_its_own(db: PgPool) {
+        let (_, a) = run_with_attempts(&db).await;
+        let search = json!({"search": "mail"});
+        assert_eq!(
+            decide(&db, &call(a, "m1", "mcp", &search)).await.unwrap(),
+            Verdict::Allow
+        );
+        let draft = json!({"tool": "pa_mail_draft_new", "args": "{}"});
+        assert_eq!(
+            decide(&db, &call(a, "m2", "mcp:pa_mail_draft_new", &draft))
+                .await
+                .unwrap(),
+            Verdict::Ask { uncertain: false }
+        );
+        // Always allowing one MCP tool doesn't allow another.
+        owner_decides(&db, a, "m2", true, true).await.unwrap();
+        assert_eq!(
+            decide(&db, &call(a, "m3", "mcp:pa_mail_draft_new", &draft))
+                .await
+                .unwrap(),
+            Verdict::Allow
+        );
+        let delete = json!({"tool": "pa_todo_delete", "args": "{}"});
+        assert_eq!(
+            decide(&db, &call(a, "m4", "mcp:pa_todo_delete", &delete))
+                .await
+                .unwrap(),
+            Verdict::Ask { uncertain: false }
         );
     }
 

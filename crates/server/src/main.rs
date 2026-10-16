@@ -9,6 +9,7 @@ mod auth;
 mod bots;
 mod calibrate;
 mod capture;
+mod connections;
 mod db;
 mod device;
 mod gate;
@@ -19,6 +20,7 @@ mod placement;
 mod routines;
 mod runs;
 mod screens;
+mod secrets;
 mod system1;
 mod tickets;
 mod usage;
@@ -154,6 +156,7 @@ struct App {
     rt: Mutex<Runtime>,
     auth: auth::Auth,
     system1: system1::System1,
+    secrets: secrets::Secrets,
     devices: device::Devices,
     notifier: notify::Notifier,
     /// The built web UI (crates/ui/dist), served at `/`.
@@ -175,6 +178,7 @@ async fn main() -> anyhow::Result<()> {
         std::env::var("ORPHUSBOT_ORIGIN").unwrap_or_else(|_| "http://localhost:7480".into());
     let auth = auth::Auth::new(&origin, setup_token)?;
     let system1 = system1::System1::from_env();
+    let secrets = secrets::Secrets::from_env()?;
     if system1.enabled() {
         info!("System 1 is on: inbox messages are routed and reversible calls may pass");
     }
@@ -192,6 +196,7 @@ async fn main() -> anyhow::Result<()> {
         .run(&db)
         .await
         .context("running migrations")?;
+    secrets.load(&db).await.context("reading stored secrets")?;
     let orphaned = runs::release_all(&db).await?;
     let expired = db::expire_open_dialogs(&db).await?;
     if expired > 0 {
@@ -214,6 +219,7 @@ async fn main() -> anyhow::Result<()> {
         rt: Mutex::default(),
         auth,
         system1,
+        secrets,
         devices: device::Devices::default(),
         notifier: notify::Notifier::from_env(&origin),
         ui_dir,
@@ -250,6 +256,12 @@ fn router(app: Shared) -> Router {
         .route("/api/decisions", get(system1::list))
         .route("/api/decisions/health", get(system1::health))
         .route("/api/decisions/calibrations", get(calibrate::list))
+        .route(
+            "/api/connections",
+            get(connections::list).post(connections::create),
+        )
+        .route("/api/connections/delete", post(connections::delete))
+        .route("/api/connections/grant", post(connections::grant))
         .route("/api/decisions/fit", post(calibrate::fit))
         .route("/api/decisions/apply", post(calibrate::apply))
         .route("/api/decisions/rollback", post(calibrate::rollback))
@@ -361,10 +373,10 @@ async fn send_message(
     }
     let thread = bot_thread(&app, &bot.slug).await?;
 
-    let event = ThreadEvent::Message {
+    let event = app.secrets.redact_event(ThreadEvent::Message {
         role: Role::User,
         text: text.clone(),
-    };
+    });
     let id = db::append(&app.db, thread.id, &event)
         .await
         .map_err(|e| internal("storing message", e))?;
@@ -582,6 +594,7 @@ async fn dialog_closed(app: &App, thread: &db::Thread, id: String, outcome: Stri
 
 /// Stores an event in a thread and sends it to browsers.
 async fn record(app: &App, thread: &db::Thread, event: ThreadEvent) {
+    let event = app.secrets.redact_event(event);
     match db::append(&app.db, thread.id, &event).await {
         Ok(id) => publish(app, Some(id), Some(&thread.bot), event),
         Err(e) => warn!("storing an event: {e}"),
@@ -627,10 +640,15 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
             return respond(app, attempt, ui_response(&id, "value", deny)).await;
         };
         let input = call["input"].clone();
+        // An MCP call is judged, ruled and shown as the tool it calls (DESIGN §11).
+        let tool = match input["tool"].as_str() {
+            Some(inner) if tool == "mcp" => format!("mcp:{inner}"),
+            _ => tool.to_owned(),
+        };
         let gate_call = gate::Call {
             attempt,
             tool_call_id: call_id,
-            tool,
+            tool: &tool,
             input: &input,
             in_computer: call["inComputer"].as_bool().unwrap_or(false),
         };
@@ -652,7 +670,7 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
             }
             gate::Verdict::Ask { uncertain } => (
                 DialogKind::Approval {
-                    tool: tool.to_owned(),
+                    tool,
                     input,
                     uncertain,
                 },
@@ -861,11 +879,13 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
     };
     publish(app, None, Some(&bot.slug), event);
     device::run_news(app, run, device::RunNews::Running).await;
+    let mut spec = bot.spec();
+    spec.mcp = connections::for_bot(app, &bot.slug).await;
     let start = ToNode::StartTurn {
         attempt,
         text: claimed.prompt,
         resumed: claimed.resumed,
-        bot: bot.spec(),
+        bot: spec,
     };
     if link.tx.send(start).await.is_err() {
         // The link closed under us; its disconnect handler re-queues the run.
@@ -1349,6 +1369,7 @@ async fn push_run_end(
 }
 
 fn publish(app: &App, id: Option<i64>, bot: Option<&str>, event: ThreadEvent) {
+    let event = app.secrets.redact_event(event);
     // No receivers is normal when no browser is open.
     let bot = bot.map(str::to_owned);
     let _ = app.live.send(Live { id, bot, event });

@@ -54,6 +54,31 @@ pub struct BotSpec {
     /// A team bot's computer also mounts the shared team folder at `/shared`.
     #[serde(default)]
     pub team: bool,
+    /// The MCP servers the owner granted this bot (DESIGN §11).
+    #[serde(default)]
+    pub mcp: Vec<McpServer>,
+}
+
+/// An MCP server a bot may use. Its token is the owner's secret for that
+/// server, never a model subscription token (AGENTS.md rule 4).
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct McpServer {
+    /// Prefixes the server's tools, as in `pa_mail_list`.
+    pub name: String,
+    pub url: String,
+    /// Sent as `Authorization: Bearer …`.
+    pub token: Option<String>,
+}
+
+/// Keeps the token out of logs.
+impl std::fmt::Debug for McpServer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("McpServer")
+            .field("name", &self.name)
+            .field("url", &self.url)
+            .field("token", &self.token.as_ref().map(|_| "[secret]"))
+            .finish()
+    }
 }
 
 /// Server → node, over the node link (DESIGN §4.1).

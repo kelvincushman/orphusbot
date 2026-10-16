@@ -38,6 +38,8 @@ impl Bot {
             thinking: self.thinking.clone(),
             exclude_tools: self.exclude_tools.clone(),
             team: self.scope == "team",
+            // Filled in when a run starts (`connections::for_bot`).
+            mcp: Vec::new(),
         }
     }
 

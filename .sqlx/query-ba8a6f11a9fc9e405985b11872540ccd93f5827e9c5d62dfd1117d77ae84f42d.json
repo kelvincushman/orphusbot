@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "delete from bot_connection where connection_id = $2 and bot_id = (select id from bot where slug = $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ba8a6f11a9fc9e405985b11872540ccd93f5827e9c5d62dfd1117d77ae84f42d"
+}

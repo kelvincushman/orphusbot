@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into bot_connection (bot_id, connection_id)\n             select b.id, c.id from bot b, connection c where b.slug = $1 and c.id = $2\n             on conflict do nothing",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2735923f3fbea4ca8ebff8cf0bc2f4f844d06589db69ae9eeae2b567773c5209"
+}

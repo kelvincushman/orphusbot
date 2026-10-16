@@ -725,19 +725,20 @@ Mapped to the PRD milestones. The wearable lands at M3, alongside System 1, beca
 | M5 | §7.5, OrtLaya | Calibration, apply/rollback, in-process Laya |
 | M6 | §11 | MCP breadth, lazy catalogue, secrets UI |
 
-### 18.1 M0 as built
+### 18.1 Built so far (M0 and M1.1)
 
-M0 implements the smallest slice of §3 and §4 that carries a message from a browser to an Orphus engine and streams the reply back. Where it is simpler than the full design, the code carries a `ponytail:` comment and [DEVELOPMENT.md](DEVELOPMENT.md#what-m0-deliberately-leaves-out) lists the milestone that replaces it.
+M0 implemented the smallest slice of §3 and §4 that carries a message from a browser to an Orphus engine and streams the reply back. M1.1 made runs durable. Where it is simpler than the full design, the code carries a `ponytail:` comment and [DEVELOPMENT.md](DEVELOPMENT.md#what-m0-deliberately-leaves-out) lists the milestone that replaces it.
 
 | Area | M0 | Full design |
 |---|---|---|
 | Crates | `proto`, `server`, `node` | §2 |
 | Threads, bots, nodes | One of each; thread id 1 | Many |
-| Event log | Postgres `thread` + `event` tables, gap-free per-thread `seq`; `Message` and `TurnEnded` persisted; deltas live only | §3.1, plus batched progress events |
+| Event log | Postgres `thread` + `event` tables, gap-free per-thread `seq`; `Message` and `RunEnded` persisted; deltas, `RunQueued`, `RunStarted` and node status live only (a connecting client is sent the current state) | §3.1, plus batched progress events |
 | Fan-out | In-process `tokio::sync::broadcast` | `PgListener` + `NOTIFY` once there are several server processes |
-| Client API | `POST /api/messages`, `GET /api/events` (SSE; resumes from `Last-Event-ID`), `POST /login` | Typed RPC over JSON (§3.1) |
-| Turn control | One turn at a time; a second send gets `409`; the user message's `seq` is the turn id | Runs, leases and fences (§3.3) |
-| Node link | WebSocket `/node`, bearer token checked before upgrade, `hello` first; the newest connection wins | Ed25519 enrolment, heartbeats (§4.1) |
+| Client API | `POST /api/messages`, `POST /api/runs/cancel`, `GET /api/events` (SSE; resumes from `Last-Event-ID`), `POST /login` | Typed RPC over JSON (§3.1) |
+| Runs (M1.1) | `run` table, at most one queued-or-running run per thread (a partial unique index). A message joins the queued run's prompt, or steers the running one through Orphus `steer`. Runs are leased to a node for 120 s, renewed every 30 s; each dispatch bumps the fence; reports and updates for an older fence are ignored. A dropped node or lapsed lease re-queues the run; three attempts and it fails. Dispatch is a `select … for update skip locked` triggered by new runs, node connects and finished runs, not a job queue (D-014). On start the server re-queues every running run | §3.2–§3.4; the job queue arrives with routines (M3) |
+| Resume | The node runs Orphus with `--session-id orphusbot`, one lasting conversation per bot; a resumed attempt's prompt starts with a note to check what was already done | Effect ledger (M1.2) makes repeated tool calls safe |
+| Node link | WebSocket `/node`, bearer token checked before upgrade, `hello` first; the newest connection wins and anything leased under its name is re-queued; the server pings every 30 s and drops a node silent for 75 s | Ed25519 enrolment (M1.3), heartbeats with load (§4.1) |
 | Engine | One `orphus --mode rpc --session-dir …` per link, started on the first turn; text deltas, final assistant messages, rejected prompts and model errors are mapped to frames | §4.2 |
 | Sign-in | Shared UI token, HttpOnly `SameSite=Strict` cookie | Passkeys (§12) |
 | UI | One plain HTML page with `EventSource` (D-013) | Leptos in Tauri (§12) |

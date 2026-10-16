@@ -1,14 +1,17 @@
-//! orphusbot-server, milestone M0: one thread, one bot, one node.
+//! orphusbot-server, milestone M1: durable runs for one thread, one bot, one node.
 //!
-//! A browser posts a message, the server stores it and hands the turn to the
-//! connected node, and the node's streamed reply comes back to every open
-//! browser over Server-Sent Events (DESIGN §3, PRD M0).
+//! A browser posts a message; it becomes a run in Postgres. When a node is
+//! connected the run is leased to it, and the node's streamed reply comes back
+//! to every open browser over Server-Sent Events. If the node drops or its
+//! lease lapses, the run goes back to the queue and resumes on the next node
+//! (DESIGN §3.2, §3.3).
 
 mod db;
+mod runs;
 
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, bail};
 use axum::extract::ws::{Message as WsMessage, WebSocket, WebSocketUpgrade};
@@ -19,7 +22,8 @@ use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Form, Json, Router};
 use futures_util::{SinkExt, Stream, StreamExt};
-use orphusbot_proto::{FromNode, Role, ThreadEvent, ToNode};
+use orphusbot_proto::{Attempt, FromNode, Role, RunOutcome, ThreadEvent, ToNode};
+use runs::{Outcome, Submitted};
 use serde::Deserialize;
 use sqlx::PgPool;
 use subtle::ConstantTimeEq;
@@ -30,6 +34,10 @@ const UI_HTML: &str = include_str!("ui.html");
 const COOKIE: &str = "orphusbot_session";
 const MAX_MESSAGE_CHARS: usize = 32_000;
 const MIN_TOKEN_CHARS: usize = 16;
+/// How often leases are renewed and lapsed ones swept (DESIGN §3.3).
+const RECONCILE_EVERY: Duration = Duration::from_secs(30);
+/// A node that sends nothing (not even a pong) for this long is treated as gone.
+const NODE_SILENCE_LIMIT: Duration = Duration::from_secs(75);
 
 /// An event on its way to browsers; `seq` is set for persisted events.
 #[derive(Clone)]
@@ -46,19 +54,19 @@ struct NodeLink {
     tx: mpsc::Sender<ToNode>,
 }
 
-/// The one node link and the one turn in flight.
-/// `turn` is `Some(0)` while a send is claiming the slot, then the turn id.
+/// In-memory view of the link. Postgres stays the source of truth for runs;
+/// `active` only lets the server drop stale frames without a query per delta.
 #[derive(Default)]
 struct Runtime {
     node: Option<NodeLink>,
     next_conn: u64,
-    turn: Option<i64>,
+    active: Option<Attempt>,
 }
 
 struct App {
     db: PgPool,
     live: broadcast::Sender<Live>,
-    // ponytail: one std Mutex for all link and turn state; per-bot state when there is more than one bot.
+    // ponytail: one std Mutex for all link state; per-node state when there is more than one node.
     rt: Mutex<Runtime>,
     ui_token: String,
     node_token: String,
@@ -84,6 +92,13 @@ async fn main() -> anyhow::Result<()> {
         .run(&db)
         .await
         .context("running migrations")?;
+    let orphaned = runs::release_all(&db).await?;
+    if orphaned > 0 {
+        info!(
+            orphaned,
+            "re-queued runs left running by the last server process"
+        );
+    }
 
     let (live, _) = broadcast::channel(1024);
     let app = Arc::new(App {
@@ -93,11 +108,13 @@ async fn main() -> anyhow::Result<()> {
         ui_token,
         node_token,
     });
+    tokio::spawn(reconcile_forever(app.clone()));
 
     let router = Router::new()
         .route("/", get(|| async { Html(UI_HTML) }))
         .route("/login", post(login))
         .route("/api/messages", post(send_message))
+        .route("/api/runs/cancel", post(cancel_run))
         .route("/api/events", get(events))
         .route("/node", get(node_link))
         .with_state(app);
@@ -122,7 +139,7 @@ fn tokens_match(given: &str, expected: &str) -> bool {
     given.as_bytes().ct_eq(expected.as_bytes()).into()
 }
 
-// ponytail: the cookie holds the shared UI token itself; passkeys and real sessions replace this in M1 (PRD B-CLI-06).
+// ponytail: the cookie holds the shared UI token itself; passkeys and real sessions replace this in M1.3 (PRD B-CLI-06).
 fn signed_in(app: &App, headers: &HeaderMap) -> bool {
     headers
         .get_all(header::COOKIE)
@@ -150,16 +167,28 @@ async fn login(State(app): State<Shared>, Form(form): Form<LoginForm>) -> Respon
         .into_response()
 }
 
+type ApiError = (StatusCode, &'static str);
+
+fn internal(context: &str, e: impl std::fmt::Display) -> ApiError {
+    warn!("{context}: {e}");
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Something went wrong; see the server log",
+    )
+}
+
 #[derive(Deserialize)]
 struct NewMessage {
     text: String,
 }
 
+/// Stores the message, then queues a run, joins the waiting one, or steers the
+/// running one (B-RUN-01).
 async fn send_message(
     State(app): State<Shared>,
     headers: HeaderMap,
     Json(msg): Json<NewMessage>,
-) -> Result<StatusCode, (StatusCode, &'static str)> {
+) -> Result<StatusCode, ApiError> {
     if !signed_in(&app, &headers) {
         return Err((StatusCode::UNAUTHORIZED, "Sign in first"));
     }
@@ -171,50 +200,148 @@ async fn send_message(
         ));
     }
 
-    // Claim the turn slot before writing anything, so two sends can't both start a turn.
-    let node_tx = {
-        let mut rt = lock(&app.rt);
-        let Some(NodeLink { tx, .. }) = rt.node.clone() else {
-            return Err((StatusCode::SERVICE_UNAVAILABLE, "No node is connected"));
-        };
-        if rt.turn.is_some() {
-            return Err((
-                StatusCode::CONFLICT,
-                "The bot is still working on the last message",
-            ));
-        }
-        rt.turn = Some(0);
-        tx
-    };
-
     let event = ThreadEvent::Message {
         role: Role::User,
         text: text.clone(),
     };
-    let seq = match db::append(&app.db, &event).await {
-        Ok(seq) => seq,
-        Err(e) => {
-            lock(&app.rt).turn = None;
-            warn!("storing message: {e}");
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Could not store the message",
-            ));
-        }
-    };
+    let seq = db::append(&app.db, &event)
+        .await
+        .map_err(|e| internal("storing message", e))?;
     publish(&app, Some(seq), event);
 
-    // The user message's sequence number doubles as the turn id.
-    lock(&app.rt).turn = Some(seq);
-    publish(&app, None, ThreadEvent::TurnStarted { turn: seq });
-    if node_tx
-        .send(ToNode::StartTurn { turn: seq, text })
+    match runs::submit(&app.db, &text)
         .await
-        .is_err()
+        .map_err(|e| internal("queueing run", e))?
     {
-        end_turn(&app, seq, Some("The node disconnected".into())).await;
+        Submitted::Queued(run) => {
+            publish(&app, None, ThreadEvent::RunQueued { run });
+            dispatch(&app).await;
+        }
+        Submitted::Joined(_) => {}
+        Submitted::Steer { run, fence } => {
+            let attempt = Attempt { run, fence };
+            if let Some(tx) = node_for(&app, attempt) {
+                // If this fails the node is going away; the run is re-queued and the text is
+                // already in the thread for the resumed attempt to see.
+                let _ = tx.send(ToNode::Steer { attempt, text }).await;
+            }
+        }
     }
     Ok(StatusCode::ACCEPTED)
+}
+
+/// Stops the thread's active run (B-RUN-03).
+async fn cancel_run(State(app): State<Shared>, headers: HeaderMap) -> Result<StatusCode, ApiError> {
+    if !signed_in(&app, &headers) {
+        return Err((StatusCode::UNAUTHORIZED, "Sign in first"));
+    }
+    let Some((run, fence)) = runs::cancel_active(&app.db)
+        .await
+        .map_err(|e| internal("cancelling run", e))?
+    else {
+        return Err((StatusCode::CONFLICT, "Nothing is running"));
+    };
+    let attempt = Attempt { run, fence };
+    if let Some(tx) = node_for(&app, attempt) {
+        let _ = tx.send(ToNode::Abort { attempt }).await;
+    }
+    {
+        let mut rt = lock(&app.rt);
+        if rt.active == Some(attempt) {
+            rt.active = None;
+        }
+    }
+    run_ended(&app, run, RunOutcome::Cancelled, None).await;
+    dispatch(&app).await;
+    Ok(StatusCode::ACCEPTED)
+}
+
+/// The node's sender if it is working on exactly this attempt.
+fn node_for(app: &App, attempt: Attempt) -> Option<mpsc::Sender<ToNode>> {
+    let rt = lock(&app.rt);
+    if rt.active == Some(attempt) {
+        rt.node.as_ref().map(|n| n.tx.clone())
+    } else {
+        None
+    }
+}
+
+/// Leases the next queued run to the connected node, if it is free.
+async fn dispatch(app: &App) {
+    let node = {
+        let rt = lock(&app.rt);
+        match (&rt.node, rt.active) {
+            (Some(node), None) => node.clone(),
+            _ => return,
+        }
+    };
+    let claimed = match runs::claim(&app.db, &node.name).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return,
+        Err(e) => return warn!("claiming a run: {e}"),
+    };
+    let attempt = Attempt {
+        run: claimed.run,
+        fence: claimed.fence,
+    };
+    lock(&app.rt).active = Some(attempt);
+    publish(
+        app,
+        None,
+        ThreadEvent::RunStarted {
+            run: claimed.run,
+            resumed: claimed.resumed,
+        },
+    );
+    let start = ToNode::StartTurn {
+        attempt,
+        text: claimed.prompt,
+        resumed: claimed.resumed,
+    };
+    if node.tx.send(start).await.is_err() {
+        // The link closed under us; its disconnect handler re-queues the run.
+        warn!(run = claimed.run, "node went away while starting a run");
+    }
+}
+
+/// Renews leases for the connected node and re-queues lapsed ones, forever.
+async fn reconcile_forever(app: Shared) {
+    let mut tick = tokio::time::interval(RECONCILE_EVERY);
+    loop {
+        tick.tick().await;
+        let node = lock(&app.rt).node.as_ref().map(|n| n.name.clone());
+        if let Some(name) = node
+            && let Err(e) = runs::renew(&app.db, &name).await
+        {
+            warn!("renewing leases: {e}");
+        }
+        match runs::release(&app.db, None).await {
+            Ok(released) if !released.is_empty() => {
+                info!(count = released.len(), "lease lapsed; re-queued");
+                announce_released(&app, released).await;
+                dispatch(&app).await;
+            }
+            Ok(_) => {}
+            Err(e) => warn!("sweeping leases: {e}"),
+        }
+    }
+}
+
+async fn announce_released(app: &App, released: Vec<runs::Released>) {
+    for r in released {
+        {
+            let mut rt = lock(&app.rt);
+            if rt.active.is_some_and(|a| a.run == r.run) {
+                rt.active = None;
+            }
+        }
+        if r.failed {
+            let error = Some("The bot lost its node too many times".to_owned());
+            run_ended(app, r.run, RunOutcome::Failed, error).await;
+        } else {
+            publish(app, None, ThreadEvent::RunQueued { run: r.run });
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -244,17 +371,10 @@ async fn events(
         warn!("reading history: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    let status = {
-        let rt = lock(&app.rt);
-        let node = rt.node.as_ref().map(|n| n.name.clone());
-        (
-            ThreadEvent::NodeStatus {
-                online: node.is_some(),
-                node,
-            },
-            rt.turn.filter(|t| *t > 0),
-        )
-    };
+    let current = current_state(&app).await.map_err(|e| {
+        warn!("reading run state: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     let stream = async_stream::stream! {
         let mut last = after;
@@ -262,9 +382,8 @@ async fn events(
             last = seq;
             yield Ok(sse(Some(seq), &event));
         }
-        yield Ok(sse(None, &status.0));
-        if let Some(turn) = status.1 {
-            yield Ok(sse(None, &ThreadEvent::TurnStarted { turn }));
+        for event in &current {
+            yield Ok(sse(None, event));
         }
         loop {
             match rx.recv().await {
@@ -279,6 +398,33 @@ async fn events(
         }
     };
     Ok(Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(20))))
+}
+
+/// The live-only state a newly connected client needs: node status and the active run.
+async fn current_state(app: &App) -> sqlx::Result<Vec<ThreadEvent>> {
+    let node = lock(&app.rt).node.as_ref().map(|n| n.name.clone());
+    let mut out = vec![ThreadEvent::NodeStatus {
+        online: node.is_some(),
+        node,
+    }];
+    let active = sqlx::query!(
+        r#"select id, status::text as "status!", attempts from run
+           where thread_id = $1 and status in ('queued', 'running')"#,
+        db::THREAD
+    )
+    .fetch_optional(&app.db)
+    .await?;
+    if let Some(r) = active {
+        out.push(if r.status == "running" {
+            ThreadEvent::RunStarted {
+                run: r.id,
+                resumed: r.attempts > 1,
+            }
+        } else {
+            ThreadEvent::RunQueued { run: r.id }
+        });
+    }
+    Ok(out)
 }
 
 fn sse(seq: Option<i64>, event: &ThreadEvent) -> Event {
@@ -326,17 +472,21 @@ async fn run_node(app: Shared, socket: WebSocket) {
         let mut rt = lock(&app.rt);
         rt.next_conn += 1;
         let conn = rt.next_conn;
-        (
+        rt.active = None;
+        let link = NodeLink {
             conn,
-            rt.node.replace(NodeLink {
-                conn,
-                name: name.clone(),
-                tx,
-            }),
-        )
+            name: name.clone(),
+            tx,
+        };
+        (conn, rt.node.replace(link))
     };
     if replaced.is_some() {
-        warn!("a second node connected; the newest one wins (M0 supports one node)");
+        warn!("a second node connected; the newest one wins (M1 supports one node)");
+    }
+    // Anything leased under this name belongs to an earlier connection that can't finish it.
+    match runs::release(&app.db, Some(&name)).await {
+        Ok(released) => announce_released(&app, released).await,
+        Err(e) => warn!("releasing runs from an earlier connection: {e}"),
     }
     publish(
         &app,
@@ -346,37 +496,46 @@ async fn run_node(app: Shared, socket: WebSocket) {
             node: Some(name.clone()),
         },
     );
+    dispatch(&app).await;
 
-    let writer = tokio::spawn(async move {
-        while let Some(cmd) = rx.recv().await {
-            let Ok(json) = serde_json::to_string(&cmd) else {
-                continue;
-            };
-            if sink.send(WsMessage::Text(json.into())).await.is_err() {
-                break;
+    let mut ping = tokio::time::interval(Duration::from_secs(30));
+    let mut last_heard = Instant::now();
+    loop {
+        tokio::select! {
+            cmd = rx.recv() => {
+                let Some(cmd) = cmd else { break };
+                let Ok(json) = serde_json::to_string(&cmd) else { continue };
+                if sink.send(WsMessage::Text(json.into())).await.is_err() { break; }
+            }
+            frame = stream.next() => {
+                let Some(Ok(frame)) = frame else { break };
+                last_heard = Instant::now();
+                if let WsMessage::Text(text) = frame {
+                    match serde_json::from_str::<FromNode>(&text) {
+                        Ok(msg) => on_node_message(&app, msg).await,
+                        Err(e) => warn!("unreadable frame from node: {e}"),
+                    }
+                }
+            }
+            _ = ping.tick() => {
+                if last_heard.elapsed() > NODE_SILENCE_LIMIT {
+                    warn!(node = %name, "node went silent");
+                    break;
+                }
+                if sink.send(WsMessage::Ping(Default::default())).await.is_err() { break; }
             }
         }
-    });
-
-    while let Some(Ok(frame)) = stream.next().await {
-        let WsMessage::Text(text) = frame else {
-            continue;
-        };
-        match serde_json::from_str::<FromNode>(&text) {
-            Ok(msg) => on_node_message(&app, msg).await,
-            Err(e) => warn!("unreadable frame from node: {e}"),
-        }
     }
-    writer.abort();
 
-    // Only clear state if this connection is still the current one.
-    let (was_current, turn) = {
+    // Only clean up if this connection is still the current one.
+    let was_current = {
         let mut rt = lock(&app.rt);
         let current = rt.node.as_ref().is_some_and(|n| n.conn == conn);
         if current {
             rt.node = None;
+            rt.active = None;
         }
-        (current, rt.turn.filter(|t| *t > 0))
+        current
     };
     if was_current {
         info!(node = %name, "node disconnected");
@@ -388,21 +547,25 @@ async fn run_node(app: Shared, socket: WebSocket) {
                 node: None,
             },
         );
-        if let Some(turn) = turn {
-            // ponytail: M0 fails the turn; M1 recovers it with leases and fences (DESIGN §3.3).
-            end_turn(&app, turn, Some("The node disconnected".into())).await;
+        match runs::release(&app.db, Some(&name)).await {
+            Ok(released) => announce_released(&app, released).await,
+            Err(e) => warn!("re-queueing runs: {e}"),
         }
     }
 }
 
 async fn on_node_message(app: &App, msg: FromNode) {
-    let current = lock(&app.rt).turn;
+    let active = lock(&app.rt).active;
     match msg {
         FromNode::Hello { .. } => {}
-        FromNode::Delta { turn, text } if current == Some(turn) => {
-            publish(app, None, ThreadEvent::Delta { turn, text });
+        FromNode::Delta { attempt, text } if active == Some(attempt) => {
+            let event = ThreadEvent::Delta {
+                run: attempt.run,
+                text,
+            };
+            publish(app, None, event);
         }
-        FromNode::Reply { turn, text } if current == Some(turn) => {
+        FromNode::Reply { attempt, text } if active == Some(attempt) => {
             let event = ThreadEvent::Message {
                 role: Role::Assistant,
                 text,
@@ -412,25 +575,45 @@ async fn on_node_message(app: &App, msg: FromNode) {
                 Err(e) => warn!("storing reply: {e}"),
             }
         }
-        FromNode::TurnEnded { turn, error } if current == Some(turn) => {
-            end_turn(app, turn, error).await;
+        FromNode::TurnEnded { attempt, error } if active == Some(attempt) => {
+            let (outcome, shown) = match error {
+                Some(_) => (Outcome::Failed, RunOutcome::Failed),
+                None => (Outcome::Completed, RunOutcome::Completed),
+            };
+            let finished = runs::finish(
+                &app.db,
+                attempt.run,
+                attempt.fence,
+                outcome,
+                error.as_deref(),
+            )
+            .await;
+            match finished {
+                Ok(true) => {
+                    lock(&app.rt).active = None;
+                    run_ended(app, attempt.run, shown, error).await;
+                    dispatch(app).await;
+                }
+                Ok(false) => warn!(?attempt, "run already ended or moved on"),
+                Err(e) => warn!("finishing run: {e}"),
+            }
         }
-        other => warn!(?other, "ignoring a frame for a turn that is not running"),
+        other => warn!(
+            ?other,
+            "ignoring a frame for an attempt that is not current"
+        ),
     }
 }
 
-async fn end_turn(app: &App, turn: i64, error: Option<String>) {
-    {
-        let mut rt = lock(&app.rt);
-        if rt.turn != Some(turn) {
-            return;
-        }
-        rt.turn = None;
-    }
-    let event = ThreadEvent::TurnEnded { turn, error };
+async fn run_ended(app: &App, run: i64, outcome: RunOutcome, error: Option<String>) {
+    let event = ThreadEvent::RunEnded {
+        run,
+        outcome,
+        error,
+    };
     match db::append(&app.db, &event).await {
         Ok(seq) => publish(app, Some(seq), event),
-        Err(e) => warn!("storing turn end: {e}"),
+        Err(e) => warn!("storing run end: {e}"),
     }
 }
 

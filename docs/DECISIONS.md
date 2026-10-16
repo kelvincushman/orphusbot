@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-014: Runs are dispatched straight from Postgres, without a job queue, until M3 (2026-10-16)
+
+**Decided:** queued runs are claimed with `select … for update skip locked` whenever a run is queued, a node connects or a run ends, and a 30-second reconciler renews and sweeps leases. `graphile_worker` (DESIGN §3.5) arrives in M3, with routines.
+**Why:** in M1 there is one kind of work and its triggers are all events the server already sees. A job queue would add a dependency and a second schema for no extra guarantee: Postgres row locks and the fence already make dispatch safe.
+**Alternatives:** `graphile_worker` from M1; `apalis`.
+**Revisit if:** routines, compaction or other timed work need scheduling (M3).
+
 ## D-013: M0 ships a plain HTML page; the Leptos UI starts in M1 (2026-10-16)
 
 **Decided:** M0's browser page is one static HTML file with `EventSource`, served by the server. The Leptos UI (D-002) starts in M1, together with the Tauri desktop shell that needs it.

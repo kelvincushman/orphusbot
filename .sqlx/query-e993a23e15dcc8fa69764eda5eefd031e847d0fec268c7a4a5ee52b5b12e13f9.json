@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update run set lease_expires_at = now() - interval '1 second' where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e993a23e15dcc8fa69764eda5eefd031e847d0fec268c7a4a5ee52b5b12e13f9"
+}

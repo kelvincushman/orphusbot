@@ -316,7 +316,8 @@ fn Shell() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
     let desk = Desk {
         bots: RwSignal::new(Vec::new()),
-        selected: RwSignal::new("inbox".to_owned()),
+        // A push opens the bot it's about (`/?bot=researcher`).
+        selected: RwSignal::new(take_param("bot").unwrap_or_else(|| "inbox".to_owned())),
         threads: RwSignal::new(HashMap::new()),
         nodes: RwSignal::new(Vec::new()),
     };
@@ -330,7 +331,7 @@ fn Shell() -> impl IntoView {
     // `None`: closed; `Some(None)`: a new bot; `Some(Some(bot))`: editing it.
     let editing = RwSignal::new(None::<Option<Bot>>);
     // Opened from a device's link (`/?link=CODE`): go straight to approving it.
-    let link_code = RwSignal::new(take_link_param().unwrap_or_default());
+    let link_code = RwSignal::new(take_param("link").unwrap_or_default());
     if !link_code.get_untracked().is_empty() {
         settings.set(true);
     }
@@ -1302,13 +1303,14 @@ struct Node {
     last_seen_at: Option<String>,
 }
 
-/// Reads `?link=CODE` and removes it from the address bar.
-fn take_link_param() -> Option<String> {
+/// Reads `?name=…` (a device link code, or the bot a push opens) and clears the
+/// query from the address bar.
+fn take_param(name: &str) -> Option<String> {
     let w = web_sys::window()?;
     let search = w.location().search().ok()?;
     let code = web_sys::UrlSearchParams::new_with_str(&search)
         .ok()?
-        .get("link")?;
+        .get(name)?;
     if let Ok(history) = w.history() {
         let _ = history.replace_state_with_url(&JsValue::NULL, "", Some("/"));
     }

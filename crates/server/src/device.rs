@@ -667,6 +667,14 @@ pub async fn expire_forever(app: Shared) {
         match expired {
             Ok(devices) => {
                 for device in devices {
+                    app.notifier.send(crate::notify::Push {
+                        title: "Your wearable asked something".into(),
+                        body: "It wasn't answered on the wrist, so it's waiting in OrphusBot."
+                            .into(),
+                        priority: 4,
+                        tags: "watch",
+                        bot: None,
+                    });
                     enqueue(&app, &device, None, "ack");
                     if let Err(e) = send_next_ask(&app, &device).await {
                         warn!("sending the next ask: {e}");

@@ -13,11 +13,12 @@ const userAgent = 'OrphusBot app';
 class SignedOut implements Exception {}
 
 class Api {
-  Api(this.server, this.cookie);
+  Api(this.server, this.cookie, [http.Client? client])
+    : _http = client ?? http.Client();
 
   final String server;
   final String cookie;
-  final _http = http.Client();
+  final http.Client _http;
 
   Map<String, String> get headers => {
     'cookie': cookie,
@@ -104,13 +105,19 @@ class Api {
     (await _check(_http.get(Uri.parse('$server$path'), headers: headers))).body,
   );
 
-  Future<void> post(String path, Object body) => _check(
+  Future<http.Response> _post(String path, Object body) => _check(
     _http.post(
       Uri.parse('$server$path'),
       headers: {...headers, 'content-type': 'application/json'},
       body: jsonEncode(body),
     ),
   );
+
+  Future<void> post(String path, Object body) => _post(path, body);
+
+  /// A POST whose answer matters, such as a code the server made.
+  Future<dynamic> postJson(String path, Object body) async =>
+      jsonDecode((await _post(path, body)).body);
 
   Future<void> send(
     String bot,

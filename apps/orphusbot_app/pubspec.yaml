@@ -15,6 +15,7 @@ dependencies:
   pasteboard: ^0.5.0
   path_provider: ^2.1.6
   rive: ^0.14.11
+  url_launcher: ^6.3.3
 
 dev_dependencies:
   flutter_test:
@@ -24,4 +25,4 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/bot-avatar.riv
+    - assets/faces/

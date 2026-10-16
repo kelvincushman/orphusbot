@@ -14,6 +14,7 @@ import 'package:markdown_widget/markdown_widget.dart';
 
 import 'api.dart';
 import 'avatar.dart';
+import 'settings.dart';
 import 'thread.dart' as t;
 
 class ChatScreen extends StatefulWidget {
@@ -44,15 +45,29 @@ class _ChatScreenState extends State<ChatScreen> {
     _start();
   }
 
+  Future<void> _loadBots() async {
+    final list = await widget.api.get('/api/bots') as List<dynamic>;
+    setState(
+      () => bots = list
+          .cast<Map<String, dynamic>>()
+          .where((b) => b['disabled'] != true)
+          .toList(),
+    );
+  }
+
+  Future<void> _settings() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            SettingsScreen(api: widget.api, onSignedOut: widget.onSignedOut),
+      ),
+    );
+    if (mounted) _act(_loadBots);
+  }
+
   Future<void> _start() async {
     try {
-      final list = await widget.api.get('/api/bots') as List<dynamic>;
-      setState(
-        () => bots = list
-            .cast<Map<String, dynamic>>()
-            .where((b) => b['disabled'] != true)
-            .toList(),
-      );
+      await _loadBots();
     } on SignedOut {
       return widget.onSignedOut();
     } catch (e) {
@@ -175,10 +190,21 @@ class _ChatScreenState extends State<ChatScreen> {
     return ListView(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-          child: Text(
-            'OrphusBot',
-            style: Theme.of(context).textTheme.titleLarge,
+          padding: const EdgeInsets.fromLTRB(16, 20, 4, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'OrphusBot',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Settings',
+                icon: const Icon(Icons.settings_outlined),
+                onPressed: _settings,
+              ),
+            ],
           ),
         ),
         for (final b in bots)
@@ -189,7 +215,11 @@ class _ChatScreenState extends State<ChatScreen> {
               final waiting = v?.waiting ?? 0;
               final working = v != null && v.run != t.RunState.idle;
               return ListTile(
-                leading: BotAvatar(mood: v?.mood ?? 0),
+                leading: BotAvatar(
+                  key: ValueKey(slug),
+                  slug: slug,
+                  mood: v?.mood ?? 0,
+                ),
                 selected: slug == chosen,
                 selectedTileColor: scheme.primary.withValues(alpha: 0.12),
                 title: Text(b['name'] as String),
@@ -226,7 +256,12 @@ class _ChatScreenState extends State<ChatScreen> {
       children: [
         // Header: who, and what it's doing.
         ListTile(
-          leading: BotAvatar(mood: v.mood, size: 56),
+          leading: BotAvatar(
+            key: ValueKey(chosen),
+            slug: chosen,
+            mood: v.mood,
+            size: 56,
+          ),
           title: Text(name, style: Theme.of(context).textTheme.titleMedium),
           subtitle: Text(switch (v.run) {
             t.RunState.idle => 'Ready',

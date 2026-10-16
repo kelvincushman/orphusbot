@@ -14,4 +14,4 @@ A bar widget for the Omarchy shell: your bots at a glance, approvals to answer, 
    o.bind("SUPER + ALT + B", "OrphusBot", "omarchy-shell kelvincushman.orphusbot toggle")
    ```
 
-Click the icon (or press the hotkey) to open the panel. Pick a bot in the list to message it.
+Click the icon (or press the hotkey) to open the panel. Each bot in the list shows its animated face: resting, thinking, working, or red when it needs you (the faces in `faces/` come from `design/bot-avatar/frames.sh`). Pick a bot to message it.

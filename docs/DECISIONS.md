@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-035: The bar panel plays faces as pre-rendered WebPs (2026-10-16)
+
+- **Context:** the Omarchy bar panel is QML (Quickshell), which has no Rive runtime; the faces should still move there.
+- **Decision:** `design/bot-avatar/frames.sh` renders each style and state with the Rive CLI into a small looping WebP (56 px, 10–20 fps), which QML's `AnimatedImage` plays. They are committed in the plugin's `faces/` (about 1 MB).
+- **Alternatives:** a community Rive plugin for Qt Quick (a native build to install alongside the shell); redrawing the faces in QML (two drawings to keep in step); a still picture per state (no animation, which was the ask).
+- **Revisit if:** Quickshell gains a Rive runtime, or the files grow enough to matter.
+
 ## D-034: Bot faces are made in code with the Rive CLI and driven by one number input (2026-10-16)
 
 - **Context:** the app wants Rive animations (D-033). The Rive editor is a hosted design tool; the Rive CLI builds `.riv` files offline from a text scene (RML).

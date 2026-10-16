@@ -241,33 +241,42 @@ Panel {
                 required property var modelData
                 readonly property bool picked: modelData.slug === root.chosenBot
                 width: bots.width
-                height: botName.implicitHeight + Style.space(10)
+                height: Math.max(botName.implicitHeight, botFace.height) + Style.space(6)
                 radius: Style.space(4)
                 color: picked ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.12) : "transparent"
 
+                // The bot's face (faces/<bot>-<state>.webp, made by design/bot-avatar/frames.sh):
+                // resting, thinking (queued), working, or red when it needs you.
+                AnimatedImage {
+                  id: botFace
+                  anchors.left: parent.left
+                  anchors.leftMargin: Style.space(4)
+                  anchors.verticalCenter: parent.verticalCenter
+                  width: Style.space(26); height: width
+                  // Each house bot has its own style; others get the default face.
+                  property bool ownStyle: true
+                  source: "faces/" + (ownStyle ? modelData.slug : "default") + "-"
+                    + (modelData.waiting > 0 ? 3
+                    : modelData.state === "running" ? 2
+                    : modelData.state === "queued" ? 1 : 0) + ".webp"
+                  onStatusChanged: if (status === Image.Error && ownStyle) ownStyle = false
+                  playing: root.opened
+                  smooth: true
+                  mipmap: true
+                }
                 Text {
                   id: botName
-                  anchors.left: parent.left
+                  anchors.left: botFace.right
                   anchors.leftMargin: Style.space(6)
-                  anchors.right: botState.left
+                  anchors.right: parent.right
                   anchors.verticalCenter: parent.verticalCenter
                   text: modelData.name
                   textFormat: Text.PlainText
                   elide: Text.ElideRight
-                  color: picked ? root.foreground : root.dim
+                  color: modelData.waiting > 0 ? root.urgent : (picked ? root.foreground : root.dim)
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.body
                   font.bold: picked
-                }
-                // A dot: urgent when it needs you, solid while it works.
-                Rectangle {
-                  id: botState
-                  anchors.right: parent.right
-                  anchors.rightMargin: Style.space(6)
-                  anchors.verticalCenter: parent.verticalCenter
-                  width: Style.space(7); height: width; radius: width / 2
-                  color: modelData.waiting > 0 ? root.urgent : root.foreground
-                  opacity: modelData.waiting > 0 ? 1.0 : (modelData.state === "idle" ? 0.15 : 0.9)
                 }
                 MouseArea {
                   anchors.fill: parent

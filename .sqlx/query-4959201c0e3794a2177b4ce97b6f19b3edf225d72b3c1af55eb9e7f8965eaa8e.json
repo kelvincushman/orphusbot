@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select c.id, c.name, c.url, c.command, c.args, c.token_env, c.secret_id is not null as \"has_token!\",\n                  coalesce(array_agg(b.slug order by b.slug) filter (where b.slug is not null), '{}') as \"bots!\"\n           from connection c left join bot_connection g on g.connection_id = c.id\n           left join bot b on b.id = g.bot_id\n           group by c.id order by c.name",
+  "query": "select c.id, c.name, c.url, c.command, c.args, c.token_env, c.secret_id is not null as \"has_token!\",\n                  c.oauth is not null and c.secret_id is not null as \"signed_in!\",\n                  coalesce(array_agg(b.slug order by b.slug) filter (where b.slug is not null), '{}') as \"bots!\"\n           from connection c left join bot_connection g on g.connection_id = c.id\n           left join bot b on b.id = g.bot_id\n           group by c.id order by c.name",
   "describe": {
     "columns": [
       {
@@ -77,6 +77,12 @@
       },
       {
         "ordinal": 7,
+        "name": "signed_in!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
         "name": "bots!",
         "type_info": "TextArray",
         "origin": "Expression"
@@ -93,8 +99,9 @@
       false,
       true,
       null,
+      null,
       null
     ]
   },
-  "hash": "0ceff94fae484c6f954681475644867fff8a8664863baf6d9febe1a50f2cd9dc"
+  "hash": "4959201c0e3794a2177b4ce97b6f19b3edf225d72b3c1af55eb9e7f8965eaa8e"
 }

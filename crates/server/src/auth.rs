@@ -44,6 +44,8 @@ pub struct Auth {
     setup_token: String,
     /// Mark cookies `Secure` when served over HTTPS.
     secure: bool,
+    /// The address browsers use, without a trailing slash (OAuth redirects back here).
+    pub origin: String,
     // ponytail: prompts in progress live in memory, so a server restart mid-sign-in means trying again.
     ceremonies: Mutex<HashMap<String, (Instant, Ceremony)>>,
 }
@@ -64,6 +66,7 @@ impl Auth {
             webauthn,
             setup_token,
             secure: url.scheme() == "https",
+            origin: url.as_str().trim_end_matches('/').to_owned(),
             ceremonies: Mutex::default(),
         })
     }

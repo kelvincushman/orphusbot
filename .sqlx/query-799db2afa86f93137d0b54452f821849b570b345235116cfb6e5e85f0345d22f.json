@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update connection c set secret_id = $2, refresh_secret_id = coalesce($3, c.refresh_secret_id),\n                token_expires_at = $4\n         from connection before where c.id = $1 and before.id = c.id\n         returning before.secret_id as old_access, before.refresh_secret_id as old_refresh",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "old_access",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "connection",
+            "name": "secret_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "old_refresh",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "connection",
+            "name": "refresh_secret_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Int8",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "799db2afa86f93137d0b54452f821849b570b345235116cfb6e5e85f0345d22f"
+}

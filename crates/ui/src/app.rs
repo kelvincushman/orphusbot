@@ -357,6 +357,15 @@ fn Shell() -> impl IntoView {
     if !link_code.get_untracked().is_empty() {
         settings.set(true);
     }
+    // Back from signing in to an MCP server (`server::oauth`).
+    if let Some(name) = take_param("connected") {
+        ctx.toast.set(format!("Signed in to {name}."));
+        settings.set(true);
+    } else if take_param("connect_error").is_some() {
+        ctx.toast
+            .set("Signing in didn't work; the server log says why.".into());
+        settings.set(true);
+    }
     connect(desk, ctx);
     let thread = desk.thread();
     let bot = desk.bot();
@@ -1797,7 +1806,20 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
                         {move || connections.with(|c| c["connections"].as_array().cloned().unwrap_or_default()).into_iter().map(|c| {
                             let id = c["id"].as_i64().unwrap_or_default();
                             let granted: Vec<String> = c["bots"].as_array().into_iter().flatten().filter_map(|b| b.as_str().map(str::to_owned)).collect();
-                            let token = if c["has_token"] == true { " · token saved" } else { "" };
+                            let token = match (c["signed_in"] == true, c["has_token"] == true) {
+                                (true, _) => " · signed in",
+                                (false, true) => " · token saved",
+                                _ => "",
+                            };
+                            let can_sign_in = c["url"].is_string();
+                            let sign_in = move |_| ctx.run(async move {
+                                let res: Value = api::post("/api/connections/oauth", &json!({ "id": id })).await?
+                                    .json().await.map_err(|e| e.to_string())?;
+                                if let (Some(w), Some(url)) = (web_sys::window(), res["url"].as_str()) {
+                                    let _ = w.location().assign(url);
+                                }
+                                Ok(())
+                            });
                             let detail = format!("{}{token}", c["target"].as_str().unwrap_or_default());
                             view! {
                                 <li>
@@ -1812,6 +1834,7 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
                                             }).collect_view()}
                                         </span>
                                     </span>
+                                    {can_sign_in.then(|| view! { <button on:click=sign_in>"Sign in"</button> })}
                                     <button class="danger" on:click=move |_| remove("/api/connections/delete", id,
                                         "Remove this connection? Bots lose it on their next run, and its token is deleted.")>"Remove"</button>
                                 </li>

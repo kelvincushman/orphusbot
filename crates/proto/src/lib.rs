@@ -88,8 +88,18 @@ impl std::fmt::Debug for E2bComputer {
 pub struct McpServer {
     /// Prefixes the server's tools, as in `pa_mail_list`.
     pub name: String,
+    /// An MCP server over HTTP; empty for a command.
+    #[serde(default)]
     pub url: String,
-    /// Sent as `Authorization: Bearer …`.
+    /// Or a program the node runs (stdio), if it's on the node's allow-list.
+    #[serde(default)]
+    pub command: Option<String>,
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// For a command, the environment variable that carries the token.
+    #[serde(default)]
+    pub token_env: Option<String>,
+    /// Sent as `Authorization: Bearer …`, or in `token_env` for a command.
     pub token: Option<String>,
 }
 
@@ -99,6 +109,8 @@ impl std::fmt::Debug for McpServer {
         f.debug_struct("McpServer")
             .field("name", &self.name)
             .field("url", &self.url)
+            .field("command", &self.command)
+            .field("args", &self.args)
             .field("token", &self.token.as_ref().map(|_| "[secret]"))
             .finish()
     }

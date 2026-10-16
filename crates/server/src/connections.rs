@@ -14,7 +14,7 @@ use crate::{ApiError, App, Shared, internal, secrets};
 
 pub async fn list(State(app): State<Shared>) -> Result<Json<Value>, ApiError> {
     let rows = sqlx::query!(
-        r#"select c.id, c.name, c.url, c.secret_id is not null as "has_token!",
+        r#"select c.id, c.name, c.url, c.command, c.args, c.token_env, c.secret_id is not null as "has_token!",
                   coalesce(array_agg(b.slug order by b.slug) filter (where b.slug is not null), '{}') as "bots!"
            from connection c left join bot_connection g on g.connection_id = c.id
            left join bot b on b.id = g.bot_id
@@ -25,7 +25,16 @@ pub async fn list(State(app): State<Shared>) -> Result<Json<Value>, ApiError> {
     .map_err(|e| internal("listing connections", e))?;
     let list: Vec<Value> = rows
         .into_iter()
-        .map(|r| json!({ "id": r.id, "name": r.name, "url": r.url, "has_token": r.has_token, "bots": r.bots }))
+        .map(|r| {
+            // What it is, in one line: the address, or the command it runs.
+            let target = match (&r.url, &r.command) {
+                (Some(url), _) => url.clone(),
+                (None, Some(cmd)) => std::iter::once(cmd.clone()).chain(r.args.iter().cloned()).collect::<Vec<_>>().join(" "),
+                (None, None) => String::new(),
+            };
+            json!({ "id": r.id, "name": r.name, "url": r.url, "command": r.command, "target": target,
+                    "token_env": r.token_env, "has_token": r.has_token, "bots": r.bots })
+        })
         .collect();
     Ok(Json(
         json!({ "connections": list, "secrets": app.secrets.enabled() }),
@@ -35,9 +44,34 @@ pub async fn list(State(app): State<Shared>) -> Result<Json<Value>, ApiError> {
 #[derive(Deserialize)]
 pub struct New {
     name: String,
+    /// An http(s) address, or a command line the node runs (`npx -y some-mcp-server`).
     url: String,
     #[serde(default)]
     token: String,
+    /// For a command: the environment variable it reads the token from.
+    #[serde(default)]
+    token_env: String,
+}
+
+/// A command line, split on spaces (no quoting): the program and its arguments.
+// ponytail: no shell quoting, so an argument can't contain a space; add it if a server needs one.
+fn command_line(text: &str) -> Result<(String, Vec<String>), &'static str> {
+    let mut words = text.split_whitespace().map(str::to_owned);
+    let program = words
+        .next()
+        .ok_or("Give the server's address or the command that runs it")?;
+    let args: Vec<String> = words.collect();
+    let program_ok = program.len() <= 100
+        && program
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "._/-".contains(c));
+    match () {
+        _ if !program_ok => Err("The program name can only have letters, digits and . _ / -"),
+        _ if args.len() > 20 || args.iter().any(|a| a.len() > 300) => {
+            Err("That command has too many or too long arguments")
+        }
+        _ => Ok((program, args)),
+    }
 }
 
 pub async fn create(
@@ -45,7 +79,18 @@ pub async fn create(
     Json(new): Json<New>,
 ) -> Result<StatusCode, ApiError> {
     let name = new.name.trim().to_lowercase();
-    let (url, token) = (new.url.trim(), new.token.trim());
+    let (url, token, token_env) = (new.url.trim(), new.token.trim(), new.token_env.trim());
+    let is_url = url.starts_with("https://") || url.starts_with("http://");
+    let command = match is_url {
+        true => None,
+        false => Some(command_line(url).map_err(|why| (StatusCode::UNPROCESSABLE_ENTITY, why))?),
+    };
+    let env_ok = token_env.is_empty()
+        || (token_env.len() <= 64
+            && token_env.starts_with(|c: char| c.is_ascii_uppercase() || c == '_')
+            && token_env
+                .chars()
+                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_'));
     let name_ok = (1..=24).contains(&name.len())
         && name.starts_with(|c: char| c.is_ascii_lowercase())
         && name
@@ -64,10 +109,19 @@ pub async fn create(
                 "Pick a name that doesn't start with mcp",
             ));
         }
-        _ if !(url.starts_with("https://") || url.starts_with("http://")) || url.len() > 500 => {
+        _ if url.len() > 500 => {
+            return Err((StatusCode::UNPROCESSABLE_ENTITY, "That address is too long"));
+        }
+        _ if !env_ok => {
             return Err((
                 StatusCode::UNPROCESSABLE_ENTITY,
-                "Give the server's http:// or https:// address",
+                "The token variable is capitals, digits and _, like GITHUB_TOKEN",
+            ));
+        }
+        _ if command.is_some() && !token.is_empty() && token_env.is_empty() => {
+            return Err((
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Say which variable the command reads its token from",
             ));
         }
         _ if !token.is_empty() && token.len() < secrets::MIN_LEN => {
@@ -104,10 +158,14 @@ pub async fn create(
                 ))?,
         ),
     };
+    let (program, args) = command.unzip();
     sqlx::query!(
-        "insert into connection (name, url, secret_id) values ($1, $2, $3)",
+        "insert into connection (name, url, command, args, token_env, secret_id) values ($1, $2, $3, $4, $5, $6)",
         name,
-        url,
+        is_url.then_some(url),
+        program,
+        &args.unwrap_or_default(),
+        (!token_env.is_empty()).then_some(token_env),
         secret
     )
     .execute(&app.db)
@@ -185,7 +243,7 @@ pub async fn grant(
 /// The servers a bot may use, with their tokens, for its engine.
 pub async fn for_bot(app: &App, slug: &str) -> Vec<McpServer> {
     let rows = sqlx::query!(
-        "select c.name, c.url, c.secret_id from connection c
+        "select c.name, c.url, c.command, c.args, c.token_env, c.secret_id from connection c
          join bot_connection g on g.connection_id = c.id join bot b on b.id = g.bot_id
          where b.slug = $1 order by c.name",
         slug
@@ -213,9 +271,37 @@ pub async fn for_bot(app: &App, slug: &str) -> Vec<McpServer> {
         };
         servers.push(McpServer {
             name: r.name,
-            url: r.url,
+            url: r.url.unwrap_or_default(),
+            command: r.command,
+            args: r.args,
+            token_env: r.token_env,
             token,
         });
     }
     servers
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn command_lines() {
+        assert_eq!(
+            command_line("  npx -y @modelcontextprotocol/server-github ").unwrap(),
+            (
+                "npx".to_owned(),
+                vec![
+                    "-y".to_owned(),
+                    "@modelcontextprotocol/server-github".to_owned()
+                ]
+            )
+        );
+        assert!(command_line("").is_err());
+        assert!(
+            command_line("rm;reboot now").is_err(),
+            "the program is a plain name"
+        );
+        assert!(command_line(&format!("npx {}", "a ".repeat(21))).is_err());
+    }
 }

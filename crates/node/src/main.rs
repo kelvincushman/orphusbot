@@ -34,6 +34,8 @@ struct Config {
     image: String,
     /// `START-END` local hours when this node takes no new work, such as `22-7`.
     quiet_hours: Option<String>,
+    /// Programs this node may run as MCP servers (`ORPHUSBOT_MCP_COMMANDS=npx,uvx`); none by default.
+    mcp_commands: Vec<String>,
 }
 
 #[tokio::main]
@@ -61,6 +63,12 @@ async fn main() -> anyhow::Result<()> {
         quiet_hours: std::env::var("ORPHUSBOT_QUIET_HOURS").ok(),
         image: std::env::var("ORPHUSBOT_COMPUTER_IMAGE")
             .unwrap_or_else(|_| "docker.io/library/debian:trixie-slim".into()),
+        mcp_commands: std::env::var("ORPHUSBOT_MCP_COMMANDS")
+            .unwrap_or_default()
+            .split(',')
+            .map(|p| p.trim().to_owned())
+            .filter(|p| !p.is_empty())
+            .collect(),
     };
     if cfg.runtime.is_none() {
         warn!("ORPHUSBOT_RUNTIME=none: the bot's tools run on this machine, not in a computer");
@@ -395,13 +403,36 @@ impl Engine {
             // environment so they're never written to disk.
             let mut servers = serde_json::Map::new();
             for (i, server) in bot.mcp.iter().enumerate() {
-                let mut entry = serde_json::json!({ "url": server.url, "lifecycle": "lazy" });
+                let var = format!("ORPHUSBOT_MCP_TOKEN_{i}");
+                let mut entry = match &server.command {
+                    // A command runs here, outside the bot's computer: only programs this
+                    // node's owner listed in ORPHUSBOT_MCP_COMMANDS.
+                    Some(program) if !cfg.mcp_commands.iter().any(|p| p == program) => {
+                        warn!(server = %server.name, %program, "not on ORPHUSBOT_MCP_COMMANDS; leaving this MCP server out");
+                        continue;
+                    }
+                    Some(program) => {
+                        let mut entry = serde_json::json!({ "command": program, "args": server.args, "lifecycle": "lazy" });
+                        if let (Some(name), Some(_)) = (&server.token_env, &server.token) {
+                            // The adapter fills ${…} from the engine's environment.
+                            entry["env"] = serde_json::json!({ name: format!("${{{var}}}") });
+                        }
+                        entry
+                    }
+                    None => {
+                        let mut entry =
+                            serde_json::json!({ "url": server.url, "lifecycle": "lazy" });
+                        if server.token.is_some() {
+                            entry["auth"] = "bearer".into();
+                            entry["bearerTokenEnv"] = var.clone().into();
+                        }
+                        entry
+                    }
+                };
                 if let Some(token) = &server.token {
-                    let var = format!("ORPHUSBOT_MCP_TOKEN_{i}");
-                    entry["auth"] = "bearer".into();
-                    entry["bearerTokenEnv"] = var.clone().into();
-                    command.env(var, token);
+                    command.env(&var, token);
                 }
+                entry["lifecycle"] = "lazy".into();
                 servers.insert(server.name.clone(), entry);
             }
             let file = format!("{dir}/mcp.json");

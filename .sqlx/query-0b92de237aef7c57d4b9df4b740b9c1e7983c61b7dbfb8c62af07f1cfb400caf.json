@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into proposal (kind, title, state, decided_at) values ('commitment', 'Send the drawings', 'dismissed', $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0b92de237aef7c57d4b9df4b740b9c1e7983c61b7dbfb8c62af07f1cfb400caf"
+}

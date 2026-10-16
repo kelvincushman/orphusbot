@@ -81,6 +81,12 @@ pub fn alert(name: &str) -> Vec<Value> {
             c
         }
         "budget_warn" => led(PATTERN_BREATHING, 0, (220, 140, 0)).to_vec(),
+        // A time-blindness nudge (DESIGN §10.5): blue flash, double buzz, from shipped commands.
+        "nudge" => {
+            let mut c = led(PATTERN_FLASH, 2000, (0, 80, 200)).to_vec();
+            c.push(haptic(HAPTIC_DOUBLE, 300));
+            c
+        }
         // These are recognised by the app (ALERT_PENDING), so they go as named cues.
         "awaiting_input" | "error" => vec![habitat(name)],
         _ if HABITAT_CUES.iter().any(|(n, _)| *n == name) => vec![habitat(name)],
@@ -182,5 +188,10 @@ mod tests {
             vec![json!({ "kind": "habitat", "cue": "nop" })]
         );
         assert!(alert("made_up").is_empty());
+        assert_eq!(
+            alert("nudge").len(),
+            3,
+            "a nudge is a flash and a double buzz"
+        );
     }
 }

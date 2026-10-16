@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "delete from ticket where id = $1 and status = 'todo' and bot_id is null",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "101a7ca6439a460a43abb0d4ec30872ff37290e54b4ebcfc73e5c338bcb9ad15"
+}

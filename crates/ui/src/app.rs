@@ -1278,6 +1278,20 @@ fn Captures(
         })
     };
     load_devices();
+    let profile = RwSignal::new(String::new());
+    ctx.run(async move {
+        let p: Value = api::get("/api/captures/profile").await?;
+        profile.set(p["profile"].as_str().unwrap_or("focus").to_owned());
+        Ok(())
+    });
+    let set_profile = move |chosen: String| {
+        ctx.run(async move {
+            let body = json!({ "profile": chosen, "timezone": api::time_zone() });
+            api::post("/api/captures/profile", &body).await?;
+            profile.set(chosen);
+            Ok(())
+        })
+    };
     let act = move |path: &'static str, id: i64| {
         ctx.run(async move {
             api::post(path, &json!({ "id": id })).await?;
@@ -1294,6 +1308,17 @@ fn Captures(
                 </header>
                 <p class="muted">"With hands-free on, what you say and hear is turned into suggestions. Nothing becomes a task until you accept it; no audio is kept, and the words are deleted after a week."</p>
                 {move || (captures.with(|c| c["allowed"] == false)).then(|| view! { <p class="warn">"Hands-free is switched off on the server (ORPHUSBOT_HANDS_FREE_ALLOWED)."</p> })}
+                <label>"Profile"
+                    <select aria-label="Capture profile" on:change=move |ev| set_profile(event_target_value(&ev))>
+                        <option value="focus" selected=move || profile.get() == "focus">"Focus support"</option>
+                        <option value="standard" selected=move || profile.get() == "standard">"Standard"</option>
+                    </select>
+                </label>
+                <p class="muted">{move || if profile.get() == "standard" {
+                    "Keeps commitments and appointments, with one digest at 18:00."
+                } else {
+                    "Keeps everything, with digests at 10:00, 14:00 and 18:00 and a review at 21:00. Ideas and things to remember file themselves (undo for a day), a dismissed commitment comes back once after three days, and appointments with a time get a nudge 30 and 10 minutes before and when they start."
+                }}</p>
                 <ul>
                     {move || devices.get().into_iter().map(|d| {
                         let id = d["id"].as_str().unwrap_or_default().to_owned();
@@ -1327,8 +1352,12 @@ fn Captures(
                                     {(!s("detail").is_empty()).then(|| view! { <small>{s("detail")}</small> })}
                                     {(!meta.is_empty()).then(|| view! { <small>{meta.join(" · ")}</small> })}
                                     {(!s("quote").is_empty()).then(|| view! { <small class="quote">{format!("“{}”", s("quote"))}</small> })}
-                                    {(!open_now).then(|| view! { <small>{s("state")}</small> })}
+                                    {(p["resurfaced"] == true && open_now).then(|| view! { <small>"Came back: still open"</small> })}
+                                    {(!open_now).then(|| view! { <small>{if p["undoable"] == true { "filed by itself".to_owned() } else { s("state") }}</small> })}
                                 </span>
+                                {(p["undoable"] == true).then(|| view! {
+                                    <button on:click=move |_| act("/api/proposals/undo", id)>"Undo"</button>
+                                })}
                                 {open_now.then(|| view! {
                                     <span class="row">
                                         <button class="primary" on:click=move |_| act("/api/proposals/accept", id)>"Accept"</button>

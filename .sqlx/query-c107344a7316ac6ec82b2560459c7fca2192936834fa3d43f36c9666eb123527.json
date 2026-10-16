@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update proposal set state = 'dismissed', decided_at = now(), auto_filed = false\n         where id = $1 and auto_filed and decided_at > now() - interval '24 hours'\n         returning ticket_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ticket_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "proposal",
+            "name": "ticket_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "c107344a7316ac6ec82b2560459c7fca2192936834fa3d43f36c9666eb123527"
+}

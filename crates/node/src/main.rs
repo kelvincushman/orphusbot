@@ -399,7 +399,19 @@ impl Engine {
                 .args(["--mcp-config", &file])
                 .env("ORPHUSBOT_MCP", "1");
         }
-        if let Some(runtime) = &cfg.runtime {
+        if let Some(sandbox) = &bot.e2b {
+            // The computer is an E2B sandbox: the bridge reaches its envd over HTTPS.
+            let work = format!("{dir}/work");
+            std::fs::create_dir_all(&work).with_context(|| format!("creating {work}"))?;
+            command
+                .current_dir(&work)
+                .env("ORPHUSBOT_COMPUTER", format!("e2b:{}", sandbox.sandbox))
+                .env("ORPHUSBOT_E2B_URL", &sandbox.url)
+                .env("ORPHUSBOT_COMPUTER_HOME", "/home/user");
+            if let Some(token) = &sandbox.token {
+                command.env("ORPHUSBOT_E2B_TOKEN", token);
+            }
+        } else if let Some(runtime) = &cfg.runtime {
             let spec = computer::Spec {
                 runtime,
                 image: &cfg.image,

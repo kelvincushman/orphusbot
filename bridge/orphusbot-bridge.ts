@@ -13,6 +13,11 @@
 // the host (DESIGN §4.4, DECISIONS D-020). If the container can't be reached,
 // the tool fails; it never falls back to the host.
 //
+// E2B: when the node sets ORPHUSBOT_E2B_URL instead, the computer is an E2B
+// sandbox and the same operations go to its envd over HTTPS (files through
+// `/files`, commands through the Connect protocol's `process.Process/Start`),
+// with that sandbox's access token. The engine still runs on the node (DESIGN §6.2).
+//
 // The node embeds this file and loads it with `orphus -e`; it is only valid
 // in RPC mode under orphusbot-node, so in any other mode it blocks everything.
 
@@ -46,8 +51,86 @@ const IMAGES: Record<string, string> = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
 };
 
+const e2bUrl = process.env.ORPHUSBOT_E2B_URL;
+const e2bHeaders: Record<string, string> = {
+  // envd runs commands and file access as this user.
+  Authorization: `Basic ${Buffer.from("user:").toString("base64")}`,
+  ...(process.env.ORPHUSBOT_E2B_TOKEN ? { "X-Access-Token": process.env.ORPHUSBOT_E2B_TOKEN } : {}),
+};
+
+/**
+ * Runs `bash -l -c script bash args…` in the E2B sandbox through envd's
+ * server-streaming `process.Process/Start`, in the Connect protocol's JSON form:
+ * each message is a 5-byte header (flags, big-endian length) and JSON; flag 2
+ * marks the closing message, which carries any error.
+ */
+async function e2bRun(
+  script: string,
+  args: string[],
+  opts: { cwd?: string; onData?: (b: Buffer) => void; signal?: AbortSignal } = {},
+): Promise<{ exitCode: number; stdout: Buffer; stderr: Buffer }> {
+  const request = Buffer.from(JSON.stringify({
+    process: { cmd: "/bin/bash", args: ["-l", "-c", script, "bash", ...args], envs: {}, ...(opts.cwd ? { cwd: opts.cwd } : {}) },
+    stdin: false,
+  }));
+  const frame = Buffer.alloc(5 + request.length);
+  frame.writeUInt32BE(request.length, 1);
+  request.copy(frame, 5);
+  const res = await fetch(`${e2bUrl}/process.Process/Start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/connect+json", "Connect-Protocol-Version": "1", ...e2bHeaders },
+    body: frame,
+    signal: opts.signal,
+  });
+  if (!res.ok || !res.body) throw new Error(`E2B sandbox answered ${res.status}: ${await res.text()}`);
+  const out: Buffer[] = [];
+  const err: Buffer[] = [];
+  let exitCode = -1;
+  let pending = Buffer.alloc(0);
+  for await (const chunk of res.body as AsyncIterable<Uint8Array>) {
+    pending = Buffer.concat([pending, chunk]);
+    while (pending.length >= 5 && pending.length >= 5 + pending.readUInt32BE(1)) {
+      const flags = pending.readUInt8(0);
+      const length = pending.readUInt32BE(1);
+      const message = JSON.parse(pending.subarray(5, 5 + length).toString() || "{}");
+      pending = pending.subarray(5 + length);
+      if (flags & 2) {
+        if (message.error) throw new Error(`E2B sandbox: ${message.error.message ?? message.error.code}`);
+        continue;
+      }
+      const event = message.event ?? {};
+      for (const [key, into] of [["stdout", out], ["stderr", err]] as const) {
+        if (event.data?.[key]) {
+          const bytes = Buffer.from(event.data[key], "base64");
+          into.push(bytes);
+          opts.onData?.(bytes);
+        }
+      }
+      // Protobuf JSON leaves out a zero exit code.
+      if (event.end) exitCode = event.end.exitCode ?? 0;
+    }
+  }
+  return { exitCode, stdout: Buffer.concat(out), stderr: Buffer.concat(err) };
+}
+
+/** envd's file API: read, or write (making parent folders). */
+async function e2bFile(path: string, content?: Buffer): Promise<Buffer> {
+  const url = `${e2bUrl}/files?path=${encodeURIComponent(path)}&username=user`;
+  const res = await fetch(url, content
+    ? { method: "POST", headers: { ...e2bHeaders, "Content-Type": "application/octet-stream" }, body: content }
+    : { headers: e2bHeaders });
+  if (!res.ok) throw new Error(`${path}: ${(await res.text()).trim() || res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
 /** Runs a bash script in the computer. `args` become $1, $2…, so paths need no quoting. */
-function inComputer(script: string, args: string[] = [], input?: Buffer): Promise<Buffer> {
+async function inComputer(script: string, args: string[] = [], input?: Buffer): Promise<Buffer> {
+  if (e2bUrl) {
+    if (input) throw new Error("input isn't supported in E2B; write files with e2bFile");
+    const r = await e2bRun(script, args);
+    if (r.exitCode !== 0) throw new Error(r.stderr.toString().trim() || `exit ${r.exitCode}`);
+    return r.stdout;
+  }
   return new Promise((resolve, reject) => {
     const child = spawn(runtime, ["exec", "-i", "-w", home, computer!, "bash", "-c", script, "bash", ...args], {
       stdio: ["pipe", "pipe", "pipe"],
@@ -121,17 +204,28 @@ export default function (pi: ExtensionAPI) {
   if (!computer) return; // ORPHUSBOT_RUNTIME=none: tools run on the host, still gated.
 
   const read: ReadOperations = {
-    readFile: (p) => inComputer('cat -- "$1"', [inside(p)]),
+    readFile: (p) => (e2bUrl ? e2bFile(inside(p)) : inComputer('cat -- "$1"', [inside(p)])),
     access: (p) => inComputer('test -r "$1"', [inside(p)]).then(() => {}),
     detectImageMimeType: async (p) => IMAGES[p.split(".").pop()?.toLowerCase() ?? ""] ?? null,
   };
   const write: WriteOperations = {
-    writeFile: (p, content) => inComputer('cat > "$1"', [inside(p)], Buffer.from(content)).then(() => {}),
+    writeFile: (p, content) =>
+      (e2bUrl ? e2bFile(inside(p), Buffer.from(content)) : inComputer('cat > "$1"', [inside(p)], Buffer.from(content))).then(() => {}),
     mkdir: (dir) => inComputer('mkdir -p -- "$1"', [inside(dir)]).then(() => {}),
   };
   const bash: BashOperations = {
     exec: (command, dir, { onData, signal, timeout }) =>
-      new Promise((resolve, reject) => {
+      e2bUrl
+        ? e2bRun(timeout ? `timeout -s KILL ${Number(timeout)} bash -c "$1"` : 'bash -c "$1"', [command], { cwd: inside(dir), onData, signal })
+            .then((r) => {
+              if (timeout && r.exitCode === 137) throw new Error(`timeout:${timeout}`);
+              return { exitCode: r.exitCode };
+            })
+            .catch((e) => {
+              // ponytail: as with podman, an aborted command runs on in the sandbox until it ends.
+              throw signal?.aborted ? new Error("aborted") : e;
+            })
+        : new Promise((resolve, reject) => {
         // ponytail: stopping the podman client doesn't stop the command inside; the in-container
         // `timeout` covers time limits, and an aborted command runs on until it ends.
         const limited = timeout ? ["timeout", "-s", "KILL", String(timeout), "bash", "-c", command] : ["bash", "-c", command];

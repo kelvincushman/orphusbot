@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-031: The node reaches an E2B sandbox's envd directly, with that sandbox's token (2026-10-16)
+
+- **Context:** DESIGN §6.2 planned that a node's bridge sends each operation up the link and the server runs it against E2B, so nothing E2B-related reaches a node.
+- **Decision:** the server keeps the API key and makes or resumes the sandbox; the node gets only that sandbox's envd address and access token, and the bridge calls envd itself, exactly as it calls `podman exec` for a local computer. The Connect protocol is spoken by hand in JSON (a 5-byte header per message) instead of generated stubs.
+- **Alternatives:** relaying every operation through the server (a new request/response path on the node link for each read, write and streamed command, for no gain: nodes are the owner's machines and the token opens one sandbox only); the E2B SDK in the bridge (a dependency the engine would load for a few calls); generated Connect stubs (a build step for two calls).
+- **Consequences:** a node needs HTTPS to E2B. A leaked envd token exposes one bot's sandbox until it's replaced, never the account. Model tokens still never reach E2B.
+
 ## D-030: Fleets and workflows are not run targets until Orphus can keep them gated (2026-10-16)
 
 - **Context:** PRD B-RUN-06 and M6 ask that a run can launch an Orphus fleet or a Goal workflow. Both work by spawning subagents or in-process stage sessions. OrphusBot's guarantees come from the bridge: every tool call is gated, and in a bot computer every tool runs inside the container. Child sessions don't load the bridge, and Orphus has no structured RPC for fleet or workflow state (H-B6, orphus-desktop H-03).

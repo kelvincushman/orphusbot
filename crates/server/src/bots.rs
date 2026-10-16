@@ -27,6 +27,13 @@ pub struct Bot {
     /// "team" or "private".
     pub scope: String,
     pub disabled: bool,
+    /// Where its computer is: `node` (a container on a node) or `e2b`.
+    #[serde(default = "on_node")]
+    pub computer: String,
+}
+
+fn on_node() -> String {
+    "node".into()
 }
 
 impl Bot {
@@ -38,8 +45,9 @@ impl Bot {
             thinking: self.thinking.clone(),
             exclude_tools: self.exclude_tools.clone(),
             team: self.scope == "team",
-            // Filled in when a run starts (`connections::for_bot`).
+            // Filled in when a run starts (`connections::for_bot`, `e2b`).
             mcp: Vec::new(),
+            e2b: None,
         }
     }
 
@@ -81,9 +89,23 @@ impl Bot {
             _ if !["team", "private"].contains(&self.scope.as_str()) => {
                 Err("Scope is team or private")
             }
+            _ if !["node", "e2b"].contains(&self.computer.as_str()) => {
+                Err("The computer is on a node or in E2B")
+            }
             _ => Ok(self),
         }
     }
+}
+
+/// A computer in E2B needs the server's E2B key.
+fn e2b_available(app: &crate::App, bot: &Bot) -> Result<(), ApiError> {
+    if bot.computer == "e2b" && !app.e2b.enabled() {
+        return Err((
+            StatusCode::CONFLICT,
+            "Set ORPHUSBOT_E2B_API_KEY on the server to put computers in E2B",
+        ));
+    }
+    Ok(())
 }
 
 /// "Research Assistant!" → "research-assistant".
@@ -107,7 +129,7 @@ fn slugify(name: &str) -> String {
 pub async fn all(db: &PgPool) -> sqlx::Result<Vec<Bot>> {
     sqlx::query_as!(
         Bot,
-        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled
+        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer
          from bot order by disabled, slug <> 'inbox', name"
     )
     .fetch_all(db)
@@ -117,7 +139,7 @@ pub async fn all(db: &PgPool) -> sqlx::Result<Vec<Bot>> {
 pub async fn get(db: &PgPool, slug: &str) -> sqlx::Result<Option<Bot>> {
     sqlx::query_as!(
         Bot,
-        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled
+        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer
          from bot where slug = $1",
         slug
     )
@@ -146,6 +168,8 @@ pub struct NewBot {
     exclude_tools: Vec<String>,
     #[serde(default = "private")]
     scope: String,
+    #[serde(default = "on_node")]
+    computer: String,
 }
 
 fn private() -> String {
@@ -166,9 +190,11 @@ pub async fn create(
         exclude_tools: new.exclude_tools,
         scope: new.scope,
         disabled: false,
+        computer: new.computer,
     }
     .check()
     .map_err(|why| (StatusCode::UNPROCESSABLE_ENTITY, why))?;
+    e2b_available(&app, &bot)?;
     let mut tx = app
         .db
         .begin()
@@ -191,8 +217,8 @@ pub async fn create(
         .find(|s| !taken.contains(s))
         .unwrap_or_default();
     let id = sqlx::query_scalar!(
-        "insert into bot (slug, name, remit, instructions, model, thinking, exclude_tools, scope)
-         values ($1, $2, $3, $4, $5, $6, $7, $8) returning id",
+        "insert into bot (slug, name, remit, instructions, model, thinking, exclude_tools, scope, computer)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning id",
         slug,
         bot.name,
         bot.remit,
@@ -200,7 +226,8 @@ pub async fn create(
         bot.model,
         bot.thinking,
         &bot.exclude_tools,
-        bot.scope
+        bot.scope,
+        bot.computer
     )
     .fetch_one(&mut *tx)
     .await
@@ -223,6 +250,7 @@ pub async fn update(
     let bot = bot
         .check()
         .map_err(|why| (StatusCode::UNPROCESSABLE_ENTITY, why))?;
+    e2b_available(&app, &bot)?;
     if bot.slug == "inbox" && bot.disabled {
         return Err((
             StatusCode::UNPROCESSABLE_ENTITY,
@@ -231,7 +259,7 @@ pub async fn update(
     }
     let done = sqlx::query!(
         "update bot set name = $2, remit = $3, instructions = $4, model = $5, thinking = $6,
-                exclude_tools = $7, scope = $8, disabled = $9
+                exclude_tools = $7, scope = $8, disabled = $9, computer = $10
          where slug = $1",
         bot.slug,
         bot.name,
@@ -241,7 +269,8 @@ pub async fn update(
         bot.thinking,
         &bot.exclude_tools,
         bot.scope,
-        bot.disabled
+        bot.disabled,
+        bot.computer
     )
     .execute(&app.db)
     .await
@@ -279,6 +308,7 @@ mod tests {
             exclude_tools: vec![],
             scope: "private".into(),
             disabled: false,
+            computer: "node".into(),
         };
         let ok = bot(" Researcher ", Some("high")).check().unwrap();
         assert_eq!((ok.name.as_str(), ok.model), ("Researcher", None));

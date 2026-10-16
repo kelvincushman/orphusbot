@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into bot_sandbox (bot_id, sandbox_id) select id, $2 from bot where slug = $1\n             on conflict (bot_id) do update set sandbox_id = excluded.sandbox_id, created_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cefa3bb2d16a3e6b0defa165cc8701f03dd9d0861482dd29ce1f3a42014f5de8"
+}

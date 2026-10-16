@@ -67,6 +67,23 @@ pub fn choose(nodes: &[Candidate], home: Option<&str>) -> Placement {
     Placement::Wait { why }
 }
 
+/// For a bot whose computer is in E2B: the engine is light, so any connected
+/// node may host it, even one on battery or in its quiet hours.
+pub fn choose_for_cloud(nodes: &[Candidate]) -> Placement {
+    match nodes
+        .iter()
+        .min_by(|a, b| a.load.cmp(&b.load).then(a.name.cmp(&b.name)))
+    {
+        Some(n) => Placement::Run {
+            node: n.name.clone(),
+            why: "its computer is in E2B; least busy machine",
+        },
+        None => Placement::Wait {
+            why: "no node is connected".to_owned(),
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -113,6 +130,19 @@ mod tests {
         );
         let tied = [node("b", 10, false, false), node("a", 10, false, false)];
         assert_eq!(choose(&tied, None), run("a", "least busy machine"));
+    }
+
+    #[test]
+    fn a_cloud_computer_can_use_any_connected_node() {
+        let nodes = [
+            node("laptop", 5, true, false),
+            node("desk", 50, false, true),
+        ];
+        assert_eq!(
+            choose_for_cloud(&nodes),
+            run("laptop", "its computer is in E2B; least busy machine")
+        );
+        assert!(matches!(choose_for_cloud(&[]), Placement::Wait { .. }));
     }
 
     #[test]

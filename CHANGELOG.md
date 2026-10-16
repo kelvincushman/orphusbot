@@ -13,6 +13,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **A setup script for the Mac:** `sh scripts/macos-setup.sh <user>@<gpu-box>` builds and installs the app and keeps the tunnel to your server open.
 - **Sign in to MCP servers (M6.5):** a connection with an address has **Sign in**: you sign in on the provider's page and come back connected. OrphusBot keeps the sign-in fresh before each run, and the tokens stay on the server.
 - **MCP servers that run as a command (M6.4):** a connection can be a command such as `npx -y @modelcontextprotocol/server-github`, with the variable its token goes in (`GITHUB_TOKEN`). It runs on your machine only if that node lists the program in `ORPHUSBOT_MCP_COMMANDS`.
 - **Capture profiles (M4.7):** Captures → Profile. **Focus support** (the default) keeps everything, sends digests at 10:00, 14:00 and 18:00 plus a 21:00 review, files ideas and things to remember by itself (Undo for a day), brings a dismissed commitment back once after three days, and nudges you 30 and 10 minutes before an appointment with a time and when it starts, by push and on your wrist. **Standard** keeps commitments and appointments with one digest at 18:00. Nothing is ever called overdue: it's "still open".

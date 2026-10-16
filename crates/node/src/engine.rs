@@ -1,11 +1,14 @@
 //! Translating one Orphus RPC output line into node-link frames.
 //!
-//! Orphus streams JSONL on stdout (orphus `docs/rpc.md`). The node only needs
-//! four things from it: text deltas, finished assistant messages, a rejected
-//! prompt, and the end of the run.
+//! Orphus streams JSONL on stdout (orphus `docs/rpc.md`). The node needs:
+//! text deltas, finished assistant messages, a rejected prompt, the end of the
+//! run, dialogs the engine is waiting on, and finished tool calls.
 
 use orphusbot_proto::{Attempt, FromNode};
 use serde_json::Value;
+
+/// Longest tool result kept for the effect ledger.
+const MAX_RESULT_CHARS: usize = 2000;
 
 /// What a turn has seen so far: the error to report when it ends, if any.
 #[derive(Debug, Default)]
@@ -59,6 +62,38 @@ pub fn map_line(line: &str, attempt: Attempt, state: &mut TurnState) -> Vec<From
             } else {
                 vec![FromNode::Reply { attempt, text }]
             }
+        }
+        Some("extension_ui_request")
+            if matches!(
+                v["method"].as_str(),
+                Some("select" | "confirm" | "input" | "editor")
+            ) =>
+        {
+            vec![FromNode::Dialog {
+                attempt,
+                request: v,
+            }]
+        }
+        Some("tool_execution_end") => {
+            let Some(id) = v["toolCallId"].as_str() else {
+                return Vec::new();
+            };
+            let result: String = v["result"]["content"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|c| c["text"].as_str())
+                .collect::<Vec<_>>()
+                .join("\n")
+                .chars()
+                .take(MAX_RESULT_CHARS)
+                .collect();
+            vec![FromNode::ToolDone {
+                attempt,
+                tool_call_id: id.to_owned(),
+                ok: v["isError"] != true,
+                result,
+            }]
         }
         Some("agent_end") => vec![FromNode::TurnEnded {
             attempt,
@@ -137,6 +172,26 @@ mod tests {
                 attempt: A,
                 error: Some("rate limited".into())
             }]
+        );
+    }
+
+    #[test]
+    fn relays_dialogs_and_finished_tool_calls() {
+        let out = run(&[
+            r#"{"type":"extension_ui_request","id":"d1","method":"input","title":"orphusbot-gate","placeholder":"{}"}"#,
+            r#"{"type":"extension_ui_request","id":"n1","method":"notify","message":"fyi"}"#,
+            r#"{"type":"tool_execution_end","toolCallId":"c1","toolName":"bash","result":{"content":[{"type":"text","text":"ok"}]},"isError":false}"#,
+        ]);
+        assert_eq!(out.len(), 2, "notify is fire-and-forget and not relayed");
+        assert!(matches!(&out[0], FromNode::Dialog { request, .. } if request["id"] == "d1"));
+        assert_eq!(
+            out[1],
+            FromNode::ToolDone {
+                attempt: A,
+                tool_call_id: "c1".into(),
+                ok: true,
+                result: "ok".into()
+            }
         );
     }
 

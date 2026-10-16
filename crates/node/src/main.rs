@@ -107,6 +107,12 @@ async fn session(cfg: &Config) -> anyhow::Result<()> {
                             e.command(&cmd.to_string()).await.ok();
                         }
                     }
+                    Ok(ToNode::DialogResponse { attempt, response }) => {
+                        let is_response = response["type"] == "extension_ui_response";
+                        if let Some(e) = engine.as_mut().filter(|e| e.current == Some(attempt) && is_response) {
+                            e.command(&response.to_string()).await.ok();
+                        }
+                    }
                     Ok(ToNode::Abort { attempt }) => {
                         if let Some(e) = engine.as_mut().filter(|e| e.current == Some(attempt)) {
                             e.command(r#"{"type":"abort"}"#).await.ok();
@@ -128,6 +134,9 @@ async fn session(cfg: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// The Orphus extension that sends every tool call to OrphusBot for approval.
+const BRIDGE: &str = include_str!("../../../bridge/orphusbot-bridge.ts");
+
 /// A running `orphus --mode rpc` process.
 struct Engine {
     _child: Child,
@@ -141,6 +150,8 @@ impl Engine {
     fn spawn(cfg: &Config, out: mpsc::Sender<FromNode>) -> anyhow::Result<Self> {
         std::fs::create_dir_all(&cfg.session_dir)
             .with_context(|| format!("creating {}", cfg.session_dir))?;
+        let bridge = format!("{}/orphusbot-bridge.ts", cfg.session_dir);
+        std::fs::write(&bridge, BRIDGE).with_context(|| format!("writing {bridge}"))?;
         let mut child = Command::new(&cfg.orphus)
             .args([
                 "--mode",
@@ -152,6 +163,8 @@ impl Engine {
                 "orphusbot",
                 "--session-dir",
                 &cfg.session_dir,
+                "--extension",
+                &bridge,
             ])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update effect set state = $4::text::effect_state, result = $5, updated_at = now()\n         where run_id = $1 and fence = $2 and tool_call_id = $3 and state = 'approved'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "861a39d94e6e7a1435b26281a93455846459b81a5f6c724f1c81d8243dede232"
+}

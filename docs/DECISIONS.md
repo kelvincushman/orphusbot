@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-015: The approval gate uses Orphus's dialog protocol, not a socket (2026-10-16)
+
+**Decided:** the bridge asks for approval with an Orphus `input` dialog; the node relays dialogs and the server answers them. Tool completions are read from Orphus's `tool_execution_end` events. The unix socket in DESIGN §4.3 arrives in M2, only for redirecting tool operations into bot computers.
+**Why:** the dialog protocol already exists, already crosses the process boundary, and already blocks the engine until answered. Reusing it means no socket code, no extra protocol and no path to configure, and the same relay gives bots a way to ask the owner questions (B-RUN-05).
+**Alternatives:** the socket from the start.
+**Revisit if:** dialogs prove too slow for read-heavy work (reads skip the gate on the server, but still round-trip).
+
 ## D-014: Runs are dispatched straight from Postgres, without a job queue, until M3 (2026-10-16)
 
 **Decided:** queued runs are claimed with `select … for update skip locked` whenever a run is queued, a node connects or a run ends, and a 30-second reconciler renews and sweeps leases. `graphile_worker` (DESIGN §3.5) arrives in M3, with routines.

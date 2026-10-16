@@ -44,6 +44,26 @@ pub async fn since(db: &PgPool, after: i64) -> sqlx::Result<Vec<(i64, ThreadEven
     Ok(rows.into_iter().map(|r| (r.seq, r.body.0)).collect())
 }
 
+/// Closes dialogs left open by an earlier server process: their engines are gone.
+pub async fn expire_open_dialogs(db: &PgPool) -> sqlx::Result<u64> {
+    let open = sqlx::query_scalar!(
+        r#"select o.body -> 'dialog' ->> 'id' as "id!" from event o
+           where o.thread_id = $1 and o.body ->> 'type' = 'dialog_opened'
+             and not exists (select 1 from event c
+                             where c.thread_id = o.thread_id and c.body ->> 'type' = 'dialog_closed'
+                               and c.body ->> 'id' = o.body -> 'dialog' ->> 'id')"#,
+        THREAD
+    )
+    .fetch_all(db)
+    .await?;
+    let count = open.len() as u64;
+    for id in open {
+        let outcome = "Expired: the server restarted".to_owned();
+        append(db, &ThreadEvent::DialogClosed { id, outcome }).await?;
+    }
+    Ok(count)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

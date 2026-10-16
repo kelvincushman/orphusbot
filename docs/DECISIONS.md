@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-024: Routines fire from a scheduler loop over a `next_at` column, still without a job queue (2026-10-16)
+
+**Decided:** a loop in the server wakes every 15 s and fires routines whose `next_at` has passed. Each firing is claimed by moving `next_at` to the next occurrence in the same statement that checks it, so it can't fire twice; one missed while the server was down fires once on start, then the schedule carries on from now. Cron is read in each routine's IANA time zone (`croner` + `chrono-tz`), so clock changes keep 08:00 at 08:00. This supersedes D-014's plan to add `graphile_worker` with routines.
+**Why:** routines are the only timed work so far, and a single `update … where next_at <= now()` gives the same once-only guarantee a job queue would, with no extra dependency or schema.
+**Alternatives:** `graphile_worker` (or `apalis`) now; cron in the operating system calling a webhook.
+**Revisit if:** there are several server processes, or more kinds of timed work (computer sleep, digests, capture mining) that need retries and backoff.
+
 ## D-023: System 1 may only let through file changes inside a bot's computer; it routes inbox messages (2026-10-16)
 
 **Decided:** in the gate, Laya is asked only about `write` and `edit` calls that run inside the bot's computer, and only when no rule decided; at 0.95 confidence or more they run without a card. Bash, anything on the host and everything else always asks the owner unless a rule says otherwise. For routing, Laya picks among the enabled bots' remits for new inbox messages and acts at 0.85 or more. Both thresholds are settings, the gate's never below 0.9. Every ask leaves a receipt.

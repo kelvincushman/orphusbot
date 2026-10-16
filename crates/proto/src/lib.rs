@@ -215,6 +215,10 @@ pub enum ThreadEvent {
     DialogOpened {
         dialog: Dialog,
     },
+    /// A line from OrphusBot in the thread, such as a routine firing or being skipped.
+    Notice {
+        text: String,
+    },
     /// System 1 sent an inbox message to another bot (`to` is its slug, `name` its
     /// name, `sure` the confidence in percent).
     Routed {
@@ -268,6 +272,7 @@ impl ThreadEvent {
                 | Self::DialogOpened { .. }
                 | Self::DialogClosed { .. }
                 | Self::Routed { .. }
+                | Self::Notice { .. }
         )
     }
 }

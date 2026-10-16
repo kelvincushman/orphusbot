@@ -37,7 +37,9 @@ const computer = process.env.ORPHUSBOT_COMPUTER;
 const runtime = process.env.ORPHUSBOT_RUNTIME ?? "podman";
 const home = process.env.ORPHUSBOT_COMPUTER_HOME ?? "/home/bot";
 /** In a computer, only these run: each one is redirected into it. */
-const COMPUTER_TOOLS = ["read", "write", "edit", "bash", "request_takeover"];
+// Plus `mcp`, Orphus's MCP gateway, when the owner granted the bot a connection:
+// it only talks to those servers, so it is safe to run outside the computer.
+const COMPUTER_TOOLS = ["read", "write", "edit", "bash", "request_takeover", ...(process.env.ORPHUSBOT_MCP ? ["mcp"] : [])];
 const IMAGES: Record<string, string> = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
 };

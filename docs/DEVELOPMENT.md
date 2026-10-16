@@ -117,6 +117,7 @@ All settings are environment variables.
 | `ORPHUSBOT_NTFY_URL` | none | An ntfy topic to push to, such as `https://ntfy.example.com/orphusbot-<random>`; nothing is pushed without it |
 | `ORPHUSBOT_NTFY_TOKEN` | none | ntfy access token, if the topic needs one |
 | `ORPHUSBOT_DAILY_TOKEN_BUDGET` | none | Input + output tokens a day; crossing it warns on the wrist and by push, once a day |
+| `ORPHUSBOT_SECRET_KEY_FILE` | none | A file of exactly 32 random bytes (`head -c 32 /dev/urandom > key`) that encrypts stored tokens; without it, connections can't keep a token. Losing it loses every stored token |
 | `ORPHUSBOT_HANDS_FREE_ALLOWED` | on | Set to `false` to switch hands-free capture off for every device (the kill switch) |
 | `ORPHUSBOT_CAPTURE_RETENTION_DAYS` | `7` | Days to keep captured conversation text |
 | `ORPHUSBOT_BIND` | `127.0.0.1:7480` | Address to listen on. Bind to your NetBird address to reach it from other machines; **never** to a public interface |

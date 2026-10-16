@@ -378,6 +378,27 @@ impl Engine {
         if !bot.exclude_tools.is_empty() {
             command.args(["--exclude-tools", &bot.exclude_tools.join(",")]);
         }
+        if !bot.mcp.is_empty() {
+            // Orphus's MCP adapter reads this file; tokens go in through the
+            // environment so they're never written to disk.
+            let mut servers = serde_json::Map::new();
+            for (i, server) in bot.mcp.iter().enumerate() {
+                let mut entry = serde_json::json!({ "url": server.url, "lifecycle": "lazy" });
+                if let Some(token) = &server.token {
+                    let var = format!("ORPHUSBOT_MCP_TOKEN_{i}");
+                    entry["auth"] = "bearer".into();
+                    entry["bearerTokenEnv"] = var.clone().into();
+                    command.env(var, token);
+                }
+                servers.insert(server.name.clone(), entry);
+            }
+            let file = format!("{dir}/mcp.json");
+            let config = serde_json::json!({ "mcpServers": servers });
+            std::fs::write(&file, config.to_string()).with_context(|| format!("writing {file}"))?;
+            command
+                .args(["--mcp-config", &file])
+                .env("ORPHUSBOT_MCP", "1");
+        }
         if let Some(runtime) = &cfg.runtime {
             let spec = computer::Spec {
                 runtime,

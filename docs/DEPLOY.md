@@ -52,9 +52,10 @@ This guide uses Cloudflare for DNS and [Caddy](https://caddyserver.com) for HTTP
 
 6. **System 1 (optional).** Run laya-serve on the GPU box bound to loopback (`LAYA_HOST=127.0.0.1`, see [DEVELOPMENT.md](DEVELOPMENT.md#system-1-laya)) and set `ORPHUSBOT_LAYA_URL=http://127.0.0.1:7600` for the server.
 7. **Push (optional).** Run [ntfy](https://ntfy.sh) on the GPU box, listening on the NetBird interface, with access control on and a token for OrphusBot. Pick a hard-to-guess topic such as `orphusbot-<random>`, set `ORPHUSBOT_NTFY_URL=https://ntfy.example.com/orphusbot-<random>` and `ORPHUSBOT_NTFY_TOKEN`, and subscribe to that topic in the ntfy Android app (pointed at your ntfy over NetBird). No Google account is involved.
-8. **Nodes** connect through Caddy with TLS: `ORPHUSBOT_SERVER=wss://bots.example.com/node`. Enrol each machine once with a code from **Add a node** on the page (`orphusbot-node enrol <code>`); the GPU box's own node enrols the same way.
+8. **Secrets (optional).** To keep tokens for connections, make a 32-byte key and hand it to the server as a systemd credential, so it never sits in plain text on disk: `head -c 32 /dev/urandom | sudo systemd-creds encrypt --name=orphusbot-secret-key - /etc/credstore.encrypted/orphusbot-secret-key`, then in the unit `LoadCredentialEncrypted=orphusbot-secret-key` and `Environment=ORPHUSBOT_SECRET_KEY_FILE=%d/orphusbot-secret-key`. Back the key up somewhere safe: without it the stored tokens can't be read.
+9. **Nodes** connect through Caddy with TLS: `ORPHUSBOT_SERVER=wss://bots.example.com/node`. Enrol each machine once with a code from **Add a node** on the page (`orphusbot-node enrol <code>`); the GPU box's own node enrols the same way.
 
-9. **First sign-in.** Open `https://bots.example.com` from a device on NetBird, enter the setup token (`ORPHUSBOT_SETUP_TOKEN`), and add a passkey when asked. From then on, sign in with the passkey. Add one passkey per device, or use a passkey manager that syncs them.
+10. **First sign-in.** Open `https://bots.example.com` from a device on NetBird, enter the setup token (`ORPHUSBOT_SETUP_TOKEN`), and add a passkey when asked. From then on, sign in with the passkey. Add one passkey per device, or use a passkey manager that syncs them.
 
 ## Troubleshooting
 

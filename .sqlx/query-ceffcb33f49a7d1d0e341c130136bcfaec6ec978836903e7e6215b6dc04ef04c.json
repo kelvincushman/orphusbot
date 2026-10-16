@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select c.name, c.url, c.secret_id from connection c\n         join bot_connection g on g.connection_id = c.id join bot b on b.id = g.bot_id\n         where b.slug = $1 order by c.name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "connection",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "url",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "connection",
+            "name": "url"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "secret_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "connection",
+            "name": "secret_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "ceffcb33f49a7d1d0e341c130136bcfaec6ec978836903e7e6215b6dc04ef04c"
+}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "delete from connection where id = $1 returning secret_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "secret_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "connection",
+            "name": "secret_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "5c9f0cb411b9943adde4cf0ac7bdebe9cf03e60dc92f0524a595836b02b262fa"
+}

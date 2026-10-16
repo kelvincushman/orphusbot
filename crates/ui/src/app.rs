@@ -1562,6 +1562,8 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
     let nodes = RwSignal::new(Vec::<Node>::new());
     let wearables = RwSignal::new(Value::Null);
     let usage = RwSignal::new(Value::Null);
+    let connections = RwSignal::new(Value::Null);
+    let bots = RwSignal::new(Vec::<Value>::new());
     let pairing = RwSignal::new(None::<String>);
     let name = RwSignal::new("This device".to_owned());
     let command = RwSignal::new(None::<String>);
@@ -1572,10 +1574,40 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
             nodes.set(api::get("/api/nodes").await?);
             wearables.set(api::get("/api/devices").await?);
             usage.set(api::get("/api/usage").await?);
+            connections.set(api::get("/api/connections").await?);
+            bots.set(api::get("/api/bots").await?);
             Ok(())
         })
     };
     load();
+    let (conn_name, conn_url, conn_token) = (
+        RwSignal::new(String::new()),
+        RwSignal::new(String::new()),
+        RwSignal::new(String::new()),
+    );
+    let add_connection = move |ev: SubmitEvent| {
+        ev.prevent_default();
+        let body = json!({ "name": conn_name.get_untracked(), "url": conn_url.get_untracked(), "token": conn_token.get_untracked() });
+        ctx.run(async move {
+            api::post("/api/connections", &body).await?;
+            conn_name.set(String::new());
+            conn_url.set(String::new());
+            conn_token.set(String::new());
+            load();
+            Ok(())
+        })
+    };
+    let grant = move |id: i64, bot: String, granted: bool| {
+        ctx.run(async move {
+            api::post(
+                "/api/connections/grant",
+                &json!({ "id": id, "bot": bot, "granted": granted }),
+            )
+            .await?;
+            load();
+            Ok(())
+        })
+    };
     let remove = move |path: &'static str, id: i64, question: &'static str| {
         if !confirmed(question) {
             return;
@@ -1703,6 +1735,44 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
                         <p class="muted">"On the machine, run this within 10 minutes. The code works once."</p>
                         <pre>{c}</pre>
                         <button on:click=copy>"Copy"</button>
+                    })}
+                </div>
+                <div>
+                    <h3>"Connections"</h3>
+                    <p class="muted">"MCP servers your bots may use. Pick which bots get each one; every call that does something asks you first, and the bot sees only a search tool until it needs one."</p>
+                    <ul>
+                        {move || connections.with(|c| c["connections"].as_array().cloned().unwrap_or_default()).into_iter().map(|c| {
+                            let id = c["id"].as_i64().unwrap_or_default();
+                            let granted: Vec<String> = c["bots"].as_array().into_iter().flatten().filter_map(|b| b.as_str().map(str::to_owned)).collect();
+                            let token = if c["has_token"] == true { " · token saved" } else { "" };
+                            let detail = format!("{}{token}", c["url"].as_str().unwrap_or_default());
+                            view! {
+                                <li>
+                                    <span>{c["name"].as_str().unwrap_or_default().to_owned()}<small>{detail}</small>
+                                        <span class="row" role="group" aria-label="Bots that may use it">
+                                            {bots.get().into_iter().map(|b| {
+                                                let slug = b["slug"].as_str().unwrap_or_default().to_owned();
+                                                let on = granted.contains(&slug);
+                                                let name = b["name"].as_str().unwrap_or_default().to_owned();
+                                                view! { <button class:primary=on aria-pressed=on.to_string()
+                                                    on:click=move |_| grant(id, slug.clone(), !on)>{name}</button> }
+                                            }).collect_view()}
+                                        </span>
+                                    </span>
+                                    <button class="danger" on:click=move |_| remove("/api/connections/delete", id,
+                                        "Remove this connection? Bots lose it on their next run, and its token is deleted.")>"Remove"</button>
+                                </li>
+                            }
+                        }).collect_view()}
+                    </ul>
+                    <form class="row" on:submit=add_connection>
+                        <input aria-label="Connection name" placeholder="pa" maxlength="24" required bind:value=conn_name style="width: 7rem" />
+                        <input aria-label="Server address" type="url" placeholder="https://pa.example.com/mcp" required bind:value=conn_url style="flex: 1" />
+                        <input aria-label="Token" type="password" placeholder="Token (optional)" autocomplete="off" bind:value=conn_token style="width: 10rem" />
+                        <button class="primary">"Add"</button>
+                    </form>
+                    {move || (connections.with(|c| c["secrets"] == false)).then(|| view! {
+                        <p class="muted">"To save tokens, set ORPHUSBOT_SECRET_KEY_FILE on the server."</p>
                     })}
                 </div>
                 <div>

@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-029: Connections ride Orphus's MCP adapter, tokens go in by environment, MCP calls are gated per tool (2026-10-16)
+
+- **Context:** DESIGN §11 planned MCP config per engine session, `search_tools` / `load_tool` / `call_tool` wrappers served by the server for big servers, and envelope-encrypted secrets.
+- **Decision:** Orphus's built-in MCP adapter already loads servers lazily behind one `mcp` tool with search and describe, so OrphusBot only hands it a config file (`--mcp-config`) per bot, with each token passed as an environment variable the file names. The gate treats a bare `mcp` call as a read and a tool call as `mcp:<tool>`. Secrets are AES-256-GCM under a single master key, using openssl, which the build already had.
+- **Alternatives:** our own rmcp wrapper endpoint (duplicates the adapter); tokens in the config file (on the node's disk); one approval rule for all of `mcp` (one "Always allow" would allow every MCP tool); envelope encryption now (only needed to rotate the master key without re-encrypting).
+- **Consequences:** a new MCP server needs no OrphusBot code. Rotating the master key means re-adding tokens. Engine session files on nodes keep raw tool output.
+
 ## D-028: No in-process Laya (OrtLaya) for now; laya-serve stays System 1's runtime (2026-10-16)
 
 - **Context:** M5 planned `OrtLaya`: Laya's ONNX graph run inside the server through ONNX Runtime, gated by parity with Laya's golden fixtures. Laya has ports in Go, Java, TypeScript and .NET, but none in Rust; the Go one is about 13,000 lines (tokenizer, CPython-exact JSON, language detection, sequence building, decoding with temperatures and binning). The graph is a 1.3 GB export the laptop doesn't have.

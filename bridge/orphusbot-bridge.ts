@@ -62,6 +62,10 @@ const COMPUTER_TOOLS = [
   ...(process.env.ORPHUSBOT_MCP ? ["mcp"] : []),
   // Fleets: helpers whose calls come back through this gate and into the computer.
   ...(process.env.ORPHUSBOT_HELPERS_GATED === "1" ? HELPER_TOOLS : []),
+  // Orphus's long-term memory (Dossier), when the node has it set up: it runs on
+  // the host but only reads and writes the memory project, and only the
+  // librarian role may write (DESIGN §11.4).
+  ...(process.env.ORPHUS_MEMORY_COMMAND ? ["memory"] : []),
 ];
 const IMAGES: Record<string, string> = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",

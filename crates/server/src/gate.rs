@@ -88,8 +88,15 @@ fn ungated_helper(call: &Call<'_>) -> bool {
     call.tool == "workflow" || (call.tool == "subagent" && !call.helpers_gated)
 }
 
+/// Orphus's `memory` tool (Dossier) when it only reads: asking it something, or
+/// checking it works. Writing (`ingest`, `gardener`) asks, and Orphus lets only
+/// the librarian role write at all (DESIGN §11.4).
+fn memory_read(call: &Call<'_>) -> bool {
+    call.tool == "memory" && matches!(call.input["action"].as_str(), Some("query" | "doctor"))
+}
+
 pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Result<Verdict> {
-    if READ_ONLY.contains(&call.tool) {
+    if READ_ONLY.contains(&call.tool) || memory_read(call) {
         return Ok(Verdict::Allow);
     }
     if ungated_helper(call) {
@@ -338,6 +345,17 @@ mod tests {
         // The fleet tool only reads blueprints.
         assert_eq!(
             decide(&db, &call(a, "h4", "fleet", &input)).await.unwrap(),
+            Verdict::Allow
+        );
+        // Memory: asking it is a read; filing something in it is not.
+        let ask = serde_json::json!({ "action": "query", "question": "what did we decide?" });
+        assert_eq!(
+            decide(&db, &call(a, "m1", "memory", &ask)).await.unwrap(),
+            Verdict::Allow
+        );
+        let file = serde_json::json!({ "action": "ingest", "source": "raw/x.md" });
+        assert_ne!(
+            decide(&db, &call(a, "m2", "memory", &file)).await.unwrap(),
             Verdict::Allow
         );
     }

@@ -13,6 +13,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **Bots can use Orphus's memory (M9.1):** a bot can ask the long-term memory what was decided before, without asking you each time; filing things into memory still asks, and only the librarian may write. Rooms, where bots talk outside their context windows, were already available.
 - **Set up fleets in the app (M7.6):** Settings → Fleets: create and edit Orphus fleets (teams of agents, each seat on its own model, that argue a question in a room or split up the work), starting from a council template, and run one as any bot with ▶. Every machine gets them automatically.
 - **Every bot has its own face (M7.5):** Researcher has glasses, Coder `< >` brackets, Checker a tick, Blogger a beret, PA a bow tie and Inbox an envelope, each in its own colour; new bots get the classic blue one. The Omarchy bar panel shows the animated faces too.
 - **Settings in the app (M7.5):** the gear next to OrphusBot opens Settings: change any bot's model, instructions, thinking and team setting, add bots, choose which bots get each connection and sign in to it, add or remove machines, see usage, link another device, pair a wearable, and sign out.

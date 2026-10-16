@@ -1,0 +1,61 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select d.catalogue, count(*) as \"asked!\", count(*) filter (where d.abstained) as \"abstained!\",\n                  count(l.id) as \"labelled!\", count(l.id) filter (where l.agrees) as \"agreed!\",\n                  avg(d.latency_ms)::float8 as latency\n           from decision d left join decision_label l on l.decision_id = d.id\n           group by d.catalogue order by d.catalogue",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "catalogue",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "decision",
+            "name": "catalogue"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "asked!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "abstained!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "labelled!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "agreed!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "latency",
+        "type_info": "Float8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "33aab7f79d96085d5dea9805f07b8087482411cb0637001286ccef69b23554a6"
+}

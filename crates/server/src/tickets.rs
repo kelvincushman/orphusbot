@@ -129,7 +129,11 @@ pub async fn create(
 async fn triage(app: Shared, ticket: Ticket) {
     let roster = bots::all(&app.db).await.unwrap_or_default();
     let text = format!("{}\n\n{}", ticket.title, ticket.body);
-    let Some(t) = app.system1.triage_ticket(&app.db, &text, &roster).await else {
+    let Some(t) = app
+        .system1
+        .triage_ticket(&app.db, &text, &roster, Some(ticket.id))
+        .await
+    else {
         return;
     };
     let saved = sqlx::query!(
@@ -180,6 +184,9 @@ pub async fn update(
     .execute(&app.db)
     .await
     .map_err(|e| internal("saving a ticket", e))?;
+    if t.bot != before.bot {
+        crate::system1::label_ticket_bot(&app.db, t.id, t.bot.as_deref()).await;
+    }
     let newly_assigned = t.bot.is_some() && t.bot != before.bot && t.status == "todo";
     if newly_assigned {
         start(&app, t.id).await?;

@@ -325,6 +325,7 @@ fn Shell() -> impl IntoView {
     let settings = RwSignal::new(false);
     let routines = RwSignal::new(false);
     let tickets = RwSignal::new(false);
+    let decisions = RwSignal::new(false);
     let menu = RwSignal::new(false);
     // `None`: closed; `Some(None)`: a new bot; `Some(Some(bot))`: editing it.
     let editing = RwSignal::new(None::<Option<Bot>>);
@@ -375,6 +376,7 @@ fn Shell() -> impl IntoView {
                 <div class="spacer"></div>
                 <button on:click=move |_| { tickets.set(true); menu.set(false); }>"Tickets"</button>
                 <button on:click=move |_| { routines.set(true); menu.set(false); }>"Routines"</button>
+                <button on:click=move |_| { decisions.set(true); menu.set(false); }>"Decisions"</button>
                 <button on:click=move |_| settings.set(true)>"Settings"</button>
             </nav>
             <main class="chat">
@@ -412,6 +414,9 @@ fn Shell() -> impl IntoView {
             </Show>
             <Show when=move || tickets.get()>
                 <Tickets open=tickets />
+            </Show>
+            <Show when=move || decisions.get()>
+                <Decisions open=decisions />
             </Show>
             {move || editing.get().map(|bot| view! { <BotSheet bot editing /> })}
         </div>
@@ -493,8 +498,12 @@ fn BotSheet(bot: Option<Bot>, editing: RwSignal<Option<Option<Bot>>>) -> impl In
                 <div class="row two">
                     <label>"Model"<input maxlength="100" bind:value=model placeholder="Orphus default" /></label>
                     <label>"Thinking"
-                        <select on:change=move |ev| thinking.set(event_target_value(&ev)) prop:value=move || thinking.get()>
-                            {thinking_levels.map(|t| view! { <option value=t>{if t.is_empty() { "Default" } else { t }}</option> })}
+                        // The chosen option is marked on the option itself: a select's value set
+                        // before its options exist falls back to the first one.
+                        <select on:change=move |ev| thinking.set(event_target_value(&ev))>
+                            {thinking_levels.map(|t| view! {
+                                <option value=t selected=move || thinking.get() == t>{if t.is_empty() { "Default" } else { t }}</option>
+                            })}
                         </select>
                     </label>
                 </div>
@@ -821,11 +830,15 @@ fn Tickets(open: RwSignal<bool>) -> impl IntoView {
             Ok(())
         })
     };
-    // Reload whenever a thread changes, so tickets move as their runs do.
+    // Reload whenever a thread changes, so tickets move as their runs do, and every few
+    // seconds, for changes no thread sees (System 1 filling in a new ticket).
     Effect::new(move |_| {
         desk.threads.track();
         load();
     });
+    if let Ok(timer) = set_interval_with_handle(load, std::time::Duration::from_secs(4)) {
+        on_cleanup(move || timer.clear());
+    }
     let create = move |ev: SubmitEvent| {
         ev.prevent_default();
         let new = json!({ "title": title.get_untracked(), "body": body.get_untracked() });
@@ -890,21 +903,22 @@ fn Tickets(open: RwSignal<bool>) -> impl IntoView {
                                             <select aria-label="Bot" on:change=move |ev| {
                                                 let v = event_target_value(&ev);
                                                 save(Ticket { bot: (!v.is_empty()).then_some(v), ..for_bot.clone() });
-                                            } prop:value=t.bot.clone().unwrap_or_default()>
-                                                <option value="">"Unassigned"</option>
-                                                {desk.bots.get_untracked().into_iter().filter(|b| !b.disabled).map(|b| view! {
-                                                    <option value=b.slug.clone()>{b.name.clone()}</option>
+                                            }>
+                                                <option value="" selected=t.bot.is_none()>"Unassigned"</option>
+                                                {desk.bots.get_untracked().into_iter().filter(|b| !b.disabled).map(|b| {
+                                                    let chosen = t.bot.as_deref() == Some(b.slug.as_str());
+                                                    view! { <option value=b.slug.clone() selected=chosen>{b.name.clone()}</option> }
                                                 }).collect_view()}
                                             </select>
                                             <select aria-label="Urgency" on:change=move |ev| {
                                                 save(Ticket { urgency: event_target_value(&ev), ..for_urgency.clone() });
-                                            } prop:value=t.urgency.clone()>
-                                                {URGENCIES.map(|(u, l)| view! { <option value=u>{l}</option> })}
+                                            }>
+                                                {URGENCIES.map(|(u, l)| view! { <option value=u selected=t.urgency == u>{l}</option> })}
                                             </select>
                                             <select aria-label="Status" on:change=move |ev| {
                                                 save(Ticket { status: event_target_value(&ev), ..for_status.clone() });
-                                            } prop:value=t.status.clone()>
-                                                {STATUSES.map(|(st, l)| view! { <option value=st>{l}</option> })}
+                                            }>
+                                                {STATUSES.map(|(st, l)| view! { <option value=st selected=t.status == st>{l}</option> })}
                                             </select>
                                             {can_start.then(|| view! { <button class="primary" on:click=move |_| start(id)>"Start"</button> })}
                                         </article>
@@ -1118,9 +1132,12 @@ fn RoutineForm(
             <h2>{if is_new { "New routine" } else { "Edit routine" }}</h2>
             <label>"Name"<input required maxlength="60" bind:value=name placeholder="Morning customer check" /></label>
             <label>"Bot"
-                <select on:change=move |ev| bot.set(event_target_value(&ev)) prop:value=move || bot.get()>
+                <select on:change=move |ev| bot.set(event_target_value(&ev))>
                     <For each=move || desk.bots.get().into_iter().filter(|b| !b.disabled) key=|b| b.slug.clone()
-                        children=move |b| view! { <option value=b.slug.clone()>{b.name.clone()}</option> } />
+                        children=move |b| {
+                            let slug = b.slug.clone();
+                            view! { <option value=b.slug.clone() selected=move || bot.get() == slug>{b.name.clone()}</option> }
+                        } />
                 </select>
             </label>
             <label>"Instruction"<textarea rows=3 required maxlength="8000" bind:value=prompt
@@ -1133,10 +1150,9 @@ fn RoutineForm(
             </fieldset>
             <Show when=move || mode.get() == "schedule">
                 <label>"Schedule"
-                    <select on:change=move |ev| { let v = event_target_value(&ev); if !v.is_empty() { cron.set(v) } }
-                        prop:value=move || if PRESETS.iter().any(|(c, _)| *c == cron.get()) { cron.get() } else { String::new() }>
-                        {PRESETS.map(|(c, l)| view! { <option value=c>{l}</option> })}
-                        <option value="">"Custom (cron)"</option>
+                    <select on:change=move |ev| { let v = event_target_value(&ev); if !v.is_empty() { cron.set(v) } }>
+                        {PRESETS.map(|(c, l)| view! { <option value=c selected=move || cron.get() == c>{l}</option> })}
+                        <option value="" selected=move || !PRESETS.iter().any(|(c, _)| *c == cron.get())>"Custom (cron)"</option>
                     </select>
                 </label>
                 <label>"Cron (minute hour day month weekday)"<input bind:value=cron /></label>
@@ -1170,6 +1186,84 @@ struct Decision {
     latency_ms: i32,
     outcome: String,
     created_at: String,
+    label: Option<Value>,
+    agrees: Option<bool>,
+    label_source: Option<String>,
+}
+
+fn catalogue_name(catalogue: &str) -> &'static str {
+    match catalogue {
+        "triage" => "Routing",
+        "gate" => "Tool calls",
+        "preflight" => "Routines",
+        _ => "Other",
+    }
+}
+
+/// System 1's receipts and how well it's doing (PRD B-CLI-03, DESIGN §7.5–§7.6).
+#[component]
+fn Decisions(open: RwSignal<bool>) -> impl IntoView {
+    let ctx = expect_context::<Ctx>();
+    let list = RwSignal::new(Vec::<Decision>::new());
+    let health = RwSignal::new(Vec::<Value>::new());
+    let filter = RwSignal::new(String::new());
+    ctx.run(async move {
+        list.set(api::get("/api/decisions").await?);
+        health.set(api::get("/api/decisions/health").await?);
+        Ok(())
+    });
+    let shown = move || -> Vec<Decision> {
+        let f = filter.get();
+        list.get()
+            .into_iter()
+            .filter(|d| f.is_empty() || d.catalogue == f)
+            .collect()
+    };
+    view! {
+        <div class="overlay" on:keydown=move |ev: KeyboardEvent| if ev.key() == "Escape" { open.set(false) }>
+            <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="decisions-title">
+                <header>
+                    <h2 id="decisions-title">"Decisions"</h2>
+                    <button autofocus on:click=move |_| open.set(false)>"Close"</button>
+                </header>
+                <p class="muted">"What System 1 (Laya) decided. It only acts when it's sure enough; otherwise you're asked. Your approvals and corrections are kept as labels to calibrate it later."</p>
+                <ul class="health">
+                    {move || health.get().into_iter().map(|h| {
+                        let asked = h["asked"].as_i64().unwrap_or(0);
+                        let labelled = h["labelled"].as_i64().unwrap_or(0);
+                        let agree = if labelled > 0 { format!(" · agrees with you {}%", h["agreed"].as_i64().unwrap_or(0) * 100 / labelled) } else { String::new() };
+                        let latency = h["latency_ms"].as_f64().map(|l| format!(" · {:.1} s average", l / 1000.0)).unwrap_or_default();
+                        view! { <li><span><strong>{catalogue_name(h["catalogue"].as_str().unwrap_or_default())}</strong>
+                            <small>{format!("{asked} asked · {} abstained · {labelled} labelled{agree}{latency}", h["abstained"].as_i64().unwrap_or(0))}</small></span></li> }
+                    }).collect_view()}
+                </ul>
+                <div class="row">
+                    {[("", "All"), ("triage", "Routing"), ("gate", "Tool calls"), ("preflight", "Routines")].map(|(c, l)| view! {
+                        <button class:primary=move || filter.get() == c aria-pressed=move || (filter.get() == c).to_string()
+                            on:click=move |_| filter.set(c.to_owned())>{l}</button>
+                    })}
+                </div>
+                <ul class="decisions">
+                    <For each=shown key=|d| d.id children=move |d| {
+                        let state: String = d.state.clone().unwrap_or_default().chars().take(120).collect();
+                        let label = d.label_source.clone().map(|source| {
+                            let verdict = if d.agrees == Some(true) { "System 1 agreed" } else { "System 1 had it differently" };
+                            format!("You {source} · {verdict}")
+                        });
+                        view! {
+                            <li>
+                                <span>{format!("{}: {}", catalogue_name(&d.catalogue), d.summary())}
+                                    <small>{format!("{} · {state}", day(&d.created_at))}</small>
+                                    {label.map(|l| view! { <small class="label">{l}</small> })}
+                                </span>
+                            </li>
+                        }
+                    } />
+                </ul>
+                {move || list.with(Vec::is_empty).then(|| view! { <p class="muted">"No decisions yet. Turn System 1 on with ORPHUSBOT_LAYA_URL."</p> })}
+            </section>
+        </div>
+    }
 }
 
 impl Decision {
@@ -1235,7 +1329,6 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
     let ctx = expect_context::<Ctx>();
     let passkeys = RwSignal::new(Vec::<Passkey>::new());
     let nodes = RwSignal::new(Vec::<Node>::new());
-    let decisions = RwSignal::new(Vec::<Decision>::new());
     let wearables = RwSignal::new(Value::Null);
     let pairing = RwSignal::new(None::<String>);
     let name = RwSignal::new("This device".to_owned());
@@ -1245,7 +1338,6 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
         ctx.run(async move {
             passkeys.set(api::get("/api/passkeys").await?);
             nodes.set(api::get("/api/nodes").await?);
-            decisions.set(api::get("/api/decisions").await?);
             wearables.set(api::get("/api/devices").await?);
             Ok(())
         })
@@ -1409,23 +1501,6 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
                             view! { <li><span>{text}<small>{format!("{} · {}", m["kind"].as_str().unwrap_or_default(), m["subject"].as_str().unwrap_or_default())}</small></span></li> }
                         }).collect_view()}
                     </ul>
-                </div>
-                <div>
-                    <h3>"Decisions"</h3>
-                    <p class="muted">"What System 1 (Laya) decided, newest first. It only acts when it's sure enough; otherwise you're asked."</p>
-                    <ul class="decisions">
-                        <For each=move || decisions.get().into_iter().take(20) key=|d| d.id children=move |d| {
-                            let what = if d.catalogue == "triage" { "Routing" } else { "Tool call" };
-                            let state: String = d.state.clone().unwrap_or_default().chars().take(90).collect();
-                            view! {
-                                <li>
-                                    <span>{format!("{what}: {}", d.summary())}
-                                        <small>{format!("{} · {state}", day(&d.created_at))}</small></span>
-                                </li>
-                            }
-                        } />
-                    </ul>
-                    {move || decisions.with(Vec::is_empty).then(|| view! { <p class="muted">"No decisions yet."</p> })}
                 </div>
                 <div>
                     <h3>"Link a device"</h3>

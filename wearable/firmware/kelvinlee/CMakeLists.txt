@@ -1,0 +1,35 @@
+cmake_minimum_required(VERSION 3.20.0)
+find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
+enable_language(C ASM) # OPUS
+
+project(kelvinlee)
+
+file(GLOB app_sources
+    src/main.c
+    src/mic.c
+    src/battery.c
+    src/led.c
+    src/haptic.c
+    src/sd_card.c
+    src/spi_flash.c
+    src/settings.c
+    src/feedback.c
+)
+file(GLOB core_sources
+    src/lib/core/config.h
+    src/lib/core/codec.c
+    src/lib/core/transport.c
+    src/lib/core/button.c
+    src/lib/core/monitor.c
+)
+
+if(CONFIG_KELVINLEE_ENABLE_OFFLINE_STORAGE)
+    list(APPEND core_sources src/lib/core/storage.c)
+endif()
+
+target_sources(app PRIVATE ${core_sources} ${app_sources})
+
+if(CONFIG_KELVINLEE_CODEC_OPUS)
+    add_subdirectory(src/lib/core/lib/opus-1.2.1/)
+    target_link_libraries(app PRIVATE opus_codec)
+endif()

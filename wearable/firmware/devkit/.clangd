@@ -1,0 +1,29 @@
+# Copyright (c) 2025-2026 Kelvin Lee. Licensed under MIT.
+#
+# Points clangd at the compile database west emits into build_rel/, so the
+# editor sees the real Zephyr include paths instead of erroring on every
+# <zephyr/...> header. Zephyr exports compile_commands.json by default; the
+# only problem was that clangd searches upward from a source file and the
+# database sits in a child directory.
+#
+# The database records arm-zephyr-eabi-gcc invocations. clangd is clang, so
+# GCC-only flags are stripped and the bare-metal target is set explicitly.
+# Rebuild with `west build ... -d build_rel` after touching Kconfig/DTS so
+# the database stays current.
+CompileFlags:
+  CompilationDatabase: build_rel
+  Add: [--target=arm-none-eabi]
+  Remove:
+    - -fno-reorder-functions
+    - -fno-defer-pop
+    - -fno-printf-return-value
+    - -fsingle-precision-constant
+    - -ftls-model=*
+    - -mfp16-format=*
+    - -mtp=soft
+    - --param=*
+    - -specs=*
+    - -Wexpansion-to-defined
+    - -fdiagnostics-color=*
+Diagnostics:
+  Suppress: [unused-includes]

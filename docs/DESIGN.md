@@ -59,7 +59,7 @@ The GPU box being always on settles PRD Q1 and Q2: the server lives there, the G
 
 ## 2. Repository and crate layout
 
-One public monorepo, `kelvincushman/orphusbot`, MIT. The wearable is brought in with `git subtree` so its history survives and it stays buildable on its own.
+One public monorepo, `kelvincushman/orphusbot`, MIT. The wearable lives in `wearable/` as a cleaned snapshot of the former OmarchyWearable repository (see §17 and DECISIONS D-012). It keeps its own toolchains (Zephyr, Flutter) and builds on its own.
 
 ```
 orphusbot/
@@ -80,7 +80,7 @@ orphusbot/
     mobile/                  Tauri 2 Android shell
   bridge/                    orphusbot-bridge Orphus extension (TypeScript)
   images/desktop/            bot desktop container image (Containerfile)
-  wearable/                  OmarchyWearable via git subtree: firmware/, app/, hardware/, docs/
+  wearable/                  the wearable: firmware/, app/, hardware/, server-contract/, docs/ (own README)
   deploy/                    systemd units, Postgres setup, NetBird ACL notes, ntfy config
   docs/                      PRD.md, DESIGN.md, ADRs
 ```
@@ -689,7 +689,7 @@ All status columns are Postgres enums. Every row that a decision shaped carries 
 
 ## 17. Open source plan
 
-Everything is MIT and public: server, node, UI, bridge, decide, device, capture, the wearable subtree, the question catalogue and the deploy files.
+Everything is MIT and public: server, node, UI, bridge, decide, device, capture, the wearable, the question catalogue and the deploy files.
 
 **Never committed, even though the project is open:**
 
@@ -697,15 +697,15 @@ Everything is MIT and public: server, node, UI, bridge, decide, device, capture,
 - **Fine-tuned Laya checkpoints and fitted thresholds trained on his conversations.** Weights can leak training text. The *code* to fine-tune and calibrate is public; the artifacts stay on the GPU box.
 - `.env`, NetBird setup keys, E2B keys, signing keys, the master key.
 
-**Before the wearable repo goes public**, clean up:
+**How the wearable was published (2026-10-16).** The former private repository was imported as a **snapshot without history**, because its history contained old Firebase client keys and personal details. Before import:
 
-- personal hostnames and LAN IPs in `docs/SERVER.md` (e.g. the STT domain and the AI server's LAN address);
-- the Nova-PAI references;
-- the dormant Firebase config;
-- the MCUboot sample keys (regenerate before any signed OTA);
-- the "KelvinLee residue" listed in its pivot plan.
+- a `gitleaks` scan of the full history and the tree; the remaining hits are reviewed false positives listed in `.gitleaksignore` (CocoaPods checksums, and MCUboot keys byte-identical to the public samples, which must be regenerated before any signed OTA);
+- LAN addresses, personal domains, machine paths, the wearable's BLE MAC, the device ID, token prefixes and the phone's ADB serial were replaced with placeholders in docs, scripts and tests;
+- four app screenshots had the same details blacked out; no screenshot contains conversation content, and every photo was checked for GPS metadata (none);
+- an unreferenced raw audio dump and machine-generated Flutter and Python files were removed, and `.gitignore` now covers them;
+- `docs/SERVER.md` now points at OrphusBot as the server and describes NetBird for off-LAN access.
 
-Run a secret scan (`gitleaks`) over the full history before flipping visibility.
+GitHub secret scanning with push protection is enabled on the repository.
 
 **Attribution:** keep `LICENSE-UPSTREAM` (Based Hardware) in `wearable/`, Laya's NOTICE when shipping the ported decode logic or ONNX export, and the model licences table from the wearable README. Gemma's terms apply to anyone downloading that model; it isn't vendored.
 

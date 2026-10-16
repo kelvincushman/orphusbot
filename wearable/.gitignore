@@ -1,0 +1,27 @@
+.DS_Store
+*.swp
+
+# Zephyr / west build output
+firmware/**/build/
+firmware/**/build_*/
+.west/
+
+# Flutter build output (app/.gitignore covers the rest)
+app/build/
+app/.dart_tool/
+
+# Local secrets — never commit
+*.env
+!app/.env.template
+local.properties
+key.properties
+!app/setup/prebuilt/key.properties
+release.keystore
+
+# Generated per machine; never commit
+app/ios/Flutter/Generated.xcconfig
+app/ios/Flutter/ephemeral/
+app/ios/Flutter/flutter_export_environment.sh
+__pycache__/
+*.pyc
+.DS_Store

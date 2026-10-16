@@ -1,0 +1,4 @@
+.venv/
+.wearable_test.json
+__pycache__/
+*.pyc

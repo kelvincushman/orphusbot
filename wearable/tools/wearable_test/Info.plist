@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleExecutable</key>
+  <string>wearable-sim</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.wearable.wearablesim</string>
+  <key>CFBundleName</key>
+  <string>Wearable Wearable Sim</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>13.0</string>
+  <key>LSBackgroundOnly</key>
+  <true/>
+  <key>NSBluetoothAlwaysUsageDescription</key>
+  <string>Simulates the Wearable/KelvinLee wearable over Bluetooth LE to test the phone app.</string>
+  <key>NSBluetoothPeripheralUsageDescription</key>
+  <string>Simulates the Wearable/KelvinLee wearable over Bluetooth LE to test the phone app.</string>
+</dict>
+</plist>

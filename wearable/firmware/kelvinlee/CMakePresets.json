@@ -1,0 +1,26 @@
+{
+    "version": 2,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 20,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "KELVINLEE",
+            "displayName": "KELVINLEE",
+            "configuration": "Debug",
+            "hidden": false,
+            "description": "Debug build for kelvinlee device",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/kelvinlee",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "YES",
+                "CMAKE_BUILD_TYPE": "Debug",
+                "BOARD": "kelvinlee/nrf5340/cpuapp",
+                "CACHED_CONF_FILE": "${sourceDir}/kelvinlee.conf",
+                "CONF_FILE": "${sourceDir}/kelvinlee.conf"
+            }
+        }
+    ]
+}

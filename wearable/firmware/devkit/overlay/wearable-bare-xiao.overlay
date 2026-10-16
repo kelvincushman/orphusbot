@@ -1,0 +1,22 @@
+// Copyright (c) 2025-2026 Kelvin Lee. Licensed under MIT.
+//
+// Bench-testing overlay — Xiao nRF52840 Sense with NO BFFs soldered.
+// Layer AFTER wearable-peripherals.overlay. Remove when BFFs are populated.
+
+// No NeoPixel BFF → disabling the node makes neopixel.c's HAS_STRIP=0, which
+// takes the stub path and avoids a blocking SPI1/WS2812 write on a dead MOSI.
+&led_strip {
+    status = "disabled";
+};
+
+// No IoT Button BFF → drop the gpio-keys instance so the input subsystem
+// doesn't configure a floating pin with pull-up + interrupt at boot.
+&iot_button {
+    status = "disabled";
+};
+
+// No vibration motor → disable the PWM LED binding; PWM0 itself stays okay
+// because other code may probe it.
+&vibration_pwm {
+    status = "disabled";
+};

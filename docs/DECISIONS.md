@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-012: The wearable is imported as a cleaned snapshot, without history (2026-10-16)
+
+**Decided:** the OmarchyWearable repository is copied into `wearable/` as one cleaned snapshot. Its history stays in the old private repository, which is retired.
+**Why:** the history contains old Firebase client keys, LAN addresses, a device MAC and token prefixes. Rewriting 200+ commits to scrub them is more work and more risk than starting clean, and nothing in OrphusBot needs the old history.
+**Alternatives:** `git subtree` with full history (would publish the leaked values); `git filter-repo` rewrite then subtree.
+**Revisit if:** someone needs blame for old firmware lines; the private repository still has it.
+
 ## D-011: Documentation is updated in the same PR, enforced by CI and CodeRabbit (2026-10-16)
 
 **Decided:** every PR that changes code also changes the docs and the changelog, unless labelled `no-docs` with a reason. A CI job checks it; CodeRabbit is instructed to flag missing updates.

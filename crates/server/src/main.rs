@@ -6,6 +6,7 @@
 //! the run goes back to the queue and resumes on the next node (DESIGN §3, §6.3).
 
 mod artifacts;
+mod attachments;
 mod auth;
 mod bots;
 mod calibrate;
@@ -275,6 +276,13 @@ fn router(app: Shared) -> Router {
         .route("/api/connections/grant", post(connections::grant))
         .route("/api/connections/oauth", post(oauth::start))
         .route("/api/artifacts/{id}", get(artifacts::download))
+        .route(
+            "/api/attachments",
+            post(attachments::upload).layer(axum::extract::DefaultBodyLimit::max(
+                attachments::MAX_BYTES + 1024,
+            )),
+        )
+        .route("/api/attachments/{id}", get(attachments::download))
         .route("/api/decisions/fit", post(calibrate::fit))
         .route("/api/decisions/apply", post(calibrate::apply))
         .route("/api/decisions/rollback", post(calibrate::rollback))
@@ -358,7 +366,11 @@ fn internal(context: &str, e: impl std::fmt::Display) -> ApiError {
 struct NewMessage {
     #[serde(default = "inbox")]
     bot: String,
+    #[serde(default)]
     text: String,
+    /// Uploaded first with `POST /api/attachments`.
+    #[serde(default)]
+    attachments: Vec<i64>,
 }
 
 fn inbox() -> String {
@@ -378,7 +390,7 @@ async fn send_message(
     Json(msg): Json<NewMessage>,
 ) -> Result<StatusCode, ApiError> {
     let text = msg.text.trim().to_owned();
-    if text.is_empty() || text.chars().count() > MAX_MESSAGE_CHARS {
+    if (text.is_empty() && msg.attachments.is_empty()) || text.chars().count() > MAX_MESSAGE_CHARS {
         return Err((
             StatusCode::UNPROCESSABLE_ENTITY,
             "Message must be 1 to 32,000 characters",
@@ -392,20 +404,46 @@ async fn send_message(
         return Err((StatusCode::CONFLICT, "That bot is disabled"));
     }
     let thread = bot_thread(&app, &bot.slug).await?;
+    let files = attachments::check(&app.db, &bot.slug, &msg.attachments).await?;
 
-    let event = app.secrets.redact_event(ThreadEvent::Message {
-        role: Role::User,
-        text: text.clone(),
-    });
-    let id = db::append(&app.db, thread.id, &event)
-        .await
-        .map_err(|e| internal("storing message", e))?;
-    publish(&app, Some(id), Some(&thread.bot), event);
+    if !text.is_empty() {
+        let event = app.secrets.redact_event(ThreadEvent::Message {
+            role: Role::User,
+            text: text.clone(),
+        });
+        record(&app, &thread, event).await;
+    }
+    for (id, name, size, image) in &files {
+        let event = ThreadEvent::Attached {
+            id: *id,
+            name: name.clone(),
+            size: *size,
+            image: *image,
+        };
+        record(&app, &thread, event).await;
+    }
 
     // Tickets named in the message (OB-12) go to the bot as labelled data (B-TKT-03).
-    let run_text = format!("{text}{}", tickets::referenced(&app.db, &text).await);
+    let mut run_text = format!("{text}{}", tickets::referenced(&app.db, &text).await);
+    if !files.is_empty() {
+        let list: Vec<String> = files
+            .iter()
+            .map(|(_, name, size, _)| format!("inbox/{name} ({} KB)", size.div_ceil(1024)))
+            .collect();
+        run_text.push_str(&format!(
+            "\n\nI've sent you {} file{}, saved in your computer: {}. Pictures are also attached for you to look at.",
+            files.len(),
+            if files.len() == 1 { "" } else { "s" },
+            list.join(", ")
+        ));
+    }
+    let source = runs::Source {
+        attachments: msg.attachments.clone(),
+        ..Default::default()
+    };
     // A new task for the inbox goes to System 1 first; a follow-up joins the inbox's run.
-    if thread.bot == "inbox" && app.system1.enabled() {
+    // ponytail: messages with files skip routing; route them too if that's wanted.
+    if thread.bot == "inbox" && app.system1.enabled() && files.is_empty() {
         let busy = runs::busy(&app.db, thread.id)
             .await
             .map_err(|e| internal("checking the inbox", e))?;
@@ -414,7 +452,7 @@ async fn send_message(
             return Ok(StatusCode::ACCEPTED);
         }
     }
-    submit(&app, &thread, run_text, runs::Source::default())
+    submit(&app, &thread, run_text, source)
         .await
         .map_err(|e| internal("queueing run", e))?;
     Ok(StatusCode::ACCEPTED)
@@ -427,6 +465,7 @@ async fn submit(
     text: String,
     source: runs::Source,
 ) -> sqlx::Result<()> {
+    let sent = source.attachments.clone();
     match runs::submit(&app.db, thread.id, &text, source).await? {
         Submitted::Queued(run) => {
             lock(&app.rt).waiting.remove(&run);
@@ -441,7 +480,14 @@ async fn submit(
             if let Some(tx) = node_for(app, attempt) {
                 // If this fails the node is going away; the run is re-queued and the text is
                 // already in the thread for the resumed attempt to see.
-                let _ = tx.send(ToNode::Steer { attempt, text }).await;
+                let files = attachments::by_ids(&app.db, &sent).await;
+                let _ = tx
+                    .send(ToNode::Steer {
+                        attempt,
+                        text,
+                        files,
+                    })
+                    .await;
             }
         }
     }
@@ -955,6 +1001,7 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
         text: claimed.prompt,
         resumed: claimed.resumed,
         bot: Box::new(spec),
+        files: attachments::for_run(&app.db, run).await,
     };
     if link.tx.send(start).await.is_err() {
         // The link closed under us; its disconnect handler re-queues the run.

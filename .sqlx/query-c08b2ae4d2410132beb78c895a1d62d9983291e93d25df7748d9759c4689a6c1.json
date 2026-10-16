@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select attachments from run where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "attachments",
+        "type_info": "Int8Array",
+        "origin": {
+          "Table": {
+            "table": "run",
+            "name": "attachments"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c08b2ae4d2410132beb78c895a1d62d9983291e93d25df7748d9759c4689a6c1"
+}

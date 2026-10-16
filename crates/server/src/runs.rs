@@ -28,6 +28,8 @@ pub struct Source {
     pub ticket: Option<i64>,
     /// The wearable whose button started it; its cues go back to that wrist.
     pub device: Option<String>,
+    /// Files the owner sent with the message.
+    pub attachments: Vec<i64>,
 }
 
 /// Queues the message as a run, or attaches it to the thread's active run.
@@ -56,9 +58,11 @@ pub async fn submit(
         },
         Some(r) => {
             sqlx::query!(
-                "update run set prompt = prompt || E'\\n\\n' || $2, updated_at = now() where id = $1",
+                "update run set prompt = prompt || E'\\n\\n' || $2, attachments = attachments || $3,
+                        updated_at = now() where id = $1",
                 r.id,
-                text
+                text,
+                &source.attachments
             )
             .execute(&mut *tx)
             .await?;
@@ -66,13 +70,14 @@ pub async fn submit(
         }
         None => {
             let id = sqlx::query_scalar!(
-                "insert into run (thread_id, prompt, routine_id, ticket_id, device_id)
-                 values ($1, $2, $3, $4, $5) returning id",
+                "insert into run (thread_id, prompt, routine_id, ticket_id, device_id, attachments)
+                 values ($1, $2, $3, $4, $5, $6) returning id",
                 thread,
                 text,
                 source.routine,
                 source.ticket,
-                source.device
+                source.device,
+                &source.attachments
             )
             .fetch_one(&mut *tx)
             .await?;

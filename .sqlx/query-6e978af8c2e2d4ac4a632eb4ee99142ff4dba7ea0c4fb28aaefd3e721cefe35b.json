@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select name, content from attachment where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "attachment",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "content",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "attachment",
+            "name": "content"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "6e978af8c2e2d4ac4a632eb4ee99142ff4dba7ea0c4fb28aaefd3e721cefe35b"
+}

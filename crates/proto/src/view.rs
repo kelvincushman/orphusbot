@@ -21,6 +21,13 @@ pub enum Item {
         text: String,
         error: bool,
     },
+    /// A file the owner sent.
+    Attached {
+        id: i64,
+        name: String,
+        size: u64,
+        image: bool,
+    },
     /// A file the bot shared.
     Artifact {
         id: i64,
@@ -111,6 +118,17 @@ impl ThreadView {
             ThreadEvent::Routed { name, sure, .. } => self.items.push(Item::Notice {
                 text: format!("Sent to {name} (System 1 was {sure}% sure)"),
                 error: false,
+            }),
+            ThreadEvent::Attached {
+                id,
+                name,
+                size,
+                image,
+            } => self.items.push(Item::Attached {
+                id,
+                name,
+                size,
+                image,
             }),
             ThreadEvent::Artifact {
                 id,

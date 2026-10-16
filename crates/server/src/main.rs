@@ -18,6 +18,7 @@ mod gate;
 mod links;
 mod nodes;
 mod notify;
+mod oauth;
 mod placement;
 mod profiles;
 mod routines;
@@ -268,6 +269,7 @@ fn router(app: Shared) -> Router {
         )
         .route("/api/connections/delete", post(connections::delete))
         .route("/api/connections/grant", post(connections::grant))
+        .route("/api/connections/oauth", post(oauth::start))
         .route("/api/artifacts/{id}", get(artifacts::download))
         .route("/api/decisions/fit", post(calibrate::fit))
         .route("/api/decisions/apply", post(calibrate::apply))
@@ -306,6 +308,8 @@ fn router(app: Shared) -> Router {
         .route("/auth/link/poll", post(links::poll))
         // Public: the secret token in the path is the credential.
         .route("/hooks/routine/{token}", post(routines::hook))
+        // Public: the single-use sign-in state is the credential (see `oauth::callback`).
+        .route("/oauth/callback", get(oauth::callback))
         // The wearable's channel (wearable/docs/SERVER.md): device tokens, not sessions.
         .route("/api/device/register", post(device::register))
         .route("/api/device/event", post(device::event))

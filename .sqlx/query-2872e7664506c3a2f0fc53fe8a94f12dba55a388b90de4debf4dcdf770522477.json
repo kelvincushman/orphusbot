@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select secret_id from connection where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "secret_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "connection",
+            "name": "secret_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "2872e7664506c3a2f0fc53fe8a94f12dba55a388b90de4debf4dcdf770522477"
+}

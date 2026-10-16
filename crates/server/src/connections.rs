@@ -15,6 +15,7 @@ use crate::{ApiError, App, Shared, internal, secrets};
 pub async fn list(State(app): State<Shared>) -> Result<Json<Value>, ApiError> {
     let rows = sqlx::query!(
         r#"select c.id, c.name, c.url, c.command, c.args, c.token_env, c.secret_id is not null as "has_token!",
+                  c.oauth is not null and c.secret_id is not null as "signed_in!",
                   coalesce(array_agg(b.slug order by b.slug) filter (where b.slug is not null), '{}') as "bots!"
            from connection c left join bot_connection g on g.connection_id = c.id
            left join bot b on b.id = g.bot_id
@@ -33,7 +34,7 @@ pub async fn list(State(app): State<Shared>) -> Result<Json<Value>, ApiError> {
                 (None, None) => String::new(),
             };
             json!({ "id": r.id, "name": r.name, "url": r.url, "command": r.command, "target": target,
-                    "token_env": r.token_env, "has_token": r.has_token, "bots": r.bots })
+                    "token_env": r.token_env, "has_token": r.has_token, "signed_in": r.signed_in, "bots": r.bots })
         })
         .collect();
     Ok(Json(
@@ -243,7 +244,7 @@ pub async fn grant(
 /// The servers a bot may use, with their tokens, for its engine.
 pub async fn for_bot(app: &App, slug: &str) -> Vec<McpServer> {
     let rows = sqlx::query!(
-        "select c.name, c.url, c.command, c.args, c.token_env, c.secret_id from connection c
+        "select c.id, c.name, c.url, c.command, c.args, c.token_env, c.secret_id from connection c
          join bot_connection g on g.connection_id = c.id join bot b on b.id = g.bot_id
          where b.slug = $1 order by c.name",
         slug
@@ -259,7 +260,13 @@ pub async fn for_bot(app: &App, slug: &str) -> Vec<McpServer> {
     };
     let mut servers = Vec::new();
     for r in rows {
-        let token = match r.secret_id {
+        // A signed-in server's access token may need refreshing first.
+        crate::oauth::fresh(app, r.id).await;
+        let secret_id = sqlx::query_scalar!("select secret_id from connection where id = $1", r.id)
+            .fetch_one(&app.db)
+            .await
+            .unwrap_or(r.secret_id);
+        let token = match secret_id {
             None => None,
             Some(id) => match app.secrets.reveal(&app.db, id).await {
                 Ok(token) => Some(token),

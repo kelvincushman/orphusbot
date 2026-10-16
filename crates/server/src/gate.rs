@@ -96,7 +96,20 @@ fn memory_read(call: &Call<'_>) -> bool {
 }
 
 pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Result<Verdict> {
+    if call.tool == "roundtable"
+        && crate::discussions::posted_already(db, call.attempt.run, call.input).await
+    {
+        return Ok(Verdict::Deny(
+            "You've already posted this round; leave the room and stop.".into(),
+        ));
+    }
     if READ_ONLY.contains(&call.tool) || memory_read(call) {
+        return Ok(Verdict::Allow);
+    }
+    // A discussion's verdict filing its own room into memory (DESIGN §11.4).
+    if call.tool == "memory"
+        && crate::discussions::files_its_room(db, call.attempt.run, call.input).await
+    {
         return Ok(Verdict::Allow);
     }
     if ungated_helper(call) {

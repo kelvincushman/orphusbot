@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select b.slug, r.status::text as \"status!\" from run r join thread t on t.id = r.thread_id\n                   join bot b on b.id = t.bot_id where r.discussion_id = $1 and r.discussion_round = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "slug",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "slug"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "status!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "bad791391838c227d9f0b3dee13b37690f333191716787d97e2bf57dcd3399e3"
+}

@@ -60,6 +60,9 @@ impl Bot {
             // Filled in when a run starts (`connections::for_bot`, `e2b`).
             mcp: Vec::new(),
             e2b: None,
+            // A discussion turn sets these (`discussions::session`).
+            session: None,
+            name: None,
         }
     }
 

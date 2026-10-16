@@ -60,6 +60,13 @@ pub struct BotSpec {
     /// The bot's computer is this E2B sandbox, not a container on the node (DESIGN §6.2).
     #[serde(default)]
     pub e2b: Option<E2bComputer>,
+    /// Run in this session instead of the bot's lasting one, so a discussion
+    /// doesn't enter its everyday conversation (DESIGN §11.4).
+    #[serde(default)]
+    pub session: Option<String>,
+    /// The session's name, which Orphus rooms use for the member (default: the slug).
+    #[serde(default)]
+    pub name: Option<String>,
 }
 
 /// An Orphus fleet blueprint the owner set up (DESIGN §11.2), written into the

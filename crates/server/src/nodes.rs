@@ -145,7 +145,7 @@ pub async fn remove(
         .await
         .map_err(|e| internal("removing the node", e))?
         .ok_or((StatusCode::NOT_FOUND, "No such node"))?;
-    if let Some(link) = lock(&app.rt).node.as_ref().filter(|n| n.name == name) {
+    if let Some(link) = lock(&app.rt).nodes.get(&name) {
         link.kick.notify_one();
     }
     Ok(StatusCode::NO_CONTENT)

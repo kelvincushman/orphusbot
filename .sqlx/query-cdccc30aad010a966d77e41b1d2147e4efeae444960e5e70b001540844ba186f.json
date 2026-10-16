@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select id, status::text as \"status!\", attempts from run\n           where thread_id = $1 and status in ('queued', 'running')",
+  "query": "select id, status::text as \"status!\", attempts, node from run\n           where thread_id = $1 and status in ('queued', 'running')",
   "describe": {
     "columns": [
       {
@@ -30,6 +30,17 @@
             "name": "attempts"
           }
         }
+      },
+      {
+        "ordinal": 3,
+        "name": "node",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "run",
+            "name": "node"
+          }
+        }
       }
     ],
     "parameters": {
@@ -40,8 +51,9 @@
     "nullable": [
       false,
       null,
-      false
+      false,
+      true
     ]
   },
-  "hash": "5e6ce9374eb8de969f212ffd904093a87fb7adc602eff0f50132419c2b8ac813"
+  "hash": "cdccc30aad010a966d77e41b1d2147e4efeae444960e5e70b001540844ba186f"
 }

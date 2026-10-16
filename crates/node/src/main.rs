@@ -1,6 +1,7 @@
 //! orphusbot-node, milestone M0: connects out to the server and runs one
 //! `orphus --mode rpc` engine for the one bot (DESIGN §4).
 
+mod beat;
 mod computer;
 mod engine;
 mod key;
@@ -31,6 +32,8 @@ struct Config {
     /// `None` (`ORPHUSBOT_RUNTIME=none`): tools run on this machine, not isolated.
     runtime: Option<String>,
     image: String,
+    /// `START-END` local hours when this node takes no new work, such as `22-7`.
+    quiet_hours: Option<String>,
 }
 
 #[tokio::main]
@@ -55,6 +58,7 @@ async fn main() -> anyhow::Result<()> {
             Ok(other) => Some(other.to_owned()),
             Err(_) => Some("podman".to_owned()),
         },
+        quiet_hours: std::env::var("ORPHUSBOT_QUIET_HOURS").ok(),
         image: std::env::var("ORPHUSBOT_COMPUTER_IMAGE")
             .unwrap_or_else(|_| "docker.io/library/debian:trixie-slim".into()),
     };
@@ -165,6 +169,7 @@ async fn session(cfg: &Config, key: &NodeKey) -> anyhow::Result<()> {
     // Screen streams: binary frames out, and each stream's VNC pipe in.
     let (screen_tx, mut screen_rx) = mpsc::channel::<Vec<u8>>(256);
     let mut screens: HashMap<u64, (Child, ChildStdin)> = HashMap::new();
+    let mut heartbeat = tokio::time::interval(Duration::from_secs(10));
 
     loop {
         tokio::select! {
@@ -225,6 +230,14 @@ async fn session(cfg: &Config, key: &NodeKey) -> anyhow::Result<()> {
             }
             Some(frame) = screen_rx.recv() => {
                 sink.send(Message::binary(frame)).await?;
+            }
+            _ = heartbeat.tick() => {
+                let beat = FromNode::Heartbeat {
+                    load: beat::load(),
+                    on_battery: beat::on_battery(),
+                    quiet: beat::quiet(cfg.quiet_hours.as_deref(), beat::local_hour().await),
+                };
+                sink.send(Message::text(serde_json::to_string(&beat)?)).await?;
             }
         }
     }

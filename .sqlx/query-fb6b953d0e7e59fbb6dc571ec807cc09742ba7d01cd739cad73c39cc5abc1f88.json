@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into bot_computer (bot, node) values ($1, $2)\n         on conflict (bot) do update set node = excluded.node, updated_at = now()\n         where bot_computer.node <> excluded.node",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fb6b953d0e7e59fbb6dc571ec807cc09742ba7d01cd739cad73c39cc5abc1f88"
+}

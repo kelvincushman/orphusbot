@@ -78,6 +78,16 @@ pub struct Claimed {
 }
 
 /// Leases the oldest queued run to `node`, bumping its fence.
+/// The thread's queued run, if one is waiting.
+pub async fn queued(db: &PgPool) -> sqlx::Result<Option<i64>> {
+    sqlx::query_scalar!(
+        "select id from run where thread_id = $1 and status = 'queued'",
+        THREAD
+    )
+    .fetch_optional(db)
+    .await
+}
+
 pub async fn claim(db: &PgPool, node: &str) -> sqlx::Result<Option<Claimed>> {
     let row = sqlx::query!(
         r#"update run set status = 'running', fence = fence + 1, node = $1, attempts = attempts + 1,

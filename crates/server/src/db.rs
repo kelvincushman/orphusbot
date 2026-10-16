@@ -64,6 +64,26 @@ pub async fn expire_open_dialogs(db: &PgPool) -> sqlx::Result<u64> {
     Ok(count)
 }
 
+/// The node holding a bot's computer, if it has one yet.
+pub async fn computer_home(db: &PgPool, bot: &str) -> sqlx::Result<Option<String>> {
+    sqlx::query_scalar!("select node from bot_computer where bot = $1", bot)
+        .fetch_optional(db)
+        .await
+}
+
+pub async fn set_computer_home(db: &PgPool, bot: &str, node: &str) -> sqlx::Result<()> {
+    sqlx::query!(
+        "insert into bot_computer (bot, node) values ($1, $2)
+         on conflict (bot) do update set node = excluded.node, updated_at = now()
+         where bot_computer.node <> excluded.node",
+        bot,
+        node
+    )
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

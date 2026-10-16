@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select id, catalogue, state, abstained, threshold, confidence, model, latency_ms, outcome,\n                  created_at::text as \"created_at!\"\n           from decision order by id desc limit 100",
+  "query": "select d.id, d.catalogue, d.state, d.abstained, d.threshold, d.confidence, d.model, d.latency_ms,\n                  d.outcome, d.created_at::text as \"created_at!\",\n                  l.label as \"label?\", l.agrees as \"agrees?\", l.source as \"label_source?\"\n           from decision d left join lateral (select label, agrees, source from decision_label\n                                              where decision_id = d.id order by id desc limit 1) l on true\n           order by d.id desc limit 100",
   "describe": {
     "columns": [
       {
@@ -107,6 +107,39 @@
         "name": "created_at!",
         "type_info": "Text",
         "origin": "Expression"
+      },
+      {
+        "ordinal": 10,
+        "name": "label?",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "decision_label",
+            "name": "label"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "agrees?",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "decision_label",
+            "name": "agrees"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "label_source?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "decision_label",
+            "name": "source"
+          }
+        }
       }
     ],
     "parameters": {
@@ -122,8 +155,11 @@
       true,
       false,
       false,
-      null
+      null,
+      false,
+      false,
+      false
     ]
   },
-  "hash": "cd6187fc9586ebd57b1a6cc04c2b76152da9f5fb9e647c953a24ca809e33703b"
+  "hash": "1fe67a4a145099b511d8ddc3d349812402ce0c8e98614abb5038ae7a7f830b29"
 }

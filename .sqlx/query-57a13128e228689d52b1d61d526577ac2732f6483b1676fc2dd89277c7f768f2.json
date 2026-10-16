@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select id, answers -> 'bot' ->> 'choice' as choice from decision\n           where catalogue = 'triage' and ticket_id = $1 order by id desc limit 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "decision",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "choice",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "57a13128e228689d52b1d61d526577ac2732f6483b1676fc2dd89277c7f768f2"
+}

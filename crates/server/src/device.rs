@@ -340,7 +340,7 @@ async fn wearable_task(app: &App, device: &str, text: &str) -> anyhow::Result<()
     let roster = crate::bots::all(&app.db).await.unwrap_or_default();
     let triage = app
         .system1
-        .triage_ticket(&app.db, text, &roster)
+        .triage_ticket(&app.db, text, &roster, Some(id))
         .await
         .unwrap_or_default();
     if let Some(bot) = &triage.bot {

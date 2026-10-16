@@ -53,6 +53,7 @@ pub struct Receipt<'a> {
     pub outcome: String,
     pub run: Option<i64>,
     pub tool_call_id: Option<&'a str>,
+    pub ticket: Option<i64>,
 }
 
 impl System1 {
@@ -180,6 +181,7 @@ impl System1 {
             outcome,
             run: None,
             tool_call_id: None,
+            ticket: None,
         };
         record(db, &receipt, &asked).await;
         chosen.map(|b| ((*b).clone(), confidence.unwrap_or_default()))
@@ -218,6 +220,7 @@ impl System1 {
             outcome,
             run: Some(run),
             tool_call_id: Some(tool_call_id),
+            ticket: None,
         };
         record(db, &receipt, &asked).await;
         passed
@@ -256,6 +259,7 @@ impl System1 {
             .to_owned(),
             run: None,
             tool_call_id: None,
+            ticket: None,
         };
         record(db, &receipt, &asked).await;
         !skip
@@ -283,6 +287,7 @@ impl System1 {
         db: &PgPool,
         text: &str,
         roster: &[Bot],
+        ticket: Option<i64>,
     ) -> Option<TicketTriage> {
         let enabled: Vec<&Bot> = roster.iter().filter(|b| !b.disabled).collect();
         if !self.enabled() || enabled.is_empty() {
@@ -351,6 +356,7 @@ impl System1 {
             outcome,
             run: None,
             tool_call_id: None,
+            ticket,
         };
         record(db, &receipt, &asked).await;
         Some(triage)
@@ -375,8 +381,8 @@ async fn record(db: &PgPool, r: &Receipt<'_>, asked: &Asked) {
     let hash = Sha256::digest(r.state.as_bytes()).to_vec();
     let stored = sqlx::query!(
         "insert into decision (catalogue, state_hash, state, answers, abstained, threshold,
-                               confidence, model, latency_ms, outcome, run_id, tool_call_id)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+                               confidence, model, latency_ms, outcome, run_id, tool_call_id, ticket_id)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
         r.catalogue,
         hash,
         r.state,
@@ -388,7 +394,8 @@ async fn record(db: &PgPool, r: &Receipt<'_>, asked: &Asked) {
         asked.latency_ms,
         r.outcome,
         r.run,
-        r.tool_call_id
+        r.tool_call_id,
+        r.ticket
     )
     .execute(db)
     .await;
@@ -403,12 +410,99 @@ async fn record(db: &PgPool, r: &Receipt<'_>, asked: &Asked) {
     }
 }
 
+/// Records what the owner's action says System 1 should have answered (DESIGN §7.5).
+async fn label(db: &PgPool, decision: i64, label: Value, agrees: bool, source: &str) {
+    let saved = sqlx::query!(
+        "insert into decision_label (decision_id, label, agrees, source) values ($1, $2, $3, $4)",
+        decision,
+        label,
+        agrees,
+        source
+    )
+    .execute(db)
+    .await;
+    if let Err(e) = saved {
+        warn!("storing a decision label: {e}");
+    }
+}
+
+/// The owner answered an approval card System 1 was asked about: allow means
+/// it could have passed, deny means it was right to ask.
+pub async fn label_gate(db: &PgPool, tool_call_id: &str, allowed: bool) {
+    let asked = sqlx::query!(
+        r#"select id, answers -> 'verdict' ->> 'choice' as choice from decision
+           where catalogue = 'gate' and tool_call_id = $1 order by id desc limit 1"#,
+        tool_call_id
+    )
+    .fetch_optional(db)
+    .await;
+    if let Ok(Some(d)) = asked {
+        let verdict = if allowed { "pass" } else { "ask" };
+        let agrees = d.choice.as_deref() == Some(verdict);
+        let source = if allowed {
+            "approved the card"
+        } else {
+            "denied the card"
+        };
+        label(db, d.id, json!({ "verdict": verdict }), agrees, source).await;
+    }
+}
+
+/// The owner changed the bot on a ticket System 1 triaged: that's the bot it should have picked.
+pub async fn label_ticket_bot(db: &PgPool, ticket: i64, bot: Option<&str>) {
+    let asked = sqlx::query!(
+        r#"select id, answers -> 'bot' ->> 'choice' as choice from decision
+           where catalogue = 'triage' and ticket_id = $1 order by id desc limit 1"#,
+        ticket
+    )
+    .fetch_optional(db)
+    .await;
+    if let Ok(Some(d)) = asked {
+        let agrees = d.choice.as_deref() == bot;
+        label(
+            db,
+            d.id,
+            json!({ "bot": bot }),
+            agrees,
+            "changed the ticket's bot",
+        )
+        .await;
+    }
+}
+
+/// Per catalogue: how often System 1 was asked, abstained, was labelled and agreed.
+pub async fn health(State(app): State<Shared>) -> Result<Json<Value>, ApiError> {
+    let rows = sqlx::query!(
+        r#"select d.catalogue, count(*) as "asked!", count(*) filter (where d.abstained) as "abstained!",
+                  count(l.id) as "labelled!", count(l.id) filter (where l.agrees) as "agreed!",
+                  avg(d.latency_ms)::float8 as latency
+           from decision d left join decision_label l on l.decision_id = d.id
+           group by d.catalogue order by d.catalogue"#
+    )
+    .fetch_all(&app.db)
+    .await
+    .map_err(|e| internal("summarising decisions", e))?;
+    let list: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            json!({
+                "catalogue": r.catalogue, "asked": r.asked, "abstained": r.abstained,
+                "labelled": r.labelled, "agreed": r.agreed, "latency_ms": r.latency,
+            })
+        })
+        .collect();
+    Ok(Json(json!(list)))
+}
+
 /// Recent receipts, newest first, for the Decisions view.
 pub async fn list(State(app): State<Shared>) -> Result<Json<Value>, ApiError> {
     let rows = sqlx::query!(
-        r#"select id, catalogue, state, abstained, threshold, confidence, model, latency_ms, outcome,
-                  created_at::text as "created_at!"
-           from decision order by id desc limit 100"#
+        r#"select d.id, d.catalogue, d.state, d.abstained, d.threshold, d.confidence, d.model, d.latency_ms,
+                  d.outcome, d.created_at::text as "created_at!",
+                  l.label as "label?", l.agrees as "agrees?", l.source as "label_source?"
+           from decision d left join lateral (select label, agrees, source from decision_label
+                                              where decision_id = d.id order by id desc limit 1) l on true
+           order by d.id desc limit 100"#
     )
     .fetch_all(&app.db)
     .await
@@ -420,6 +514,7 @@ pub async fn list(State(app): State<Shared>) -> Result<Json<Value>, ApiError> {
                 "id": r.id, "catalogue": r.catalogue, "state": r.state, "abstained": r.abstained,
                 "threshold": r.threshold, "confidence": r.confidence, "model": r.model,
                 "latency_ms": r.latency_ms, "outcome": r.outcome, "created_at": r.created_at,
+                "label": r.label, "agrees": r.agrees, "label_source": r.label_source,
             })
         })
         .collect();
@@ -533,7 +628,7 @@ pub(crate) mod tests {
         let roster = [bot("inbox", false), bot("researcher", false)];
         let laya = fake_laya("bot", "researcher", 0.9).await;
         let t = laya
-            .triage_ticket(&db, "compare e-bike batteries", &roster)
+            .triage_ticket(&db, "compare e-bike batteries", &roster, None)
             .await
             .unwrap();
         assert_eq!(t.bot.map(|b| b.slug), Some("researcher".to_owned()));
@@ -541,13 +636,84 @@ pub(crate) mod tests {
         assert_eq!((t.urgency, t.act_now), (None, false));
         assert!(
             System1::off()
-                .triage_ticket(&db, "x", &roster)
+                .triage_ticket(&db, "x", &roster, None)
                 .await
                 .is_none()
         );
         assert_eq!(
             most_likely(&json!({ "probabilities": { "0": 0.1, "1": 0.7, "2": 0.2 } })),
             Some((1, 0.7))
+        );
+    }
+
+    #[sqlx::test]
+    async fn owner_actions_label_decisions(db: PgPool) {
+        let decision = |catalogue: &str,
+                        answers: Value,
+                        tool: Option<&str>,
+                        ticket: Option<i64>| {
+            let (catalogue, tool) = (catalogue.to_owned(), tool.map(str::to_owned));
+            let db = db.clone();
+            async move {
+                sqlx::query!(
+                    "insert into decision (catalogue, state_hash, answers, abstained, threshold, latency_ms, outcome,
+                                           tool_call_id, ticket_id)
+                     values ($1, $2, $3, false, 0.9, 5, 'x', $4, $5)",
+                    catalogue, vec![0u8; 32], answers, tool, ticket
+                )
+                .execute(&db)
+                .await
+                .unwrap();
+            }
+        };
+        let ticket: i64 =
+            sqlx::query_scalar!("insert into ticket (title) values ('t') returning id")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        decision(
+            "gate",
+            json!({ "verdict": { "choice": "ask" } }),
+            Some("c1"),
+            None,
+        )
+        .await;
+        decision(
+            "triage",
+            json!({ "bot": { "choice": "researcher" } }),
+            None,
+            Some(ticket),
+        )
+        .await;
+
+        // System 1 said ask; the owner allowed it: it could have passed.
+        label_gate(&db, "c1", true).await;
+        // System 1 picked researcher; the owner kept that bot after editing it away and back.
+        label_ticket_bot(&db, ticket, Some("researcher")).await;
+        label_gate(&db, "no-such-call", false).await;
+
+        let labels: Vec<(Value, bool, String)> =
+            sqlx::query!("select label, agrees, source from decision_label order by id")
+                .fetch_all(&db)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|r| (r.label, r.agrees, r.source))
+                .collect();
+        assert_eq!(
+            labels,
+            [
+                (
+                    json!({ "verdict": "pass" }),
+                    false,
+                    "approved the card".to_owned()
+                ),
+                (
+                    json!({ "bot": "researcher" }),
+                    true,
+                    "changed the ticket's bot".to_owned()
+                ),
+            ]
         );
     }
 

@@ -238,6 +238,7 @@ fn router(app: Shared) -> Router {
         .route("/api/bots", get(bots::list).post(bots::create))
         .route("/api/bots/update", post(bots::update))
         .route("/api/decisions", get(system1::list))
+        .route("/api/decisions/health", get(system1::health))
         .route("/api/routines", get(routines::list).post(routines::save))
         .route("/api/routines/delete", post(routines::delete))
         .route("/api/routines/run", post(routines::run_now))
@@ -498,6 +499,7 @@ async fn resolve_dialog(app: &App, answer: Answer) -> Result<StatusCode, ApiErro
         (Some(call), Some(decision @ ("allow" | "always" | "deny"))) => {
             let allow = decision != "deny";
             let always = decision == "always";
+            system1::label_gate(&app.db, call, allow).await;
             if let Err(e) = gate::owner_decides(&app.db, pending.attempt, call, allow, always).await
             {
                 lock(&app.rt).dialogs.insert(id, pending);

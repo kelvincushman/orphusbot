@@ -62,6 +62,7 @@ input, textarea { background: var(--bg); border: 1px solid var(--line); border-r
 .ticket p { margin: 0; font-size: .85rem; overflow-wrap: anywhere; }
 .ticket.urgent { border-color: var(--bad); }
 .ticket select { padding: .3rem; font-size: .85rem; }
+.decisions small.label { color: var(--accent); }
 .new-bot { margin-top: .4rem; border-style: dashed; }
 .sheet label { display: flex; flex-direction: column; gap: .3rem; font-size: .9rem; }
 .sheet label.inline { flex-direction: row; align-items: center; gap: .5rem; }

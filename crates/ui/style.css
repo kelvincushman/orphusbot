@@ -63,6 +63,10 @@ input, textarea { background: var(--bg); border: 1px solid var(--line); border-r
 .ticket.urgent { border-color: var(--bad); }
 .ticket select { padding: .3rem; font-size: .85rem; }
 .decisions small.label { color: var(--accent); }
+.sidebar button .badge { margin-left: .4rem; }
+.banner.listening { background: var(--you); color: var(--fg); }
+.proposals li.closed { opacity: .6; }
+.proposals small.quote { font-style: italic; }
 .new-bot { margin-top: .4rem; border-style: dashed; }
 .sheet label { display: flex; flex-direction: column; gap: .3rem; font-size: .9rem; }
 .sheet label.inline { flex-direction: row; align-items: center; gap: .5rem; }

@@ -64,6 +64,13 @@ pub enum ToNode {
     Challenge { nonce: String },
     /// Answer to [`FromNode::Enrol`]; the server closes the link after it.
     Enrolled { error: Option<String> },
+    /// Extract proposals from a capture window (DESIGN §10.2): one call with no
+    /// tools, no extensions and no session; answer with `FromNode::Extracted`.
+    Extract {
+        id: i64,
+        system: String,
+        text: String,
+    },
     /// Connect a viewer to a bot computer's screen; its bytes follow as binary frames.
     ScreenOpen { stream: u64, bot: String },
     /// The viewer went away.
@@ -112,6 +119,12 @@ pub enum FromNode {
         on_battery: bool,
         /// Inside the node's quiet hours.
         quiet: bool,
+    },
+    /// The extractor's reply for capture window `id`, or why it failed.
+    Extracted {
+        id: i64,
+        text: Option<String>,
+        error: Option<String>,
     },
     /// The screen stream ended, or couldn't start (`error` says why).
     ScreenClosed { stream: u64, error: Option<String> },

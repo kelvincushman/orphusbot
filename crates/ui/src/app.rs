@@ -327,6 +327,26 @@ fn Shell() -> impl IntoView {
     let routines = RwSignal::new(false);
     let tickets = RwSignal::new(false);
     let decisions = RwSignal::new(false);
+    let captures_open = RwSignal::new(false);
+    // Hands-free state and waiting proposals, shown on every screen (PRD B-CAP-07).
+    let captures = RwSignal::new(Value::Null);
+    let load_captures = move || {
+        ctx.run(async move {
+            captures.set(api::get("/api/captures").await?);
+            Ok(())
+        })
+    };
+    load_captures();
+    if let Ok(timer) = set_interval_with_handle(load_captures, std::time::Duration::from_secs(15)) {
+        on_cleanup(move || timer.clear());
+    }
+    let waiting_proposals = move || {
+        captures.with(|c| {
+            c["proposals"]
+                .as_array()
+                .map_or(0, |p| p.iter().filter(|p| p["state"] == "proposed").count())
+        })
+    };
     let menu = RwSignal::new(false);
     // `None`: closed; `Some(None)`: a new bot; `Some(Some(bot))`: editing it.
     let editing = RwSignal::new(None::<Option<Bot>>);
@@ -378,6 +398,9 @@ fn Shell() -> impl IntoView {
                 <button on:click=move |_| { tickets.set(true); menu.set(false); }>"Tickets"</button>
                 <button on:click=move |_| { routines.set(true); menu.set(false); }>"Routines"</button>
                 <button on:click=move |_| { decisions.set(true); menu.set(false); }>"Decisions"</button>
+                <button on:click=move |_| { captures_open.set(true); menu.set(false); }>
+                    "Captures" {move || (waiting_proposals() > 0).then(|| view! { <span class="badge">{waiting_proposals()}</span> })}
+                </button>
                 <button on:click=move |_| settings.set(true)>"Settings"</button>
             </nav>
             <main class="chat">
@@ -398,6 +421,28 @@ fn Shell() -> impl IntoView {
                         <button class="primary" on:click=move |_| settings.set(true)>"Add a passkey"</button>
                     </div>
                 </Show>
+                {move || {
+                    let on = captures.with(|c| c["listening"].as_array().cloned().unwrap_or_default());
+                    (!on.is_empty()).then(|| {
+                        let names: Vec<String> = on.iter().map(|d| d["label"].as_str().filter(|l| !l.is_empty()).or(d["id"].as_str()).unwrap_or_default().to_owned()).collect();
+                        let ids: Vec<String> = on.iter().filter_map(|d| d["id"].as_str().map(str::to_owned)).collect();
+                        view! {
+                            <div class="banner listening" role="status">
+                                <span>{format!("Hands-free listening is on: {}. Nothing heard makes a bot act; you'll get suggestions to accept.", names.join(", "))}</span>
+                                <button on:click=move |_| {
+                                    let ids = ids.clone();
+                                    ctx.run(async move {
+                                        for id in ids {
+                                            api::post("/api/devices/hands-free", &json!({ "id": id, "on": false })).await?;
+                                        }
+                                        load_captures();
+                                        Ok(())
+                                    })
+                                }>"Pause"</button>
+                            </div>
+                        }
+                    })
+                }}
                 <Show when=move || bot.get().disabled>
                     <div class="banner">"This bot is disabled. Edit it to turn it back on."</div>
                 </Show>
@@ -418,6 +463,9 @@ fn Shell() -> impl IntoView {
             </Show>
             <Show when=move || decisions.get()>
                 <Decisions open=decisions />
+            </Show>
+            <Show when=move || captures_open.get()>
+                <Captures open=captures_open captures reload=Callback::new(move |_| load_captures()) />
             </Show>
             {move || editing.get().map(|bot| view! { <BotSheet bot editing /> })}
         </div>
@@ -1190,6 +1238,90 @@ struct Decision {
     label: Option<Value>,
     agrees: Option<bool>,
     label_source: Option<String>,
+}
+
+/// Things heard in hands-free mode, waiting to be accepted or dismissed (DESIGN §10).
+#[component]
+fn Captures(
+    open: RwSignal<bool>,
+    captures: RwSignal<Value>,
+    reload: Callback<()>,
+) -> impl IntoView {
+    let ctx = expect_context::<Ctx>();
+    let devices = RwSignal::new(Vec::<Value>::new());
+    let load_devices = move || {
+        ctx.run(async move {
+            let d: Value = api::get("/api/devices").await?;
+            devices.set(d["devices"].as_array().cloned().unwrap_or_default());
+            Ok(())
+        })
+    };
+    load_devices();
+    let act = move |path: &'static str, id: i64| {
+        ctx.run(async move {
+            api::post(path, &json!({ "id": id })).await?;
+            reload.run(());
+            Ok(())
+        })
+    };
+    view! {
+        <div class="overlay" on:keydown=move |ev: KeyboardEvent| if ev.key() == "Escape" { open.set(false) }>
+            <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="captures-title">
+                <header>
+                    <h2 id="captures-title">"Captures"</h2>
+                    <button autofocus on:click=move |_| open.set(false)>"Close"</button>
+                </header>
+                <p class="muted">"With hands-free on, what you say and hear is turned into suggestions. Nothing becomes a task until you accept it; no audio is kept, and the words are deleted after a week."</p>
+                {move || (captures.with(|c| c["allowed"] == false)).then(|| view! { <p class="warn">"Hands-free is switched off on the server (ORPHUSBOT_HANDS_FREE_ALLOWED)."</p> })}
+                <ul>
+                    {move || devices.get().into_iter().map(|d| {
+                        let id = d["id"].as_str().unwrap_or_default().to_owned();
+                        let on = d["hands_free"] == true;
+                        let label = d["label"].as_str().filter(|l| !l.is_empty()).unwrap_or(&id).to_owned();
+                        view! {
+                            <li><span>{label}<small>{if on { "hands-free on" } else { "hands-free off" }}</small></span>
+                                <button class:primary=!on on:click=move |_| {
+                                    let id = id.clone();
+                                    ctx.run(async move {
+                                        api::post("/api/devices/hands-free", &json!({ "id": id, "on": !on })).await?;
+                                        load_devices();
+                                        reload.run(());
+                                        Ok(())
+                                    })
+                                }>{if on { "Pause" } else { "Turn on" }}</button></li>
+                        }
+                    }).collect_view()}
+                </ul>
+                <ul class="proposals">
+                    {move || captures.with(|c| c["proposals"].as_array().cloned().unwrap_or_default()).into_iter().map(|p| {
+                        let id = p["id"].as_i64().unwrap_or_default();
+                        let open_now = p["state"] == "proposed";
+                        let s = |k: &str| p[k].as_str().unwrap_or_default().to_owned();
+                        let meta: Vec<String> = [("with", s("who")), ("due", s("due"))].into_iter()
+                            .filter(|(_, v)| !v.is_empty()).map(|(k, v)| format!("{k} {v}")).collect();
+                        view! {
+                            <li class:closed=!open_now>
+                                <span>
+                                    <strong>{format!("{} · {}", s("kind"), s("title"))}</strong>
+                                    {(!s("detail").is_empty()).then(|| view! { <small>{s("detail")}</small> })}
+                                    {(!meta.is_empty()).then(|| view! { <small>{meta.join(" · ")}</small> })}
+                                    {(!s("quote").is_empty()).then(|| view! { <small class="quote">{format!("“{}”", s("quote"))}</small> })}
+                                    {(!open_now).then(|| view! { <small>{s("state")}</small> })}
+                                </span>
+                                {open_now.then(|| view! {
+                                    <span class="row">
+                                        <button class="primary" on:click=move |_| act("/api/proposals/accept", id)>"Accept"</button>
+                                        <button on:click=move |_| act("/api/proposals/dismiss", id)>"Dismiss"</button>
+                                    </span>
+                                })}
+                            </li>
+                        }
+                    }).collect_view()}
+                </ul>
+                {move || captures.with(|c| c["proposals"].as_array().is_none_or(Vec::is_empty)).then(|| view! { <p class="muted">"No captures yet."</p> })}
+            </section>
+        </div>
+    }
 }
 
 fn catalogue_name(catalogue: &str) -> &'static str {

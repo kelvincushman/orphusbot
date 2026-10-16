@@ -7,6 +7,7 @@
 
 mod auth;
 mod bots;
+mod capture;
 mod db;
 mod device;
 mod gate;
@@ -124,6 +125,8 @@ struct Runtime {
     waiting: HashMap<i64, String>,
     /// Open dialogs by Orphus request id.
     dialogs: HashMap<String, Pending>,
+    /// Capture windows sent to a node for extraction and not yet answered.
+    extracting: std::collections::HashSet<i64>,
     /// Open screen viewers by stream number, with the node serving each.
     screens: HashMap<u64, (String, mpsc::Sender<screens::ToViewer>)>,
     next_screen: u64,
@@ -217,6 +220,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(reconcile_forever(app.clone()));
     tokio::spawn(routines::schedule_forever(app.clone()));
     tokio::spawn(device::expire_forever(app.clone()));
+    tokio::spawn(capture::mine_forever(app.clone()));
 
     let router = router(app);
 
@@ -252,6 +256,10 @@ fn router(app: Shared) -> Router {
         .route("/api/tickets/start", post(tickets::start_now))
         .route("/api/devices", get(device::list))
         .route("/api/devices/pairing-code", post(device::pairing_code))
+        .route("/api/devices/hands-free", post(capture::set_hands_free))
+        .route("/api/captures", get(capture::list))
+        .route("/api/proposals/accept", post(capture::accept))
+        .route("/api/proposals/dismiss", post(capture::dismiss))
         .route("/api/screen", get(screens::open))
         .route("/api/links/{code}", get(links::lookup))
         .route("/api/links/approve", post(links::approve))
@@ -1177,6 +1185,7 @@ async fn on_node_message(app: &App, node: &str, msg: FromNode) {
         }
         FromNode::Hello { .. } | FromNode::Enrol { .. } => {}
         FromNode::ScreenClosed { stream, error } => screens::closed(app, stream, error).await,
+        FromNode::Extracted { id, text, error } => capture::extracted(app, id, text, error).await,
         FromNode::Delta { attempt, text } => {
             if let Some(a) = current(attempt) {
                 let event = ThreadEvent::Delta {

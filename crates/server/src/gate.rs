@@ -23,6 +23,8 @@ const READ_ONLY: &[&str] = &[
     "search",
     "glob",
     "request_takeover",
+    // Only gives the owner a copy of a file (an artifact).
+    "share_file",
     // The MCP gateway when it only searches or describes tools; a call that
     // names a tool arrives as `mcp:<tool>` (see `main.rs` `on_dialog`) and asks.
     "mcp",

@@ -5,6 +5,7 @@
 //! open browser over Server-Sent Events. If the node drops or its lease lapses,
 //! the run goes back to the queue and resumes on the next node (DESIGN §3, §6.3).
 
+mod artifacts;
 mod auth;
 mod bots;
 mod calibrate;
@@ -262,6 +263,7 @@ fn router(app: Shared) -> Router {
         )
         .route("/api/connections/delete", post(connections::delete))
         .route("/api/connections/grant", post(connections::grant))
+        .route("/api/artifacts/{id}", get(artifacts::download))
         .route("/api/decisions/fit", post(calibrate::fit))
         .route("/api/decisions/apply", post(calibrate::apply))
         .route("/api/decisions/rollback", post(calibrate::rollback))
@@ -1283,6 +1285,15 @@ async fn on_node_message(app: &App, node: &str, msg: FromNode) {
         FromNode::Dialog { attempt, request } => {
             if let Some(a) = current(attempt) {
                 on_dialog(app, a, request).await;
+            }
+        }
+        FromNode::Artifact {
+            attempt,
+            name,
+            data,
+        } => {
+            if let Some(a) = current(attempt) {
+                artifacts::shared(app, &a.thread, attempt.run, &name, &data).await;
             }
         }
         FromNode::ToolDone {

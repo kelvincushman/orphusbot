@@ -124,3 +124,5 @@ select { font: inherit; color: inherit; background: var(--bg); border: 1px solid
   .menu { display: inline-block; }
 }
 @media (prefers-reduced-motion: reduce) { .sidebar { transition: none; } }
+.artifact { margin: .25rem 0; }
+.artifact a { color: var(--accent); }

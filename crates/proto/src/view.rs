@@ -21,6 +21,13 @@ pub enum Item {
         text: String,
         error: bool,
     },
+    /// A file the bot shared.
+    Artifact {
+        id: i64,
+        name: String,
+        version: i32,
+        size: u64,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -104,6 +111,17 @@ impl ThreadView {
             ThreadEvent::Routed { name, sure, .. } => self.items.push(Item::Notice {
                 text: format!("Sent to {name} (System 1 was {sure}% sure)"),
                 error: false,
+            }),
+            ThreadEvent::Artifact {
+                id,
+                name,
+                version,
+                size,
+            } => self.items.push(Item::Artifact {
+                id,
+                name,
+                version,
+                size,
             }),
             // The node list is for every thread; clients keep it beside their thread views.
             ThreadEvent::Nodes { .. } => {}

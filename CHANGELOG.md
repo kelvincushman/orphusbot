@@ -13,6 +13,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **Files from your bots (M6.2):** a bot can hand you a file it made (a report, a spreadsheet, an image, up to 10 MB). It shows in the chat as a download link; sharing the same name again adds a new version.
 - **Connections (M6.1):** Settings → **Connections** adds an MCP server (name, address and an optional token) and picks which bots may use it. A bot searches its tools on its own; every call that does something asks you first, by name (for example "Allow Inbox to use mcp:pa_mail_list?"), and **Always allow** covers only that one tool. Tokens are encrypted on the server (set `ORPHUSBOT_SECRET_KEY_FILE`) and hidden as `[secret]` anywhere they would show up.
 - **Calibrate System 1 (M5.2):** Decisions → **Fit from labels** works out how sure System 1 should be before it picks a bot or lets a tool call through, from your own approvals and corrections, and shows how the new setting would have done on your newest labels next to the current one. **Apply** starts using it; **Roll back** returns to the one before (or the defaults). A tool call still never passes below 90% sure.
 - **System 1 learns from more of what you do (M5.1):** changing a ticket's urgency, and starting or finishing a ticket with the bot System 1 picked, are now kept as labels next to approving cards and changing bots. The Decisions view counts them.

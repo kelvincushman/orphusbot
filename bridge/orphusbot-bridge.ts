@@ -17,6 +17,8 @@
 // in RPC mode under orphusbot-node, so in any other mode it blocks everything.
 
 import { spawn } from "node:child_process";
+import { readFile } from "node:fs/promises";
+import { basename, resolve } from "node:path";
 import { Type } from "typebox";
 import type { ExtensionAPI } from "@orphus/coding-agent";
 import {
@@ -39,7 +41,7 @@ const home = process.env.ORPHUSBOT_COMPUTER_HOME ?? "/home/bot";
 /** In a computer, only these run: each one is redirected into it. */
 // Plus `mcp`, Orphus's MCP gateway, when the owner granted the bot a connection:
 // it only talks to those servers, so it is safe to run outside the computer.
-const COMPUTER_TOOLS = ["read", "write", "edit", "bash", "request_takeover", ...(process.env.ORPHUSBOT_MCP ? ["mcp"] : [])];
+const COMPUTER_TOOLS = ["read", "write", "edit", "bash", "request_takeover", "share_file", ...(process.env.ORPHUSBOT_MCP ? ["mcp"] : [])];
 const IMAGES: Record<string, string> = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
 };
@@ -86,11 +88,37 @@ export default function (pi: ExtensionAPI) {
     return { block: true, reason };
   });
 
-  if (!computer) return; // ORPHUSBOT_RUNTIME=none: tools run on the host, still gated.
-
   // The engine's working folder on the host stands for the computer's home.
   const cwd = process.cwd();
   const inside = (p: string) => (p === cwd || p.startsWith(cwd + "/") ? home + p.slice(cwd.length) : p);
+
+  // An artifact (DESIGN §11.1): the file travels in `details`, which the node
+  // forwards to the server and the model never sees.
+  const MAX_SHARE = 10 * 1024 * 1024;
+  pi.registerTool({
+    name: "share_file",
+    label: "Share a file with the owner",
+    description:
+      "Give the owner a copy of a file you made, such as a report, a spreadsheet or an image. It appears in the chat with a download link; sharing the same name again adds a new version. Up to 10 MB.",
+    promptSnippet: "Give the owner a file you made",
+    parameters: Type.Object({
+      path: Type.String({ description: "The file's path" }),
+    }),
+    async execute(_id, params) {
+      const path = resolve(cwd, params.path);
+      const data = computer
+        ? await inComputer('head -c 10485761 -- "$1"', [inside(path)])
+        : await readFile(path);
+      if (data.length > MAX_SHARE) throw new Error("That file is over 10 MB; share a smaller one.");
+      const name = basename(path);
+      return {
+        content: [{ type: "text", text: `Shared ${name} with the owner.` }],
+        details: { artifact: { name, data: data.toString("base64") } },
+      };
+    },
+  });
+
+  if (!computer) return; // ORPHUSBOT_RUNTIME=none: tools run on the host, still gated.
 
   const read: ReadOperations = {
     readFile: (p) => inComputer('cat -- "$1"', [inside(p)]),

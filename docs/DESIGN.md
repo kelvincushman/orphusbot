@@ -605,10 +605,18 @@ Cards and cues follow the wearable's existing tiers. Nothing escalates to red fo
 
 - **Integrations are MCP.** `connections` stores MCP server records (URL or allowlisted stdio command), OAuth material (envelope-encrypted) and per-bot grants. For each engine session, the server issues an MCP config file containing only the granted servers, with short-lived tokens where the server supports them.
 - **First integration:** Kelvin's PA MCP server (mail drafts, calendar, todos).
-- **Lazy catalogue:** a server with more than 20 tools is exposed through `search_tools` / `load_tool` / `call_tool` wrappers served by the server's own rmcp endpoint. The `mcp_` prefix is avoided.
+- **Lazy catalogue:** planned as `search_tools` / `load_tool` / `call_tool` wrappers on the server's own rmcp endpoint; Orphus's MCP adapter does this already (D-029). The `mcp_` prefix is avoided.
 - **Built (M6.1, D-029):** Settings → **Connections** adds an MCP server by name, http(s) URL and an optional bearer token, and grants it to bots. When a run starts, the server puts the bot's granted servers, with decrypted tokens, in its `BotSpec` (`McpServer`; the `Debug` output hides the token). The node writes them to `<session dir>/<bot>/mcp.json` (with `"lifecycle": "lazy"` and `bearerTokenEnv`, so the token itself is only in the engine's environment) and starts Orphus with `--mcp-config`. Orphus's built-in MCP adapter is the lazy catalogue: the bot gets one `mcp` tool that searches, describes and calls, whatever the number of servers or tools, so no wrapper is needed here. The bridge allows `mcp` beside the computer tools when the bot has a connection. At the gate, a bare `mcp` call (search, describe, connect) reads and runs; a call that names a tool becomes `mcp:<tool>`, so the ledger, the owner's rules, "Always allow" and the card are per MCP tool, and it asks. Only URL servers for now (stdio commands later); no OAuth yet.
 - **Built (M6.1):** secrets are AES-256-GCM under one master key from `ORPHUSBOT_SECRET_KEY_FILE` (32 bytes, ideally a `systemd-creds` credential), a fresh nonce each. Every stored value is known at start, and its plain, base64 and URL-encoded forms (8 characters or more) become `[secret]` in every event before it is stored or sent to a browser, including the owner's own messages. The engine's own session file on the node still holds raw tool output; it never leaves that machine.
-- **Secrets (planned):** AES-256-GCM envelope encryption. The data key is wrapped by a master key in `systemd-creds` on the GPU box. Values are redacted from events (plain, base64 and URL-encoded) before they're appended.
+- **Later:** envelope encryption (a data key per value, wrapped by the master key), so the master key can rotate without re-adding tokens.
+
+### 11.1 Artifacts
+
+- **Built (M6.2):** a bot gives the owner a file with the bridge's `share_file` tool (up to 10 MB, read inside its computer). The bytes travel in the tool result's `details`, which Orphus never shows the model; the node relays them as `FromNode::Artifact`, and the server keeps them in `artifact` (per bot and name, a new version each time) and records `ThreadEvent::Artifact {id, name, version, size}`, shown as a download link. `GET /api/artifacts/<id>` always answers `application/octet-stream` as an attachment with `nosniff`, so a shared HTML file can't run in OrphusBot's origin. `share_file` runs without asking: it only gives the owner a copy. File contents aren't scanned for secrets.
+
+### 11.2 Fleets and workflows as run targets
+
+- **Deferred (D-030).** Orphus runs fleets and Goal workflows through subagents and in-process stage sessions, whose tools would run on the node outside the bot's computer and outside the bridge's gate, and it has no structured RPC for their state yet (H-B6). A run stays a single engine turn until both exist upstream.
 
 ---
 

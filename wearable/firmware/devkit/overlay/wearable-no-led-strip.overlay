@@ -1,0 +1,13 @@
+// Copyright (c) 2025-2026 Kelvin Lee. Licensed under MIT.
+//
+// Diagnostic overlay — disable ONLY the WS2812 NeoPixel (led_strip), keeping the
+// IoT button (A2) and vibration PWM enabled. Layer LAST (after wearable-peripherals).
+//
+// Purpose: isolate whether the real SPI1 NeoPixel init is what wedges main()
+// after the boot LED sequence. With led_strip disabled, neopixel.c HAS_STRIP=0
+// takes the stub path (no blocking SPI write) — exactly as in Phase 1, which
+// booted fully. If the board now boots with button+haptic enabled, the NeoPixel
+// SPI init is the culprit.
+&led_strip {
+    status = "disabled";
+};

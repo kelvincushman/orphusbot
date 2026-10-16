@@ -23,7 +23,7 @@ OrphusBot is an open-source, self-hosted bot service. You hand it a task from th
 | **System 1 / System 2** | [Laya](https://github.com/NandhaKishorM/laya), a fast "Jev-family" decision model, answers typed questions in milliseconds: which bot, which subscription, how urgent, act now or ask you, local or E2B, approve this step or not. Orphus agents do the slow, deliberate work. |
 | **Safe by default** | Irreversible actions (send, pay, delete, merge, publish) always need a rule you set or a tap from you. The fast model can route, defer or deny, but never approve those. |
 | **Receipts and learning** | Every decision is stored with its confidence and linked to what happened next. Your approvals, overrides and reassignments become labels to recalibrate and fine-tune the model, applied only when you say so, with rollback. |
-| **Wearable, duplex** | The OmarchyWearable (being prepared for open source; it joins this repo) button sends a spoken task to the bots. Bots answer through its light and vibration (no speaker, by design), and you answer back with a tap, a double tap or your voice. |
+| **Wearable, duplex** | The [wearable](wearable/README.md)'s button sends a spoken task to the bots. Bots answer through its light and vibration (no speaker, by design), and you answer back with a tap, a double tap or your voice. |
 | **Ambient capture** | Optional hands-free mode turns conversation into proposed to-dos, appointments and follow-ups that you accept with one tap. No audio is stored; transcripts are deleted after 7 days. Off by default. |
 | **Everywhere** | One Rust UI for the web, a desktop app and an Android app, kept in sync live. Push notifications through self-hosted ntfy; no Google account needed. |
 
@@ -69,6 +69,7 @@ Full detail: [docs/DESIGN.md](docs/DESIGN.md).
 | [docs/DESIGN.md](docs/DESIGN.md) | Design: components, run loop, decision layer, computers, wearable duplex habitat, capture, security, testing, deployment |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Decision log: what was decided, when and why |
 | [docs/research/rakazo-architecture.md](docs/research/rakazo-architecture.md) | The study of Rakazo that informed the design |
+| [wearable/README.md](wearable/README.md) | The wearable: firmware, companion app, hardware, device channel, its own docs |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute: workflow, documentation rule, ponytail, Rust practices |
 | [AGENTS.md](AGENTS.md) | Rules for AI coding agents and reviewers working in this repo |
 | [SECURITY.md](SECURITY.md) | Reporting vulnerabilities |

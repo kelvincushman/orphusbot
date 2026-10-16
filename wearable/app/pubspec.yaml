@@ -1,0 +1,136 @@
+# Copyright (c) 2025-2026 Kelvin Lee. Licensed under MIT. Portions (c) 2024 Based Hardware Contributors, MIT (see LICENSE-UPSTREAM).
+
+name: kelvinlee
+description: Phone app for a self-hosted body-worn audio wearable.
+
+publish_to: "none"
+
+version: 1.0.74+436
+
+environment:
+  # Dart 3.10.7+ (Flutter 3.44.x). Driven by flutter_gemma >=0.12.7, whose deps
+  # (dart_sentencepiece_tokenizer, sqlite3) require it — needed for on-device
+  # Gemma 4 E2B STT (lib/wearable/local_llm/).
+  sdk: ">=3.10.7 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State
+  provider: ^6.1.2
+
+  # Server transport — HTTP + WS + mDNS discovery + credential storage
+  http: ^1.4.0
+  web_socket_channel: ^3.0.3
+  multicast_dns: ^0.3.2
+  flutter_secure_storage: ^9.2.2
+  shared_preferences: 2.5.3
+
+  # Wearable BLE
+  flutter_blue_plus: 1.33.6
+
+  # Audio capture + codec
+  record: ^6.2.0
+  opus_dart: ^3.0.1
+  opus_flutter: ^3.0.3
+
+  # On-device speech-to-text (lib/wearable/local_llm/): Gemma 4 E2B via
+  # MediaPipe LLM Inference, plus sherpa-onnx for diarization / speaker ID.
+  # Gemma is the TEXT-polish stage only — never the transcriber. Its audio
+  # encoder is CPU-only, prefills 1.15 s per 2 s of audio, and caps clips at
+  # 30 s by Google's own docs. ASR runs through sherpa_onnx below.
+  # See docs/research/ON_DEVICE_STT.md and ASR_CANDIDATES.md.
+  flutter_gemma: ^1.7.4
+  sherpa_onnx: ^1.13.4
+  archive: ^3.6.1
+  crypto: ^3.0.3
+  path_provider: 2.1.5
+
+  # UI + platform
+  webview_flutter: 4.13.0
+  url_launcher: ^6.3.0
+  file_picker: 8.3.2
+  image_picker: ^1.1.2
+  local_auth: ^3.0.1
+  device_info_plus: ^11.5.0
+  package_info_plus: ^8.0.1
+  uuid: ^4.4.0
+
+  # Subscriptions
+  purchases_flutter: ^10.0.1
+  purchases_ui_flutter: ^10.0.1
+
+dependency_overrides:
+  uuid: ^4.4.0
+  # Upstream opus_flutter has no null-safe release for these platforms.
+  opus_flutter_ios:
+    git:
+      url: https://github.com/mdmohsin7/opus_flutter.git
+      path: opus_flutter_ios
+      ref: dev
+  opus_flutter_android:
+    git:
+      url: https://github.com/mdmohsin7/opus_flutter.git
+      path: opus_flutter_android
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  lints: ^4.0.0
+  # Native branding generators. Not imported at runtime — they read their source
+  # images straight off disk and write into android/ and ios/.
+  flutter_launcher_icons: 0.13.1
+  flutter_native_splash: ^2.4.0
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  web:
+    generate: true
+  image_path: "assets/images/app_launcher_icon.png"
+
+flutter:
+  uses-material-design: true
+  # No `assets:` block: nothing under lib/wearable/ calls Image.asset,
+  # AssetImage or rootBundle. The font binaries below are bundled by the
+  # `fonts:` declaration, which is a separate mechanism.
+  fonts:
+    # Load-bearing: WearableType.fallback names "SF Pro Display" as the
+    # fallback family, so this declaration is what makes it resolve.
+    - family: "SF Pro Display"
+      fonts:
+        - asset: assets/fonts/SFPRODISPLAYTHINITALIC.OTF
+          weight: 100
+          style: italic
+        - asset: assets/fonts/SFPRODISPLAYLIGHTITALIC.OTF
+          weight: 300
+          style: italic
+        - asset: assets/fonts/SFPRODISPLAYREGULAR.OTF
+        - asset: assets/fonts/SFPRODISPLAYHEAVYITALIC.OTF
+          style: italic
+        - asset: assets/fonts/SFPRODISPLAYMEDIUM.OTF
+          weight: 500
+        # SFPRODISPLAYSEMIBOLDITALIC is deliberately NOT mapped to weight 600.
+        # There is no upright semibold face in assets/fonts/, so declaring the
+        # italic one at w600 made Flutter serve it for ordinary w600 text --
+        # and the Eloquent type scale asks for w600 more than any other weight,
+        # so every headline, card label and button rendered oblique on device.
+        # Unmapped, w600 resolves to the nearest upright face instead.
+        - asset: assets/fonts/SFPRODISPLAYBOLD.OTF
+          weight: 700
+        - asset: assets/fonts/SFPRODISPLAYBLACKITALIC.OTF
+          weight: 900
+          style: italic
+
+flutter_native_splash:
+  background_image: "assets/images/splash.png"
+  android_12:
+    image: assets/images/splash_icon.png
+    color: "#000000"
+  android: true
+  ios: true

@@ -19,6 +19,8 @@ reviews:
   path_filters:
     - "!**/target/**"
     - "!**/*.lock"
+    - "!wearable/hardware/**"
+    - "!**/*.{png,jpg,jpeg,gif,stl,step,3mf,f3d,hex,uf2,exe}"
 
   pre_merge_checks:
     docstrings:
@@ -64,6 +66,20 @@ reviews:
       instructions: |
         The Orphus bridge extension must hold no policy, must refuse all tool calls if its node socket is missing, and must
         never forward host environment variables or files into a bot computer.
+    - path: "wearable/firmware/**"
+      instructions: |
+        Zephyr firmware for the nRF52840. Follow wearable/docs/product/BUTTON_FEEDBACK_SPEC.md and HABITAT_ALERTS.md exactly:
+        the button grammar, power state machine and the non-suppressible white capture light must not change silently.
+        There is no speaker by design. Wire constants must match the server contract and the Dart codec.
+    - path: "wearable/app/**"
+      instructions: |
+        Flutter companion app. The phone is the privacy boundary: no audio leaves it in on-device mode, and capture only
+        happens in a button window or allowed hands-free mode. The app resolves gestures and must confirm within 1500 ms.
+        No real device addresses, IDs, tokens or LAN addresses in code, tests or assets.
+    - path: "wearable/server-contract/**"
+      instructions: |
+        This is the reference specification the Rust device channel is tested against. Any change here is a protocol
+        change: the firmware header, Dart codec and docs must change in the same PR.
     - path: ".github/workflows/**"
       instructions: |
         Actions pinned to full commit SHAs with the version in a comment; least-privilege permissions; no untrusted

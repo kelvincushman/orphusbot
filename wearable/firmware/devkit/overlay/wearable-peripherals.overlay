@@ -1,0 +1,130 @@
+// Copyright (c) 2025-2026 Kelvin Lee. Licensed under MIT.
+//
+// Wearable wearable peripherals overlay.
+// Layer this on top of xiao_ble_sense_devkitv2-adafruit.overlay via west:
+//
+//   west build -b xiao_ble_sense -d build_wearable -- \
+//     -DEXTRA_CONF_FILE=prj_wearable.conf \
+//     -DEXTRA_DTC_OVERLAY_FILE="overlay/xiao_ble_sense_devkitv2-adafruit.overlay;overlay/wearable-peripherals.overlay"
+//
+// Changes vs the upstream devkit v2 overlay:
+//   1. Disables &i2s0 — Kelvin's build has no speaker BFF. Frees A1/A2/A3.
+//   2. Wires A2 (P0.28) as GPIO input for the Adafruit IoT Button + NeoPixel BFF.
+//   3. Wires A3 (P0.29) as SPIM3 MOSI for the WS2812 NeoPixel (worldsemi,
+//      ws2812-spi). SPIM3 has no TWIM sibling, unlike SPIM1 (= i2c1) — see below.
+//   4. Wires A1 (P0.03) as PWM0 channel 0 for an optional second haptic motor.
+//      Unused if Kelvin hasn't soldered the extra motor — safe to leave enabled.
+//
+// Pin map authority: ../../docs/PIN_MAP.md
+
+#include <zephyr/dt-bindings/led/led.h>
+
+/ {
+    aliases {
+        iot-button = &iot_button;
+        led-strip = &led_strip;
+        vibration-pwm = &vibration_pwm;
+    };
+
+    buttons {
+        compatible = "gpio-keys";
+
+        iot_button: button_iot {
+            gpios = <&gpio0 28 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+            label = "IoT Button (A2)";
+            zephyr,code = <INPUT_KEY_0>;
+        };
+    };
+
+    pwmleds {
+        compatible = "pwm-leds";
+
+        vibration_pwm: vibration_pwm {
+            pwms = <&pwm0 0 PWM_MSEC(20) PWM_POLARITY_NORMAL>;
+            label = "Vibration motor (A1)";
+        };
+    };
+
+};
+
+// Free A1/A2/A3 from the upstream devkit's I2S speaker wiring.
+&i2s0 {
+    status = "disabled";
+};
+
+// Mic-silence fix (2026-07-01): the Xiao Sense board DTS leaves &pdm0 ENABLED
+// with pinctrl (pdm0_default/pdm0_sleep) that owns the mic pins P1.00/P0.16.
+// This firmware drives PDM via raw nrfx (not the Zephyr DMIC driver) and never
+// resumes the pdm0 device, so under CONFIG_PM_DEVICE its sleep-pinctrl parks
+// DIN (P0.16) as a disconnected input — the PDM clock runs but DIN reads a
+// constant zero, so every Opus frame decodes to silence. Disabling the Zephyr
+// node removes the second owner and leaves nrfx as the sole configurator of the
+// mic pins.
+&pdm0 {
+    status = "disabled";
+};
+
+// NeoPixel on A3 via SPIM3 (worldsemi,ws2812-spi). SPIM3 (0x4002F000) is the
+// standalone SPI instance with NO TWIM sibling. SPIM1 shares peripheral instance
+// 1 (0x40004000) with the board's i2c1/TWIM1 — xiao_ble_common.dtsi enables i2c1
+// with the note "Cannot be used together with spi1" — so enabling &spi1 for the
+// WS2812 collided two drivers on one block/IRQ and hard-faulted. SPIM3 sidesteps
+// that, and being pure EasyDMA (no irq_lock) it coexists cleanly with BLE.
+&spi3 {
+    status = "okay";
+    pinctrl-0 = <&spi3_wearable>;
+    pinctrl-1 = <&spi3_wearable_sleep>;
+    pinctrl-names = "default", "sleep";
+    /delete-property/ cs-gpios;
+
+    led_strip: ws2812@0 {
+        compatible = "worldsemi,ws2812-spi";
+        reg = <0>;
+        spi-max-frequency = <4000000>;
+        spi-one-frame = <0x70>;       /* 1 bit */
+        spi-zero-frame = <0x40>;      /* 0 bit */
+        chain-length = <1>;
+        color-mapping = <LED_COLOR_ID_GREEN
+                         LED_COLOR_ID_RED
+                         LED_COLOR_ID_BLUE>;
+        label = "WS2812 NeoPixel (A3)";
+    };
+};
+
+// PWM0 channel 0 on A1 (P0.03) for the optional vibration motor.
+&pwm0 {
+    status = "okay";
+    pinctrl-0 = <&pwm0_wearable_motor>;
+    pinctrl-1 = <&pwm0_wearable_motor_sleep>;
+    pinctrl-names = "default", "sleep";
+};
+
+&pinctrl {
+    spi3_wearable: spi3_wearable {
+        group1 {
+            psels = <NRF_PSEL(SPIM_MOSI, 0, 29)>,   // A3 = P0.29 → WS2812 DIN (data)
+                    <NRF_PSEL(SPIM_SCK, 1, 12)>;    // D7 = P1.12 dummy SCK (free pin; nRF SPIM clocks MOSI off it)
+        };
+    };
+
+    spi3_wearable_sleep: spi3_wearable_sleep {
+        group1 {
+            psels = <NRF_PSEL(SPIM_MOSI, 0, 29)>,
+                    <NRF_PSEL(SPIM_SCK, 1, 12)>;
+            low-power-enable;
+        };
+    };
+
+    pwm0_wearable_motor: pwm0_wearable_motor {
+        group1 {
+            psels = <NRF_PSEL(PWM_OUT0, 0, 3)>;     // A1 = P0.03 → motor +
+        };
+    };
+
+    pwm0_wearable_motor_sleep: pwm0_wearable_motor_sleep {
+        group1 {
+            psels = <NRF_PSEL(PWM_OUT0, 0, 3)>;
+            low-power-enable;
+        };
+    };
+};

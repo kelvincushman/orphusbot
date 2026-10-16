@@ -16,7 +16,8 @@ OrphusBot is a self-hosted bot service written mainly in Rust. A server on an al
 6. **The wearable has no speaker, by design.** Nothing may depend on audio output. Every signal to the wrist is a tracked habitat message; every ask has a defined tap and double-tap reply (DESIGN §9.3).
 7. **The capture consent light is non-suppressible.** No change may dim, delay or remove it.
 8. **No personal data or secrets in the repo**: receipts, labels, transcripts, captures, fine-tuned checkpoints, keys, `.env`.
-9. **Wearable wire constants** live in `crates/device` and are mirrored in the firmware header and the Dart codec; change all three and the contract test together.
+9. **Wearable wire constants** live in `crates/device` (from M3; until then `wearable/server-contract/src/device/commands.ts` is the authority) and are mirrored in `wearable/firmware/devkit/src/agent_commands.h` and `wearable/app/lib/wearable/command_codec.dart`; change all of them and the contract test together.
+10. **Wearable privacy:** no real device addresses, device IDs, tokens, LAN addresses or recordings in code, tests, docs or screenshots. Use placeholders such as `AA:BB:CC:DD:EE:FF`.
 
 ## Rust conventions
 
@@ -47,3 +48,4 @@ Don't flag style the formatter or linter already enforces. Be specific and short
 | `docs/DECISIONS.md` | Decision log |
 | `docs/research/` | Background studies (not normative) |
 | `crates/` | Rust crates (from milestone M0; layout in DESIGN §2) |
+| `wearable/` | The wearable: Zephyr firmware (C), Flutter companion app (Dart), hardware, the reference device-channel contract (TypeScript), and its docs. Follow its own README for toolchains |

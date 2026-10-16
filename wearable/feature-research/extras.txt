@@ -1,0 +1,40 @@
+@@@ test-clean wear10dn (GTCRN-denoised)
+{"model": "moonshine-tiny-en-v1-int8", "wer": 45.73268921095008, "rtf": 0.028972633347400467, "audio_s": 908.0640000000002, "decode_s": 26.309005327973864, "n": 120}
+{"model": "zipformer-small-en-int8", "wer": 18.115942028985508, "rtf": 0.01985598468060388, "audio_s": 908.0640000000002, "decode_s": 18.030504873007885, "n": 120}
+{"model": "parakeet-tdt-ctc-110m-int8", "wer": 20.77294685990338, "rtf": 0.023349908477823162, "audio_s": 908.0640000000002, "decode_s": 21.203211292006017, "n": 120}
+{"model": "parakeet-tdt-0.6b-v3-int8", "wer": 29.42834138486312, "rtf": 0.072647225165873, "audio_s": 908.0640000000002, "decode_s": 65.96832987302332, "n": 120}
+{"model": "canary-180m-flash-int8", "wer": 26.207729468599034, "rtf": 0.11324053915914047, "audio_s": 908.0640000000002, "decode_s": 102.82965695100575, "n": 120}
+{"model": "whisper-base.en-int8", "wer": 33.29307568438003, "rtf": 0.14347047858411202, "audio_s": 908.0640000000002, "decode_s": 130.28037666500313, "n": 120}
+@@@ test-other wear10dn (GTCRN-denoised)
+{"model": "moonshine-tiny-en-v1-int8", "wer": 74.54068241469817, "rtf": 0.03376438108829304, "audio_s": 699.04, "decode_s": 23.602652955960366, "n": 120}
+{"model": "zipformer-small-en-int8", "wer": 39.42257217847769, "rtf": 0.021136611567280084, "audio_s": 699.04, "decode_s": 14.77533694999147, "n": 120}
+{"model": "parakeet-tdt-ctc-110m-int8", "wer": 42.67716535433071, "rtf": 0.023164080686353415, "audio_s": 699.04, "decode_s": 16.19261896298849, "n": 120}
+{"model": "parakeet-tdt-0.6b-v3-int8", "wer": 56.11548556430446, "rtf": 0.07286804850233602, "audio_s": 699.04, "decode_s": 50.93768062507297, "n": 120}
+{"model": "canary-180m-flash-int8", "wer": 55.643044619422575, "rtf": 0.07593383205822521, "audio_s": 699.04, "decode_s": 53.080785961981746, "n": 120}
+{"model": "whisper-base.en-int8", "wer": 56.95538057742782, "rtf": 0.0944036944066113, "audio_s": 699.04, "decode_s": 65.99195853799756, "n": 120}
+@@@ SHORT<9s test-clean clean  (moonshine v2 44MB vs the rest)
+# 88 utterances < 9 s from chan/test-clean-clean
+{"model": "moonshine-tiny-en", "wer": 5.979202772963605, "rtf": 0.0203193859954522, "audio_s": 409.65500000000003, "decode_s": 8.323938069966971, "n": 88}
+{"model": "moonshine-base-en", "wer": 4.072790294627383, "rtf": 0.032805702469097045, "audio_s": 409.65500000000003, "decode_s": 13.439020044977951, "n": 88}
+{"model": "moonshine-tiny-en-v1-int8", "wer": 6.152512998266898, "rtf": 0.02743236636687989, "audio_s": 409.65500000000003, "decode_s": 11.237806044024182, "n": 88}
+{"model": "zipformer-small-en-int8", "wer": 3.3795493934142113, "rtf": 0.021208481314825618, "audio_s": 409.65500000000003, "decode_s": 8.688160413024889, "n": 88}
+{"model": "parakeet-tdt-ctc-110m-int8", "wer": 3.552859618717504, "rtf": 0.02299043646718894, "audio_s": 409.65500000000003, "decode_s": 9.418147250966285, "n": 88}
+@@@ SHORT<9s test-clean wear10
+# 88 utterances < 9 s from chan/test-clean-wear10
+{"model": "moonshine-tiny-en", "wer": 33.62218370883882, "rtf": 0.020746226000031124, "audio_s": 409.65500000000003, "decode_s": 8.49879521204275, "n": 88}
+{"model": "moonshine-base-en", "wer": 22.790294627383016, "rtf": 0.03376919000866978, "audio_s": 409.65500000000003, "decode_s": 13.833717533001618, "n": 88}
+{"model": "moonshine-tiny-en-v1-int8", "wer": 29.462738301559792, "rtf": 0.028661428611914647, "audio_s": 409.65500000000003, "decode_s": 11.741297538013896, "n": 88}
+{"model": "zipformer-small-en-int8", "wer": 12.131715771230503, "rtf": 0.021624582871148778, "audio_s": 409.65500000000003, "decode_s": 8.858618496080453, "n": 88}
+{"model": "parakeet-tdt-ctc-110m-int8", "wer": 14.298093587521663, "rtf": 0.0232614605583282, "audio_s": 409.65500000000003, "decode_s": 9.52917362502194, "n": 88}
+@@@ LATENCY (uncontended, NT=4, Apple M2, 12 utts)
+{"model": "moonshine-tiny-en-v1-int8", "peak_rss_mb": 478.4, "base_rss_mb": 40.5, "rtf": 0.0254, "med_lat_s": 0.133, "med_audio_s": 5.2}
+{"model": "whisper-tiny.en-int8", "peak_rss_mb": 509.3, "base_rss_mb": 40.4, "rtf": 0.0536, "med_lat_s": 0.283, "med_audio_s": 5.2}
+{"model": "whisper-base.en-int8", "peak_rss_mb": 748.6, "base_rss_mb": 40.5, "rtf": 0.0926, "med_lat_s": 0.502, "med_audio_s": 5.2}
+{"model": "zipformer-small-en-int8", "peak_rss_mb": 358.4, "base_rss_mb": 40.4, "rtf": 0.0186, "med_lat_s": 0.127, "med_audio_s": 5.2}
+{"model": "zipformer-gigaspeech-int8", "peak_rss_mb": 513.4, "base_rss_mb": 40.2, "rtf": 0.0237, "med_lat_s": 0.158, "med_audio_s": 5.2}
+{"model": "parakeet-tdt-ctc-110m-int8", "peak_rss_mb": 586.5, "base_rss_mb": 40.5, "rtf": 0.0229, "med_lat_s": 0.124, "med_audio_s": 5.2}
+{"model": "parakeet-tdt-0.6b-v3-int8", "peak_rss_mb": 1318.2, "base_rss_mb": 40.6, "rtf": 0.0761, "med_lat_s": 0.52, "med_audio_s": 5.2}
+{"model": "canary-180m-flash-int8", "peak_rss_mb": 776.2, "base_rss_mb": 40.7, "rtf": 0.1021, "med_lat_s": 0.445, "med_audio_s": 5.2}
+{"model": "sense-voice-2024-int8", "peak_rss_mb": 691.8, "base_rss_mb": 40.6, "rtf": 0.0352, "med_lat_s": 0.182, "med_audio_s": 5.2}
+{"model": "kroko-en-streaming", "peak_rss_mb": 305.6, "base_rss_mb": 40.3, "rtf": 0.0435, "med_lat_s": 0.227, "med_audio_s": 5.2}
+@@@ EXTRASDONE

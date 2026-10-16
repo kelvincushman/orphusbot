@@ -69,6 +69,8 @@ These apply from the first crate onwards (milestone M0). The Rust CI workflow la
 
 Non-Rust parts (the TypeScript Orphus bridge extension, Playwright tests, any Python tooling) follow their own ecosystem's formatter and linter, configured in the repo when they arrive.
 
+The wearable in `wearable/` keeps its own toolchains: Zephyr / nRF Connect SDK for the firmware and Flutter (pinned with fvm) for the app. See [wearable/README.md](wearable/README.md), [wearable/docs/TOOLCHAIN.md](wearable/docs/TOOLCHAIN.md) and [wearable/docs/APP.md](wearable/docs/APP.md). Its docs follow the same rule: change the code, change the doc that describes it.
+
 ## Commits
 
 [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary`, imperative mood, under 72 characters.

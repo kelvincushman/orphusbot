@@ -1,0 +1,31 @@
+# Copyright (c) 2025-2026 Kelvin Lee. Licensed under MIT. Portions (c) 2024 Based Hardware Contributors, MIT (see LICENSE-UPSTREAM).
+
+flavors:
+  prod:
+    app:
+      name: "Wearable"
+      icon: "assets/images/app_launcher_icon.png"
+    android:
+      applicationId: "com.wearable.app"
+      icon: "assets/images/app_launcher_icon.png"
+      firebase:
+        config: "app/android/app/src/prod/google-services.json"
+    ios:
+      bundleId: "com.wearable.app"
+      icon: "assets/images/app_launcher_icon.png"
+      firebase:
+        config: "app/ios/Config/Prod/GoogleService-Info.plist"
+  dev:
+    app:
+      name: "Wearable Dev"
+      icon: "assets/images/app_launcher_icon.png"
+    android:
+      icon: "assets/images/app_launcher_icon.png"
+      applicationId: "com.wearable.app.dev"
+      firebase:
+        config: "app/android/app/src/dev/google-services.json"
+    ios:
+      bundleId: "com.wearable.app.development"
+      icon: "assets/images/app_launcher_icon.png"
+      firebase:
+        config: "app/ios/Config/Dev/GoogleService-Info.plist"

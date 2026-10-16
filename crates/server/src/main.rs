@@ -656,6 +656,7 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
             tool: &tool,
             input: &input,
             in_computer: call["inComputer"].as_bool().unwrap_or(false),
+            helpers_gated: call["helpersGated"].as_bool().unwrap_or(false),
         };
         let verdict = gate::decide(&app.db, &app.system1, &gate_call)
             .await

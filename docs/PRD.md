@@ -297,7 +297,7 @@ A Rust **orphusbot-server** (axum, sqlx, Postgres, `graphile_worker` jobs, crone
 | **M3 System 1 + wearable** | HttpLaya triage + tool gate + receipts + strict thresholds; tickets; routines with pre-flight; Decisions view; wearable device channel, button → task, cues | Journeys 2 (desktop), 6 and 7 |
 | **M4 Reach + capture** | E2B backend; Tauri Android; ntfy push; quota tracker; ambient capture, proposals and profiles | Journeys 2 and 3 on the phone; Journeys 4 and 8 |
 | **M5 Learning** | Label capture complete; calibration fit, apply and rollback; ~~OrtLaya with golden-fixture parity~~ (deferred, D-028) | Journey 5 |
-| **M6 Breadth** | MCP connections UI and lazy catalogue; artifacts; secrets; ~~fleets and workflows as run targets~~ (deferred until Orphus can gate them, D-030) | — |
+| **M6 Breadth** | MCP connections UI and lazy catalogue; artifacts; secrets; fleets as run targets (D-032); ~~workflows as run targets~~ (blocked: their own code can't be gated, D-032) | — |
 
 Order is strict: M3 depends on M1's receipts and gates; M4's overflow depends on M2's placement.
 

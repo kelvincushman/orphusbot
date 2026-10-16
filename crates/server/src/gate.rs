@@ -25,6 +25,10 @@ const READ_ONLY: &[&str] = &[
     "request_takeover",
     // Only gives the owner a copy of a file (an artifact).
     "share_file",
+    // A fleet's blueprints, read only; and its rooms, where the bot's own
+    // helpers talk to each other (DESIGN §11.2).
+    "fleet",
+    "roundtable",
     // The MCP gateway when it only searches or describes tools; a call that
     // names a tool arrives as `mcp:<tool>` (see `main.rs` `on_dialog`) and asks.
     "mcp",
@@ -48,6 +52,9 @@ pub struct Call<'a> {
     pub input: &'a Value,
     /// The call runs inside the bot's computer, not on the node itself.
     pub in_computer: bool,
+    /// The node put the bridge where helper sessions load it, so a helper's
+    /// calls come back through this gate (DESIGN §11.2).
+    pub helpers_gated: bool,
 }
 
 /// Reversible by construction (DESIGN §7.4): file changes inside the bot's computer.
@@ -72,15 +79,18 @@ async fn gate_state(db: &PgPool, call: &Call<'_>) -> sqlx::Result<String> {
     .to_string())
 }
 
-/// Tools whose helper agents act without coming back through this gate
-/// (DECISIONS D-030). The bridge blocks them; this is the second lock.
-const UNGATED_HELPERS: &[&str] = &["subagent", "workflow", "fleet"];
+/// Tools that start helper agents. A helper's calls only come back through this
+/// gate when the node installed the bridge for helpers; a workflow's own
+/// TypeScript never does (DECISIONS D-030). The bridge blocks these too; this is the second lock.
+fn ungated_helper(call: &Call<'_>) -> bool {
+    call.tool == "workflow" || (call.tool == "subagent" && !call.helpers_gated)
+}
 
 pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Result<Verdict> {
     if READ_ONLY.contains(&call.tool) {
         return Ok(Verdict::Allow);
     }
-    if UNGATED_HELPERS.contains(&call.tool) {
+    if ungated_helper(call) {
         return Ok(Verdict::Deny(format!(
             "{} starts helpers whose actions OrphusBot can't check, so it isn't allowed. Do the work yourself.",
             call.tool
@@ -267,6 +277,7 @@ mod tests {
             tool,
             input,
             in_computer: false,
+            helpers_gated: false,
         }
     }
 
@@ -301,12 +312,32 @@ mod tests {
             .await
             .unwrap();
         let input = json!({"agent": "worker", "task": "x"});
-        for tool in ["subagent", "workflow", "fleet"] {
+        // Helpers that wouldn't come back through the gate: always refused.
+        for tool in ["subagent", "workflow"] {
             assert!(matches!(
                 decide(&db, &call(a, "h1", tool, &input)).await.unwrap(),
                 Verdict::Deny(_)
             ));
         }
+        // With the bridge installed for helpers, a subagent follows the rules like any call;
+        // a workflow's own code still can't be gated.
+        let gated = |id, tool| Call {
+            helpers_gated: true,
+            ..call(a, id, tool, &input)
+        };
+        assert_eq!(
+            decide(&db, &gated("h2", "subagent")).await.unwrap(),
+            Verdict::Allow
+        );
+        assert!(matches!(
+            decide(&db, &gated("h3", "workflow")).await.unwrap(),
+            Verdict::Deny(_)
+        ));
+        // The fleet tool only reads blueprints.
+        assert_eq!(
+            decide(&db, &call(a, "h4", "fleet", &input)).await.unwrap(),
+            Verdict::Allow
+        );
     }
 
     #[sqlx::test]

@@ -365,7 +365,19 @@ impl Engine {
         std::fs::create_dir_all(&dir).with_context(|| format!("creating {dir}"))?;
         let bridge = format!("{dir}/orphusbot-bridge.ts");
         std::fs::write(&bridge, BRIDGE).with_context(|| format!("writing {bridge}"))?;
+        // The engine works in this empty folder. A copy of the bridge in its
+        // project extensions is what helper sessions (subagents, fleet members)
+        // load, so their calls are gated too (DESIGN §11.2); the engine itself
+        // loads the bridge from `--extension` and ignores the copy.
+        let work = format!("{dir}/work");
+        let helpers = format!("{work}/.orphus/extensions");
+        std::fs::create_dir_all(&helpers).with_context(|| format!("creating {helpers}"))?;
+        std::fs::write(format!("{helpers}/orphusbot-bridge.ts"), BRIDGE)
+            .with_context(|| format!("writing the bridge into {helpers}"))?;
         let mut command = Command::new(&cfg.orphus);
+        command
+            .current_dir(&work)
+            .env("ORPHUSBOT_HELPERS_GATED", "1");
         if let Some(model) = &bot.model {
             command.args(["--model", model]);
         }
@@ -401,10 +413,7 @@ impl Engine {
         }
         if let Some(sandbox) = &bot.e2b {
             // The computer is an E2B sandbox: the bridge reaches its envd over HTTPS.
-            let work = format!("{dir}/work");
-            std::fs::create_dir_all(&work).with_context(|| format!("creating {work}"))?;
             command
-                .current_dir(&work)
                 .env("ORPHUSBOT_COMPUTER", format!("e2b:{}", sandbox.sandbox))
                 .env("ORPHUSBOT_E2B_URL", &sandbox.url)
                 .env("ORPHUSBOT_COMPUTER_HOME", "/home/user");
@@ -419,12 +428,8 @@ impl Engine {
                 team: bot.team,
             };
             let name = spec.ensure().await?;
-            // The engine works in an empty folder here; the bridge maps it onto the
-            // computer's home and runs every tool there.
-            let work = format!("{dir}/work");
-            std::fs::create_dir_all(&work).with_context(|| format!("creating {work}"))?;
+            // The bridge maps the work folder onto the computer's home and runs every tool there.
             command
-                .current_dir(&work)
                 .env("ORPHUSBOT_COMPUTER", name)
                 .env("ORPHUSBOT_RUNTIME", runtime)
                 .env("ORPHUSBOT_COMPUTER_HOME", computer::HOME);

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled\n         from bot order by disabled, slug <> 'inbox', name",
+  "query": "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer\n         from bot order by disabled, slug <> 'inbox', name",
   "describe": {
     "columns": [
       {
@@ -101,6 +101,17 @@
             "name": "disabled"
           }
         }
+      },
+      {
+        "ordinal": 9,
+        "name": "computer",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "computer"
+          }
+        }
       }
     ],
     "parameters": {
@@ -115,8 +126,9 @@
       true,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "4366e1940456383f8724a0df9132692c45e410a732df508c08572223e834bbe5"
+  "hash": "6c18006a7712b905ae22a12a4a267d1b6d2b19bb9310429447c8e76e8451a359"
 }

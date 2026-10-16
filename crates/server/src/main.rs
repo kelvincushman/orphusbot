@@ -13,6 +13,7 @@ mod capture;
 mod connections;
 mod db;
 mod device;
+mod e2b;
 mod gate;
 mod links;
 mod nodes;
@@ -158,6 +159,7 @@ struct App {
     auth: auth::Auth,
     system1: system1::System1,
     secrets: secrets::Secrets,
+    e2b: e2b::E2b,
     devices: device::Devices,
     notifier: notify::Notifier,
     /// The built web UI (crates/ui/dist), served at `/`.
@@ -221,6 +223,7 @@ async fn main() -> anyhow::Result<()> {
         auth,
         system1,
         secrets,
+        e2b: e2b::E2b::from_env(),
         devices: device::Devices::default(),
         notifier: notify::Notifier::from_env(&origin),
         ui_dir,
@@ -818,11 +821,15 @@ async fn dispatch(app: &App) {
                 .values()
                 .map(NodeLink::candidate)
                 .collect();
-            let home = match db::computer_home(&app.db, &q.bot).await {
-                Ok(home) => home,
-                Err(e) => return warn!("reading where the computer is: {e}"),
-            };
-            placement::choose(&candidates, home.as_deref())
+            if bot.computer == "e2b" {
+                placement::choose_for_cloud(&candidates)
+            } else {
+                let home = match db::computer_home(&app.db, &q.bot).await {
+                    Ok(home) => home,
+                    Err(e) => return warn!("reading where the computer is: {e}"),
+                };
+                placement::choose(&candidates, home.as_deref())
+            }
         };
         match placed {
             placement::Placement::Run { node, why } => start(app, q.run, &bot, node, why).await,
@@ -851,13 +858,29 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
         Ok(None) => return,
         Err(e) => return warn!("claiming a run: {e}"),
     };
-    if let Err(e) = db::set_computer_home(&app.db, &bot.slug, &node).await {
-        warn!("recording where the computer is: {e}");
-    }
     let thread = match db::run_thread(&app.db, run).await {
         Ok(thread) => thread,
         Err(e) => return warn!("finding the run's thread: {e}"),
     };
+    let mut spec = bot.spec();
+    if bot.computer == "e2b" {
+        match app.e2b.computer(&app.db, &bot.slug).await {
+            Ok(computer) => spec.e2b = Some(computer),
+            Err(e) => {
+                let error = format!("Couldn't get its E2B computer: {e:#}");
+                warn!(run, "{error}");
+                if let Err(e) =
+                    runs::finish(&app.db, run, claimed.fence, Outcome::Failed, Some(&error)).await
+                {
+                    warn!("finishing run: {e}");
+                }
+                lock(&app.rt).waiting.remove(&run);
+                return run_ended(app, &thread, run, RunOutcome::Failed, Some(error)).await;
+            }
+        }
+    } else if let Err(e) = db::set_computer_home(&app.db, &bot.slug, &node).await {
+        warn!("recording where the computer is: {e}");
+    }
     let attempt = Attempt {
         run,
         fence: claimed.fence,
@@ -881,13 +904,12 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
     };
     publish(app, None, Some(&bot.slug), event);
     device::run_news(app, run, device::RunNews::Running).await;
-    let mut spec = bot.spec();
     spec.mcp = connections::for_bot(app, &bot.slug).await;
     let start = ToNode::StartTurn {
         attempt,
         text: claimed.prompt,
         resumed: claimed.resumed,
-        bot: spec,
+        bot: Box::new(spec),
     };
     if link.tx.send(start).await.is_err() {
         // The link closed under us; its disconnect handler re-queues the run.

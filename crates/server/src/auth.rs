@@ -465,6 +465,7 @@ pub(crate) mod tests {
             auth: Auth::new(ORIGIN, SETUP.into()).unwrap(),
             system1: crate::system1::System1::off(),
             secrets: crate::secrets::Secrets::with_key(Some([1; 32])),
+            e2b: crate::e2b::E2b::off(),
             devices: Default::default(),
             notifier: crate::notify::Notifier::off(),
             ui_dir: String::new(),

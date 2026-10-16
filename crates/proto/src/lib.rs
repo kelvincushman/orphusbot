@@ -57,6 +57,29 @@ pub struct BotSpec {
     /// The MCP servers the owner granted this bot (DESIGN §11).
     #[serde(default)]
     pub mcp: Vec<McpServer>,
+    /// The bot's computer is this E2B sandbox, not a container on the node (DESIGN §6.2).
+    #[serde(default)]
+    pub e2b: Option<E2bComputer>,
+}
+
+/// One E2B sandbox's envd: where it answers and its access token. Scoped to
+/// that sandbox; never the E2B API key, never a model token.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct E2bComputer {
+    pub sandbox: String,
+    pub url: String,
+    pub token: Option<String>,
+}
+
+/// Keeps the token out of logs.
+impl std::fmt::Debug for E2bComputer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("E2bComputer")
+            .field("sandbox", &self.sandbox)
+            .field("url", &self.url)
+            .field("token", &self.token.as_ref().map(|_| "[secret]"))
+            .finish()
+    }
 }
 
 /// An MCP server a bot may use. Its token is the owner's secret for that
@@ -105,7 +128,7 @@ pub enum ToNode {
         attempt: Attempt,
         text: String,
         resumed: bool,
-        bot: BotSpec,
+        bot: Box<BotSpec>,
     },
     /// Extra instructions for the run in progress.
     Steer { attempt: Attempt, text: String },

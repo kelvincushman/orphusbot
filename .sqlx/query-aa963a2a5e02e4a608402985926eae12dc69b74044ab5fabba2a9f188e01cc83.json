@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select s.sandbox_id from bot_sandbox s join bot b on b.id = s.bot_id where b.slug = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sandbox_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot_sandbox",
+            "name": "sandbox_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "aa963a2a5e02e4a608402985926eae12dc69b74044ab5fabba2a9f188e01cc83"
+}

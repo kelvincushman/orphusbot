@@ -683,6 +683,7 @@ pub(crate) mod tests {
             exclude_tools: vec![],
             scope: "private".into(),
             disabled,
+            computer: "node".into(),
         }
     }
 

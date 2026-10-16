@@ -264,6 +264,8 @@ struct Bot {
     exclude_tools: Vec<String>,
     scope: String,
     disabled: bool,
+    /// `node` or `e2b`.
+    computer: String,
 }
 
 /// Everything the signed-in screens share: the bots, which one is open, every
@@ -480,6 +482,7 @@ fn BotSheet(bot: Option<Bot>, editing: RwSignal<Option<Option<Bot>>>) -> impl In
     let is_new = bot.is_none();
     let bot = bot.unwrap_or_else(|| Bot {
         scope: "private".into(),
+        computer: "node".into(),
         ..Bot::default()
     });
     let is_inbox = bot.slug == "inbox";
@@ -489,6 +492,7 @@ fn BotSheet(bot: Option<Bot>, editing: RwSignal<Option<Option<Bot>>>) -> impl In
     let model = RwSignal::new(bot.model.clone().unwrap_or_default());
     let thinking = RwSignal::new(bot.thinking.clone().unwrap_or_default());
     let team = RwSignal::new(bot.scope == "team");
+    let cloud = RwSignal::new(bot.computer == "e2b");
     let disabled = RwSignal::new(bot.disabled);
     let save = move |ev: SubmitEvent| {
         ev.prevent_default();
@@ -507,6 +511,7 @@ fn BotSheet(bot: Option<Bot>, editing: RwSignal<Option<Option<Bot>>>) -> impl In
             }
             .into(),
             disabled: disabled.get_untracked(),
+            computer: if cloud.get_untracked() { "e2b" } else { "node" }.into(),
             ..bot.clone()
         };
         ctx.run(async move {
@@ -562,6 +567,7 @@ fn BotSheet(bot: Option<Bot>, editing: RwSignal<Option<Option<Bot>>>) -> impl In
                         on:change=move |_| team.set(false) />"Private: its own home"</label>
                     <label class="inline"><input type="radio" name="scope" prop:checked=move || team.get()
                         on:change=move |_| team.set(true) />"Team: also shares the team folder"</label>
+                    <label class="inline"><input type="checkbox" bind:checked=cloud />"In E2B (the cloud) instead of on your machines"</label>
                 </fieldset>
                 {(!is_new && !is_inbox).then(|| view! {
                     <label class="inline"><input type="checkbox" bind:checked=disabled />"Disabled: takes no new work"</label>

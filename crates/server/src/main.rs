@@ -11,6 +11,7 @@ mod db;
 mod gate;
 mod links;
 mod nodes;
+mod placement;
 mod runs;
 mod screens;
 
@@ -30,7 +31,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use futures_util::{SinkExt, Stream, StreamExt};
 use orphusbot_proto::{
-    Attempt, Dialog, DialogKind, FromNode, Role, RunOutcome, ThreadEvent, ToNode,
+    Attempt, Dialog, DialogKind, FromNode, NodeView, Role, RunOutcome, ThreadEvent, ToNode,
 };
 use runs::{Outcome, Submitted};
 use serde::Deserialize;
@@ -65,7 +66,25 @@ struct NodeLink {
     kick: Arc<Notify>,
     /// Binary screen frames for the node (see `screens`).
     screen: mpsc::Sender<Vec<u8>>,
+    /// From its latest heartbeat; until the first one it counts as idle and ready.
+    load: u32,
+    on_battery: bool,
+    quiet: bool,
 }
+
+impl NodeLink {
+    fn candidate(&self) -> placement::Candidate {
+        placement::Candidate {
+            name: self.name.clone(),
+            load: self.load,
+            on_battery: self.on_battery,
+            quiet: self.quiet,
+        }
+    }
+}
+
+// ponytail: one bot until bots arrive (M3); its computer and runs are keyed by this name.
+const BOT: &str = "orphus";
 
 /// A dialog the engine is blocked on.
 #[derive(Clone)]
@@ -81,14 +100,24 @@ struct Pending {
 /// `active` only lets the server drop stale frames without a query per delta.
 #[derive(Default)]
 struct Runtime {
-    node: Option<NodeLink>,
+    /// Connected nodes by name.
+    nodes: HashMap<String, NodeLink>,
     next_conn: u64,
-    active: Option<Attempt>,
+    /// The running attempt and the node it's on.
+    active: Option<(Attempt, String)>,
+    /// Why the queued run is waiting, as last told to clients.
+    waiting: Option<String>,
     /// Open dialogs by Orphus request id.
     dialogs: HashMap<String, Pending>,
-    /// Open screen viewers by stream number.
-    screens: HashMap<u64, mpsc::Sender<screens::ToViewer>>,
+    /// Open screen viewers by stream number, with the node serving each.
+    screens: HashMap<u64, (String, mpsc::Sender<screens::ToViewer>)>,
     next_screen: u64,
+}
+
+impl Runtime {
+    fn active(&self) -> Option<Attempt> {
+        self.active.as_ref().map(|(a, _)| *a)
+    }
 }
 
 /// Title the bridge extension gives its approval requests (bridge/orphusbot-bridge.ts).
@@ -255,7 +284,8 @@ async fn send_message(
         .map_err(|e| internal("queueing run", e))?
     {
         Submitted::Queued(run) => {
-            publish(&app, None, ThreadEvent::RunQueued { run });
+            lock(&app.rt).waiting = None;
+            publish(&app, None, ThreadEvent::RunQueued { run, waiting: None });
             dispatch(&app).await;
         }
         Submitted::Joined(_) => {}
@@ -285,7 +315,7 @@ async fn cancel_run(State(app): State<Shared>) -> Result<StatusCode, ApiError> {
     }
     {
         let mut rt = lock(&app.rt);
-        if rt.active == Some(attempt) {
+        if rt.active() == Some(attempt) {
             rt.active = None;
         }
     }
@@ -503,38 +533,95 @@ async fn on_dialog(app: &App, attempt: Attempt, request: Value) {
 /// The node's sender if it is working on exactly this attempt.
 fn node_for(app: &App, attempt: Attempt) -> Option<mpsc::Sender<ToNode>> {
     let rt = lock(&app.rt);
-    if rt.active == Some(attempt) {
-        rt.node.as_ref().map(|n| n.tx.clone())
-    } else {
-        None
+    match &rt.active {
+        Some((a, node)) if *a == attempt => rt.nodes.get(node).map(|n| n.tx.clone()),
+        _ => None,
     }
 }
 
-/// Leases the next queued run to the connected node, if it is free.
+/// Sends every client the node list.
+fn publish_nodes(app: &App) {
+    publish(app, None, nodes_event(&lock(&app.rt)));
+}
+
+fn nodes_event(rt: &Runtime) -> ThreadEvent {
+    let mut nodes: Vec<NodeView> = rt
+        .nodes
+        .values()
+        .map(|n| {
+            let held = n.candidate().held_back();
+            NodeView {
+                name: n.name.clone(),
+                ready: held.is_none(),
+                note: held.map(str::to_owned),
+            }
+        })
+        .collect();
+    nodes.sort_by(|a, b| a.name.cmp(&b.name));
+    ThreadEvent::Nodes { nodes }
+}
+
+/// Places the next queued run on a node (DESIGN §6.3), or says why it waits.
 async fn dispatch(app: &App) {
-    let node = {
+    let candidates: Vec<placement::Candidate> = {
         let rt = lock(&app.rt);
-        match (&rt.node, rt.active) {
-            (Some(node), None) => node.clone(),
-            _ => return,
+        if rt.active.is_some() {
+            return;
+        }
+        rt.nodes.values().map(NodeLink::candidate).collect()
+    };
+    let home = match db::computer_home(&app.db, BOT).await {
+        Ok(home) => home,
+        Err(e) => return warn!("reading where the computer is: {e}"),
+    };
+    let (node, why) = match placement::choose(&candidates, home.as_deref()) {
+        placement::Placement::Run { node, why } => (node, why),
+        placement::Placement::Wait { why } => {
+            let changed = {
+                let mut rt = lock(&app.rt);
+                let changed = rt.waiting.as_deref() != Some(why.as_str());
+                rt.waiting = Some(why.clone());
+                changed
+            };
+            if changed && let Ok(Some(run)) = runs::queued(&app.db).await {
+                let event = ThreadEvent::RunQueued {
+                    run,
+                    waiting: Some(why),
+                };
+                publish(app, None, event);
+            }
+            return;
         }
     };
-    let claimed = match runs::claim(&app.db, &node.name).await {
+    let Some(link) = lock(&app.rt).nodes.get(&node).cloned() else {
+        return;
+    };
+    let claimed = match runs::claim(&app.db, &node).await {
         Ok(Some(c)) => c,
         Ok(None) => return,
         Err(e) => return warn!("claiming a run: {e}"),
     };
+    if let Err(e) = db::set_computer_home(&app.db, BOT, &node).await {
+        warn!("recording where the computer is: {e}");
+    }
     let attempt = Attempt {
         run: claimed.run,
         fence: claimed.fence,
     };
-    lock(&app.rt).active = Some(attempt);
+    {
+        let mut rt = lock(&app.rt);
+        rt.active = Some((attempt, node.clone()));
+        rt.waiting = None;
+    }
+    info!(run = claimed.run, %node, why, "placed run");
     publish(
         app,
         None,
         ThreadEvent::RunStarted {
             run: claimed.run,
             resumed: claimed.resumed,
+            node: Some(node),
+            why: Some(why.to_owned()),
         },
     );
     let start = ToNode::StartTurn {
@@ -542,22 +629,22 @@ async fn dispatch(app: &App) {
         text: claimed.prompt,
         resumed: claimed.resumed,
     };
-    if node.tx.send(start).await.is_err() {
+    if link.tx.send(start).await.is_err() {
         // The link closed under us; its disconnect handler re-queues the run.
         warn!(run = claimed.run, "node went away while starting a run");
     }
 }
 
-/// Renews leases for the connected node and re-queues lapsed ones, forever.
+/// Renews leases for connected nodes and re-queues lapsed ones, forever.
 async fn reconcile_forever(app: Shared) {
     let mut tick = tokio::time::interval(RECONCILE_EVERY);
     loop {
         tick.tick().await;
-        let node = lock(&app.rt).node.as_ref().map(|n| n.name.clone());
-        if let Some(name) = node
-            && let Err(e) = runs::renew(&app.db, &name).await
-        {
-            warn!("renewing leases: {e}");
+        let names: Vec<String> = lock(&app.rt).nodes.keys().cloned().collect();
+        for name in names {
+            if let Err(e) = runs::renew(&app.db, &name).await {
+                warn!("renewing leases: {e}");
+            }
         }
         match runs::release(&app.db, None).await {
             Ok(released) if !released.is_empty() => {
@@ -575,7 +662,7 @@ async fn announce_released(app: &App, released: Vec<runs::Released>) {
     for r in released {
         {
             let mut rt = lock(&app.rt);
-            if rt.active.is_some_and(|a| a.run == r.run) {
+            if rt.active().is_some_and(|a| a.run == r.run) {
                 rt.active = None;
             }
         }
@@ -584,7 +671,12 @@ async fn announce_released(app: &App, released: Vec<runs::Released>) {
             let error = Some("The bot lost its node too many times".to_owned());
             run_ended(app, r.run, RunOutcome::Failed, error).await;
         } else {
-            publish(app, None, ThreadEvent::RunQueued { run: r.run });
+            lock(&app.rt).waiting = None;
+            let event = ThreadEvent::RunQueued {
+                run: r.run,
+                waiting: None,
+            };
+            publish(app, None, event);
         }
     }
 }
@@ -644,13 +736,13 @@ async fn events(
 
 /// The live-only state a newly connected client needs: node status and the active run.
 async fn current_state(app: &App) -> sqlx::Result<Vec<ThreadEvent>> {
-    let node = lock(&app.rt).node.as_ref().map(|n| n.name.clone());
-    let mut out = vec![ThreadEvent::NodeStatus {
-        online: node.is_some(),
-        node,
-    }];
+    let (nodes, waiting) = {
+        let rt = lock(&app.rt);
+        (nodes_event(&rt), rt.waiting.clone())
+    };
+    let mut out = vec![nodes];
     let active = sqlx::query!(
-        r#"select id, status::text as "status!", attempts from run
+        r#"select id, status::text as "status!", attempts, node from run
            where thread_id = $1 and status in ('queued', 'running')"#,
         db::THREAD
     )
@@ -661,9 +753,11 @@ async fn current_state(app: &App) -> sqlx::Result<Vec<ThreadEvent>> {
             ThreadEvent::RunStarted {
                 run: r.id,
                 resumed: r.attempts > 1,
+                node: r.node,
+                why: None,
             }
         } else {
-            ThreadEvent::RunQueued { run: r.id }
+            ThreadEvent::RunQueued { run: r.id, waiting }
         });
     }
     Ok(out)
@@ -743,32 +837,30 @@ async fn run_node(app: Shared, socket: WebSocket) {
         let mut rt = lock(&app.rt);
         rt.next_conn += 1;
         let conn = rt.next_conn;
-        rt.active = None;
+        if rt.active.as_ref().is_some_and(|(_, n)| *n == name) {
+            rt.active = None;
+        }
         let link = NodeLink {
             conn,
             name: name.clone(),
             tx,
             kick: kick.clone(),
             screen: screen_tx,
+            load: 0,
+            on_battery: false,
+            quiet: false,
         };
-        (conn, rt.node.replace(link))
+        (conn, rt.nodes.insert(name.clone(), link))
     };
     if replaced.is_some() {
-        warn!("a second node connected; the newest one wins (M1 supports one node)");
+        warn!(node = %name, "node reconnected; the newer link wins");
     }
     // Anything leased under this name belongs to an earlier connection that can't finish it.
     match runs::release(&app.db, Some(&name)).await {
         Ok(released) => announce_released(&app, released).await,
         Err(e) => warn!("releasing runs from an earlier connection: {e}"),
     }
-    publish(
-        &app,
-        None,
-        ThreadEvent::NodeStatus {
-            online: true,
-            node: Some(name.clone()),
-        },
-    );
+    publish_nodes(&app);
     dispatch(&app).await;
 
     let mut ping = tokio::time::interval(Duration::from_secs(30));
@@ -785,7 +877,7 @@ async fn run_node(app: Shared, socket: WebSocket) {
                 last_heard = Instant::now();
                 match frame {
                     WsMessage::Text(text) => match serde_json::from_str::<FromNode>(&text) {
-                        Ok(msg) => on_node_message(&app, msg).await,
+                        Ok(msg) => on_node_message(&app, &name, msg).await,
                         Err(e) => warn!("unreadable frame from node: {e}"),
                     },
                     WsMessage::Binary(data) => screens::from_node(&app, &data).await,
@@ -813,25 +905,20 @@ async fn run_node(app: Shared, socket: WebSocket) {
     // Only clean up if this connection is still the current one.
     let was_current = {
         let mut rt = lock(&app.rt);
-        let current = rt.node.as_ref().is_some_and(|n| n.conn == conn);
+        let current = rt.nodes.get(&name).is_some_and(|n| n.conn == conn);
         if current {
-            rt.node = None;
-            rt.active = None;
-            // Dropping the senders ends every viewer's stream.
-            rt.screens.clear();
+            rt.nodes.remove(&name);
+            if rt.active.as_ref().is_some_and(|(_, n)| *n == name) {
+                rt.active = None;
+            }
+            // Dropping the senders ends the viewers' streams on this node.
+            rt.screens.retain(|_, (node, _)| *node != name);
         }
         current
     };
     if was_current {
         info!(node = %name, "node disconnected");
-        publish(
-            &app,
-            None,
-            ThreadEvent::NodeStatus {
-                online: false,
-                node: None,
-            },
-        );
+        publish_nodes(&app);
         match runs::release(&app.db, Some(&name)).await {
             Ok(released) => announce_released(&app, released).await,
             Err(e) => warn!("re-queueing runs: {e}"),
@@ -839,9 +926,28 @@ async fn run_node(app: Shared, socket: WebSocket) {
     }
 }
 
-async fn on_node_message(app: &App, msg: FromNode) {
-    let active = lock(&app.rt).active;
+async fn on_node_message(app: &App, node: &str, msg: FromNode) {
+    let active = lock(&app.rt).active();
     match msg {
+        FromNode::Heartbeat {
+            load,
+            on_battery,
+            quiet,
+        } => {
+            let changed = {
+                let mut rt = lock(&app.rt);
+                let Some(link) = rt.nodes.get_mut(node) else {
+                    return;
+                };
+                let before = link.candidate().held_back();
+                (link.load, link.on_battery, link.quiet) = (load, on_battery, quiet);
+                before != link.candidate().held_back()
+            };
+            if changed {
+                publish_nodes(app);
+            }
+            dispatch(app).await;
+        }
         FromNode::Hello { .. } | FromNode::Enrol { .. } => {}
         FromNode::ScreenClosed { stream, error } => screens::closed(app, stream, error).await,
         FromNode::Delta { attempt, text } if active == Some(attempt) => {

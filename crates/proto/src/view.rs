@@ -2,7 +2,7 @@
 //! (DESIGN §12). Every client uses this one function, so the web, desktop
 //! and Android apps can't disagree about what happened.
 
-use crate::{Dialog, Role, RunOutcome, ThreadEvent};
+use crate::{Dialog, NodeView, Role, RunOutcome, ThreadEvent};
 
 /// One entry in the conversation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,14 +33,23 @@ pub enum RunState {
     Running { resumed: bool },
 }
 
+/// Where the run is, or why it waits, for the status line.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RunWhere {
+    pub node: Option<String>,
+    /// The placement rule that chose the node, or why the run is waiting.
+    pub note: Option<String>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ThreadView {
     pub items: Vec<Item>,
     /// Assistant text still streaming in, shown after `items`.
     pub streaming: Option<String>,
     pub run: RunState,
-    /// The connected node's name, if one is online.
-    pub node: Option<String>,
+    pub run_where: RunWhere,
+    /// The connected nodes.
+    pub nodes: Vec<NodeView>,
 }
 
 impl ThreadView {
@@ -56,13 +65,23 @@ impl ThreadView {
             ThreadEvent::Delta { text, .. } => {
                 self.streaming.get_or_insert_default().push_str(&text);
             }
-            ThreadEvent::RunQueued { .. } => {
+            ThreadEvent::RunQueued { waiting, .. } => {
                 self.run = RunState::Queued;
+                self.run_where = RunWhere {
+                    node: None,
+                    note: waiting,
+                };
                 self.streaming = None;
             }
-            ThreadEvent::RunStarted { resumed, .. } => self.run = RunState::Running { resumed },
+            ThreadEvent::RunStarted {
+                resumed, node, why, ..
+            } => {
+                self.run = RunState::Running { resumed };
+                self.run_where = RunWhere { node, note: why };
+            }
             ThreadEvent::RunEnded { outcome, error, .. } => {
                 self.run = RunState::Idle;
+                self.run_where = RunWhere::default();
                 // Keep what streamed before a stop or failure; it isn't replayed.
                 if let Some(text) = self.streaming.take().filter(|t| !t.is_empty()) {
                     self.items.push(Item::Message {
@@ -83,9 +102,7 @@ impl ThreadView {
                     self.items.push(Item::Notice { text, error });
                 }
             }
-            ThreadEvent::NodeStatus { online, node } => {
-                self.node = node.filter(|_| online);
-            }
+            ThreadEvent::Nodes { nodes } => self.nodes = nodes,
             ThreadEvent::DialogOpened { dialog } => self.items.push(Item::Card {
                 dialog,
                 outcome: None,
@@ -110,19 +127,37 @@ impl ThreadView {
             .count()
     }
 
-    /// One line for the header, such as "laptop online · working…".
+    /// One line for the header, such as "laptop online · working on laptop…".
     pub fn status(&self) -> String {
-        let node = match &self.node {
-            Some(name) => format!("{name} online"),
-            None => "No node connected".to_owned(),
+        let nodes = if self.nodes.is_empty() {
+            "No node connected".to_owned()
+        } else {
+            let list: Vec<String> = self
+                .nodes
+                .iter()
+                .map(|n| match (&n.note, n.ready) {
+                    (Some(note), false) => format!("{} ({note})", n.name),
+                    _ => n.name.clone(),
+                })
+                .collect();
+            format!("{} online", list.join(", "))
         };
-        let run = match self.run {
-            RunState::Idle => "",
-            RunState::Queued => " · waiting for a node",
-            RunState::Running { resumed: true } => " · resuming after an interruption…",
-            RunState::Running { resumed: false } => " · working…",
+        let on = self
+            .run_where
+            .node
+            .as_ref()
+            .map(|n| format!(" on {n}"))
+            .unwrap_or_default();
+        let run = match (self.run, &self.run_where.note) {
+            (RunState::Idle, _) => String::new(),
+            (RunState::Queued, Some(why)) => format!(" · waiting: {why}"),
+            (RunState::Queued, None) => " · waiting for a node".to_owned(),
+            (RunState::Running { resumed: true }, _) => {
+                format!(" · resuming{on} after an interruption…")
+            }
+            (RunState::Running { resumed: false }, _) => format!(" · working{on}…"),
         };
-        format!("{node}{run}")
+        format!("{nodes}{run}")
     }
 
     /// The latest message, for the sidebar preview.
@@ -138,6 +173,14 @@ impl ThreadView {
 mod tests {
     use super::*;
     use crate::DialogKind;
+
+    fn node(name: &str, ready: bool, note: Option<&str>) -> NodeView {
+        NodeView {
+            name: name.into(),
+            ready,
+            note: note.map(Into::into),
+        }
+    }
 
     fn fold(events: Vec<ThreadEvent>) -> ThreadView {
         let mut view = ThreadView::default();
@@ -155,18 +198,22 @@ mod tests {
     #[test]
     fn streamed_text_is_replaced_by_the_final_message() {
         let view = fold(vec![
-            ThreadEvent::NodeStatus {
-                online: true,
-                node: Some("laptop".into()),
+            ThreadEvent::Nodes {
+                nodes: vec![node("laptop", true, None)],
             },
             ThreadEvent::Message {
                 role: Role::User,
                 text: "hi".into(),
             },
-            ThreadEvent::RunQueued { run: 1 },
+            ThreadEvent::RunQueued {
+                run: 1,
+                waiting: None,
+            },
             ThreadEvent::RunStarted {
                 run: 1,
                 resumed: false,
+                node: Some("laptop".into()),
+                why: Some("least busy machine".into()),
             },
             ThreadEvent::Delta {
                 run: 1,
@@ -178,7 +225,7 @@ mod tests {
             },
         ]);
         assert_eq!(view.streaming.as_deref(), Some("Hello"));
-        assert_eq!(view.status(), "laptop online · working…");
+        assert_eq!(view.status(), "laptop online · working on laptop…");
 
         let mut view = view;
         view.apply(ThreadEvent::Message {
@@ -205,6 +252,8 @@ mod tests {
             ThreadEvent::RunStarted {
                 run: 1,
                 resumed: true,
+                node: None,
+                why: None,
             },
             ThreadEvent::Delta {
                 run: 1,
@@ -261,10 +310,21 @@ mod tests {
         assert!(
             matches!(&view.items[0], Item::Card { outcome: Some(o), .. } if o == "Allowed once")
         );
-        view.apply(ThreadEvent::NodeStatus {
-            online: false,
-            node: None,
-        });
+        view.apply(ThreadEvent::Nodes { nodes: vec![] });
         assert_eq!(view.status(), "No node connected");
+        view.apply(ThreadEvent::Nodes {
+            nodes: vec![
+                node("gpu-box", true, None),
+                node("laptop", false, Some("on battery")),
+            ],
+        });
+        view.apply(ThreadEvent::RunQueued {
+            run: 2,
+            waiting: Some("gpu-box is busy".into()),
+        });
+        assert_eq!(
+            view.status(),
+            "gpu-box, laptop (on battery) online · waiting: gpu-box is busy"
+        );
     }
 }

@@ -13,7 +13,7 @@ use orphusbot_proto::{ToNode, screen_frame, split_screen_frame};
 use tokio::sync::mpsc;
 use tracing::warn;
 
-use crate::{App, Shared, lock};
+use crate::{App, BOT, Shared, db, lock};
 
 /// Bytes for a viewer, or the reason its stream ended.
 pub type ToViewer = Result<Vec<u8>, String>;
@@ -28,16 +28,24 @@ async fn relay(app: Shared, socket: WebSocket) {
     let (mut sink, mut source) = socket.split();
     // ponytail: a viewer that reads slowly slows the whole node link; per-stream flow control if it bites.
     let (to_viewer, mut from_node) = mpsc::channel::<ToViewer>(256);
+    // The screen is on whichever node holds the bot's computer.
+    let home = db::computer_home(&app.db, BOT).await.ok().flatten();
     let (stream, link) = {
         let mut rt = lock(&app.rt);
         rt.next_screen += 1;
         let stream = rt.next_screen;
-        rt.screens.insert(stream, to_viewer);
-        (stream, rt.node.clone())
+        let link = home.as_ref().and_then(|h| rt.nodes.get(h)).cloned();
+        if let Some(link) = &link {
+            rt.screens.insert(stream, (link.name.clone(), to_viewer));
+        }
+        (stream, link)
     };
     let mut ended = "The screen closed".to_owned();
     match &link {
-        None => ended = "No node is connected".into(),
+        None if home.is_none() => {
+            ended = "The bot has no computer yet; it gets one with its first task".into()
+        }
+        None => ended = "The node with the bot's computer isn't connected".into(),
         Some(link) if link.tx.send(ToNode::ScreenOpen { stream }).await.is_ok() => loop {
             tokio::select! {
                 data = from_node.recv() => match data {
@@ -74,7 +82,7 @@ pub async fn from_node(app: &App, frame: &[u8]) {
     let Some((stream, data)) = split_screen_frame(frame) else {
         return warn!("screen frame too short");
     };
-    let viewer = lock(&app.rt).screens.get(&stream).cloned();
+    let viewer = lock(&app.rt).screens.get(&stream).map(|(_, v)| v.clone());
     if let Some(viewer) = viewer {
         let _ = viewer.send(Ok(data.to_vec())).await;
     }
@@ -82,7 +90,7 @@ pub async fn from_node(app: &App, frame: &[u8]) {
 
 /// The node ended a stream, perhaps because the computer has no screen.
 pub async fn closed(app: &App, stream: u64, error: Option<String>) {
-    let viewer = lock(&app.rt).screens.remove(&stream);
+    let viewer = lock(&app.rt).screens.remove(&stream).map(|(_, v)| v);
     if let (Some(viewer), Some(error)) = (viewer, error) {
         let _ = viewer.send(Err(error)).await;
     }

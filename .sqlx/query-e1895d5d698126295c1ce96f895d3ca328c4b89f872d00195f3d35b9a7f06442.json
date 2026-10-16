@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select node from bot_computer where bot = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "node",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot_computer",
+            "name": "node"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e1895d5d698126295c1ce96f895d3ca328c4b89f872d00195f3d35b9a7f06442"
+}

@@ -85,6 +85,15 @@ pub enum FromNode {
     },
     /// A chunk of assistant text while it streams.
     Delta { attempt: Attempt, text: String },
+    /// Every 10 s: what placement needs to know (DESIGN §4.1, §6.3).
+    Heartbeat {
+        /// One-minute load average as a percentage of the CPUs (can exceed 100).
+        load: u32,
+        /// Running on battery (a laptop off its charger).
+        on_battery: bool,
+        /// Inside the node's quiet hours.
+        quiet: bool,
+    },
     /// The screen stream ended, or couldn't start (`error` says why).
     ScreenClosed { stream: u64, error: Option<String> },
     /// One complete assistant message. A run that uses tools can produce several.
@@ -160,22 +169,29 @@ pub enum ThreadEvent {
         outcome: RunOutcome,
         error: Option<String>,
     },
-    /// The run is waiting for a node.
+    /// The run is waiting for a node; `waiting` says why, when there are nodes.
     RunQueued {
         run: i64,
+        #[serde(default)]
+        waiting: Option<String>,
     },
-    /// A node is working on the run. `resumed` means an earlier attempt was interrupted.
+    /// A node is working on the run. `resumed` means an earlier attempt was
+    /// interrupted. `node` and `why` say where it runs and which placement rule chose it.
     RunStarted {
         run: i64,
         resumed: bool,
+        #[serde(default)]
+        node: Option<String>,
+        #[serde(default)]
+        why: Option<String>,
     },
     Delta {
         run: i64,
         text: String,
     },
-    NodeStatus {
-        online: bool,
-        node: Option<String>,
+    /// The connected nodes, sent whenever one connects, leaves or changes state.
+    Nodes {
+        nodes: Vec<NodeView>,
     },
     DialogOpened {
         dialog: Dialog,
@@ -185,6 +201,16 @@ pub enum ThreadEvent {
         id: String,
         outcome: String,
     },
+}
+
+/// A connected node, as clients see it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NodeView {
+    pub name: String,
+    /// Placement may give it work.
+    pub ready: bool,
+    /// Why it isn't ready, such as "on battery".
+    pub note: Option<String>,
 }
 
 /// How a run ended, as clients see it.
@@ -243,6 +269,12 @@ mod tests {
             r#"{"type":"run_ended","run":3,"outcome":"cancelled","error":null}"#
         );
         assert!(ev.is_persisted());
-        assert!(!ThreadEvent::RunQueued { run: 1 }.is_persisted());
+        assert!(
+            !ThreadEvent::RunQueued {
+                run: 1,
+                waiting: None
+            }
+            .is_persisted()
+        );
     }
 }

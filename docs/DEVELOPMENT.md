@@ -92,6 +92,7 @@ All settings are environment variables.
 
 | Variable | Default | Meaning |
 |---|---|---|
+| `ORPHUSBOT_QUIET_HOURS` | none | Local hours when this node takes no new work, such as `22-7` |
 | `ORPHUSBOT_RUNTIME` | `podman` | The container runtime for bots' computers, or `none` to run tools on this machine (not isolated) |
 | `ORPHUSBOT_COMPUTER_IMAGE` | `docker.io/library/debian:trixie-slim` | Image for a bot's computer |
 | `ORPHUSBOT_NODE_KEY` | `~/.config/orphusbot/node.json` | The node's name and private key, written by `enrol` |
@@ -150,7 +151,7 @@ These are known simplifications, each marked `ponytail:` in the code, with the m
 
 | Simplification | Replaced in |
 |---|---|
-| One thread, one bot, one node | M1–M3 |
+| One thread and one bot (any number of nodes since M2.3) | M3 |
 | Streaming text isn't stored; only finished messages are replayed after a reconnect | M2 (batched progress events) |
 | Read-only tools still round-trip to the server before running | When it measurably slows bots down |
 | Live events fan out inside one server process, not through Postgres `NOTIFY` | When there's more than one server process |

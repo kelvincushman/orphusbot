@@ -13,6 +13,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **Several machines and placement (M2.3):** any number of nodes can be connected at once. A bot's work goes back to the machine holding its computer; otherwise to the least busy machine that may work. A laptop on battery, or a node in its quiet hours (`ORPHUSBOT_QUIET_HOURS=22-7`), takes no new work, and a waiting task says why. The chat header shows which machines are online and where the bot is working.
 - **Bot screens and takeover (M2.2):** with the new desktop image (`images/desktop`), a bot's computer has a screen with Chromium. Press **Screen** in the chat to watch it live, and **Take control** to use it yourself. A bot can ask you to take over (for a login or a captcha); a card appears with **Open screen** and **Done**, and the bot carries on when you're finished. Screens go through the server and the node's existing link, so the computer opens no ports.
 - **Bot computers (M2.1):** a bot's tools (read, write, edit, bash) now run in its own rootless Podman container, not on your machine. The container has no capabilities, a read-only system, its own home folder, resource limits, and internet access but no access to your LAN or NetBird addresses. Your model logins stay on the host. Set `ORPHUSBOT_RUNTIME=none` to keep the old behaviour.
 - **Desktop app (M1.5):** `orphusbot-desktop`, a Tauri window onto your server's web UI. It stays on your server and opens other links in your browser; the first run asks for the server's address.

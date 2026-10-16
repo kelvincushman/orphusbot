@@ -13,6 +13,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **MCP servers that run as a command (M6.4):** a connection can be a command such as `npx -y @modelcontextprotocol/server-github`, with the variable its token goes in (`GITHUB_TOKEN`). It runs on your machine only if that node lists the program in `ORPHUSBOT_MCP_COMMANDS`.
 - **Capture profiles (M4.7):** Captures → Profile. **Focus support** (the default) keeps everything, sends digests at 10:00, 14:00 and 18:00 plus a 21:00 review, files ideas and things to remember by itself (Undo for a day), brings a dismissed commitment back once after three days, and nudges you 30 and 10 minutes before an appointment with a time and when it starts, by push and on your wrist. **Standard** keeps commitments and appointments with one digest at 18:00. Nothing is ever called overdue: it's "still open".
 - **Screens for computers in E2B (M4.6):** watch and take over a bot's E2B computer from the Screen button, like a local one, once the desktop image is built as an E2B template (docs/DEVELOPMENT.md).
 - **Fleets (M6.3):** start a message or a routine with `/fleet <name> <task>` (for example `/fleet research-team compare e-bike batteries`) and an Orphus fleet does the work. Every helper it starts asks you first, and every helper's actions are checked and run in the bot's computer, just like the bot's own. Orphus workflows stay switched off.

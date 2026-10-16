@@ -1635,14 +1635,17 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
         RwSignal::new(String::new()),
         RwSignal::new(String::new()),
     );
+    let conn_env = RwSignal::new(String::new());
     let add_connection = move |ev: SubmitEvent| {
         ev.prevent_default();
-        let body = json!({ "name": conn_name.get_untracked(), "url": conn_url.get_untracked(), "token": conn_token.get_untracked() });
+        let body = json!({ "name": conn_name.get_untracked(), "url": conn_url.get_untracked(),
+                           "token": conn_token.get_untracked(), "token_env": conn_env.get_untracked() });
         ctx.run(async move {
             api::post("/api/connections", &body).await?;
             conn_name.set(String::new());
             conn_url.set(String::new());
             conn_token.set(String::new());
+            conn_env.set(String::new());
             load();
             Ok(())
         })
@@ -1789,13 +1792,13 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
                 </div>
                 <div>
                     <h3>"Connections"</h3>
-                    <p class="muted">"MCP servers your bots may use. Pick which bots get each one; every call that does something asks you first, and the bot sees only a search tool until it needs one."</p>
+                    <p class="muted">"MCP servers your bots may use, by address or as a command that runs on your machine (only programs a node lists in ORPHUSBOT_MCP_COMMANDS). Pick which bots get each one; every call that does something asks you first, and the bot sees only a search tool until it needs one."</p>
                     <ul>
                         {move || connections.with(|c| c["connections"].as_array().cloned().unwrap_or_default()).into_iter().map(|c| {
                             let id = c["id"].as_i64().unwrap_or_default();
                             let granted: Vec<String> = c["bots"].as_array().into_iter().flatten().filter_map(|b| b.as_str().map(str::to_owned)).collect();
                             let token = if c["has_token"] == true { " · token saved" } else { "" };
-                            let detail = format!("{}{token}", c["url"].as_str().unwrap_or_default());
+                            let detail = format!("{}{token}", c["target"].as_str().unwrap_or_default());
                             view! {
                                 <li>
                                     <span>{c["name"].as_str().unwrap_or_default().to_owned()}<small>{detail}</small>
@@ -1817,8 +1820,11 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
                     </ul>
                     <form class="row" on:submit=add_connection>
                         <input aria-label="Connection name" placeholder="pa" maxlength="24" required bind:value=conn_name style="width: 7rem" />
-                        <input aria-label="Server address" type="url" placeholder="https://pa.example.com/mcp" required bind:value=conn_url style="flex: 1" />
+                        <input aria-label="Server address" placeholder="https://pa.example.com/mcp, or npx -y some-mcp-server" required bind:value=conn_url style="flex: 1" />
                         <input aria-label="Token" type="password" placeholder="Token (optional)" autocomplete="off" bind:value=conn_token style="width: 10rem" />
+                        {move || (!conn_url.get().trim().starts_with("http")).then(|| view! {
+                            <input aria-label="Token variable" placeholder="GITHUB_TOKEN" maxlength="64" bind:value=conn_env style="width: 9rem" />
+                        })}
                         <button class="primary">"Add"</button>
                     </form>
                     {move || (connections.with(|c| c["secrets"] == false)).then(|| view! {

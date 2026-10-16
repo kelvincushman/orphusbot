@@ -47,6 +47,12 @@ const home = process.env.ORPHUSBOT_COMPUTER_HOME ?? "/home/bot";
 // Plus `mcp`, Orphus's MCP gateway, when the owner granted the bot a connection:
 // it only talks to those servers, so it is safe to run outside the computer.
 const COMPUTER_TOOLS = ["read", "write", "edit", "bash", "request_takeover", "share_file", ...(process.env.ORPHUSBOT_MCP ? ["mcp"] : [])];
+/**
+ * Tools that run helper agents. Their helpers' own tool calls never reach this
+ * gate (checked: a subagent's bash ran unasked), so they are blocked everywhere,
+ * even without a computer (DECISIONS D-030).
+ */
+const UNGATED_HELPERS = ["subagent", "workflow", "fleet"];
 const IMAGES: Record<string, string> = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
 };
@@ -151,6 +157,9 @@ export default function (pi: ExtensionAPI) {
   pi.on("tool_call", async (event, ctx) => {
     if (ctx.mode !== "rpc") {
       return { block: true, reason: "orphusbot-bridge only runs under orphusbot-node." };
+    }
+    if (UNGATED_HELPERS.includes(event.toolName)) {
+      return { block: true, reason: `${event.toolName} starts helpers whose actions OrphusBot can't check, so it is switched off. Do the work yourself.` };
     }
     // Anything else (an MCP tool, another extension's tool) would run on the host.
     if (computer && !COMPUTER_TOOLS.includes(event.toolName)) {

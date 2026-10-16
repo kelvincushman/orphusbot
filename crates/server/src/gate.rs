@@ -72,9 +72,19 @@ async fn gate_state(db: &PgPool, call: &Call<'_>) -> sqlx::Result<String> {
     .to_string())
 }
 
+/// Tools whose helper agents act without coming back through this gate
+/// (DECISIONS D-030). The bridge blocks them; this is the second lock.
+const UNGATED_HELPERS: &[&str] = &["subagent", "workflow", "fleet"];
+
 pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Result<Verdict> {
     if READ_ONLY.contains(&call.tool) {
         return Ok(Verdict::Allow);
+    }
+    if UNGATED_HELPERS.contains(&call.tool) {
+        return Ok(Verdict::Deny(format!(
+            "{} starts helpers whose actions OrphusBot can't check, so it isn't allowed. Do the work yourself.",
+            call.tool
+        )));
     }
 
     // Did an earlier attempt of this run make the same call?
@@ -281,6 +291,22 @@ mod tests {
             decide(&db, &call(a, "c3", "write", &input)).await.unwrap(),
             Verdict::Allow
         );
+    }
+
+    #[sqlx::test]
+    async fn helpers_that_skip_the_gate_are_denied_even_with_a_rule(db: PgPool) {
+        let (_, a) = run_with_attempts(&db).await;
+        sqlx::query!("insert into approval_rule (tool, effect) values ('subagent', 'allow')")
+            .execute(&db)
+            .await
+            .unwrap();
+        let input = json!({"agent": "worker", "task": "x"});
+        for tool in ["subagent", "workflow", "fleet"] {
+            assert!(matches!(
+                decide(&db, &call(a, "h1", tool, &input)).await.unwrap(),
+                Verdict::Deny(_)
+            ));
+        }
     }
 
     #[sqlx::test]

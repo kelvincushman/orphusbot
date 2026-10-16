@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into approval_rule (tool, effect) values ($1, 'allow')\n             on conflict (tool) do update set effect = 'allow'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "309d2c45c728462c409505ff5591ac590512028954aec722bb88143692bf8991"
+}

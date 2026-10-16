@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select o.body -> 'dialog' ->> 'id' as \"id!\" from event o\n           where o.thread_id = $1 and o.body ->> 'type' = 'dialog_opened'\n             and not exists (select 1 from event c\n                             where c.thread_id = o.thread_id and c.body ->> 'type' = 'dialog_closed'\n                               and c.body ->> 'id' = o.body -> 'dialog' ->> 'id')",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1727b9e97d90cf77969ddb0a6221d9de5ca198a548f1525cc090a9bc77d1be1c"
+}

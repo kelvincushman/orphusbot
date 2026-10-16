@@ -208,13 +208,10 @@ mod tests {
     use super::*;
 
     async fn status(db: &PgPool, run: i64) -> String {
-        sqlx::query_scalar!(
-            r#"select status::text as "s!" from run where id = $1"#,
-            run
-        )
-        .fetch_one(db)
-        .await
-        .unwrap()
+        sqlx::query_scalar!(r#"select status::text as "s!" from run where id = $1"#, run)
+            .fetch_one(db)
+            .await
+            .unwrap()
     }
 
     #[sqlx::test]

@@ -4,6 +4,7 @@
 //! the browser when the Leptos UI arrives (DESIGN §2).
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// Identifies one attempt at a run. A node tags everything it reports with
 /// this; the server ignores reports whose fence is no longer current
@@ -28,6 +29,9 @@ pub enum ToNode {
     Steer { attempt: Attempt, text: String },
     /// Stop the run if it is still going.
     Abort { attempt: Attempt },
+    /// Answer to a dialog the engine opened: a complete Orphus
+    /// `extension_ui_response` object, written to the engine as is.
+    DialogResponse { attempt: Attempt, response: Value },
 }
 
 /// Node → server, over the node link.
@@ -44,6 +48,43 @@ pub enum FromNode {
     TurnEnded {
         attempt: Attempt,
         error: Option<String>,
+    },
+    /// The engine opened a dialog (`extension_ui_request` with method
+    /// `select`, `confirm`, `input` or `editor`) and is waiting for an answer.
+    Dialog { attempt: Attempt, request: Value },
+    /// A tool call finished. `result` is its text, truncated.
+    ToolDone {
+        attempt: Attempt,
+        tool_call_id: String,
+        ok: bool,
+        result: String,
+    },
+}
+
+/// Something the bot is waiting on the owner for (B-RUN-05, DESIGN §3.4).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Dialog {
+    pub id: String,
+    pub run: i64,
+    pub kind: DialogKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum DialogKind {
+    /// May the bot run this tool call? `uncertain` means an interrupted
+    /// attempt may already have run it.
+    Approval {
+        tool: String,
+        input: Value,
+        uncertain: bool,
+    },
+    /// The bot asked a question. `method` is `select`, `confirm`, `input` or `editor`.
+    Question {
+        method: String,
+        title: String,
+        message: Option<String>,
+        options: Vec<String>,
     },
 }
 
@@ -89,6 +130,14 @@ pub enum ThreadEvent {
         online: bool,
         node: Option<String>,
     },
+    DialogOpened {
+        dialog: Dialog,
+    },
+    /// The dialog was answered, or expired because its run ended or moved on.
+    DialogClosed {
+        id: String,
+        outcome: String,
+    },
 }
 
 /// How a run ended, as clients see it.
@@ -103,7 +152,13 @@ pub enum RunOutcome {
 impl ThreadEvent {
     /// Whether this event is stored and replayed, rather than live only.
     pub fn is_persisted(&self) -> bool {
-        matches!(self, Self::Message { .. } | Self::RunEnded { .. })
+        matches!(
+            self,
+            Self::Message { .. }
+                | Self::RunEnded { .. }
+                | Self::DialogOpened { .. }
+                | Self::DialogClosed { .. }
+        )
     }
 }
 

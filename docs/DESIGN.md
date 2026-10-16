@@ -195,15 +195,11 @@ Fences are checked on every node message: a message carrying an old fence is dro
 - RPC events go up the link unchanged, wrapped with `{run, fence}`. `extension_ui_request` (questions, OAuth prompts) is relayed as a card and the answer comes back as `extension_ui_response`.
 - MCP config is written per session to a file the engine reads at start. It contains only the servers granted to that bot.
 
-### 4.3 Bridge socket
+### 4.3 Bridge channels
 
-The node listens on `$XDG_RUNTIME_DIR/orphusbot/bridge-<session>.sock` (mode 0600). The bridge extension sends:
+**Gate (built, M1.2): Orphus's own dialog protocol, no socket.** For each tool call the bridge opens an `input` dialog titled `orphusbot-gate` whose placeholder is `{toolCallId, tool, input}`. Orphus writes it to stdout as an `extension_ui_request`; the node relays every dialog (`select`, `confirm`, `input`, `editor`) to the server as `FromNode::Dialog`; the server answers with a complete `extension_ui_response` in `ToNode::DialogResponse`, which the node writes to the engine's stdin. The gate's answer is `allow` or `deny:<reason>`; any other answer blocks. Tool completions come from Orphus's own `tool_execution_end` events, mapped to `FromNode::ToolDone`, so the bridge needs no result hook (D-015).
 
-| Request | Node does |
-|---|---|
-| `Gate{tool, args, call_id}` | Forwards to the server, which runs approvals (§7.4); the reply is `allow` / `deny{reason}` / `ask` (blocks until answered or timed out) |
-| `Op{kind: bash\|read\|write\|edit\|find\|ls, …}` | Runs it inside the bot's computer through `ComputerProvider` and streams the result back |
-| `Effect{call_id, state, result}` | Updates the ledger |
+**Ops (M2): a socket.** Redirecting tool operations into the bot's computer needs a request/response channel with streaming, so M2 adds `$XDG_RUNTIME_DIR/orphusbot/bridge-<session>.sock` (mode 0600) carrying `Op{kind: bash|read|write|edit|find|ls, …}`, which the node runs through `ComputerProvider`.
 
 ### 4.4 Computers on a node
 
@@ -221,12 +217,11 @@ The node listens on `$XDG_RUNTIME_DIR/orphusbot/bridge-<session>.sock` (mode 060
 
 ## 5. orphusbot-bridge (TypeScript extension)
 
-Target: under 300 lines, no policy.
+Target: under 300 lines, no policy. Source: `bridge/orphusbot-bridge.ts`; the node embeds it and writes it beside the session files, so there is nothing to install.
 
-1. On load, it connects to the bridge socket path passed in an env var. If the socket is missing it refuses every tool call, so the bot can't run tools on the host by accident.
-2. It replaces the built-in tool operations (bash, read, write, edit, find, ls) with implementations that send `Op` over the socket. This needs harness change **H-B1** (PRD §12); the `ssh.ts` example shows it's close already.
-3. It handles `tool_call`: it sends `Gate` and blocks on the reply. `deny` returns the reason to the model; `ask` waits.
-4. It handles `tool_result`: it sends `Effect` with a hash and size summary of the result, plus a diff for edits.
+1. **Built (M1.2):** it handles `tool_call` by asking the gate (§4.3) and blocking until the answer. `deny:<reason>` returns the reason to the model. Outside RPC mode it blocks every call, so the bridge can't be misused in an interactive session.
+2. **M2:** it replaces the built-in tool operations (bash, read, write, edit, find, ls) with implementations that send `Op` over the socket, and refuses every call if the socket is missing. This needs harness change **H-B1** (PRD §12); the `ssh.ts` example shows it's close already.
+3. **M2:** diff capture for edits.
 
 Model credentials stay in the engine process on the host. Nothing in the bridge forwards env vars or files from the host into the computer.
 
@@ -737,7 +732,9 @@ M0 implemented the smallest slice of §3 and §4 that carries a message from a b
 | Fan-out | In-process `tokio::sync::broadcast` | `PgListener` + `NOTIFY` once there are several server processes |
 | Client API | `POST /api/messages`, `POST /api/runs/cancel`, `GET /api/events` (SSE; resumes from `Last-Event-ID`), `POST /login` | Typed RPC over JSON (§3.1) |
 | Runs (M1.1) | `run` table, at most one queued-or-running run per thread (a partial unique index). A message joins the queued run's prompt, or steers the running one through Orphus `steer`. Runs are leased to a node for 120 s, renewed every 30 s; each dispatch bumps the fence; reports and updates for an older fence are ignored. A dropped node or lapsed lease re-queues the run; three attempts and it fails. Dispatch is a `select … for update skip locked` triggered by new runs, node connects and finished runs, not a job queue (D-014). On start the server re-queues every running run | §3.2–§3.4; the job queue arrives with routines (M3) |
-| Resume | The node runs Orphus with `--session-id orphusbot`, one lasting conversation per bot; a resumed attempt's prompt starts with a note to check what was already done | Effect ledger (M1.2) makes repeated tool calls safe |
+| Resume | The node runs Orphus with `--session-id orphusbot`, one lasting conversation per bot; a resumed attempt's prompt starts with a note to check what was already done | — |
+| Approvals (M1.2) | Bridge gate over the dialog protocol (§4.3). Order: read-only tools (`read`, `ls`, `find`, `grep`, `search`, `glob`) run; the ledger blocks an exact repeat (same tool, `jsonb`-equal input) of a call that completed in an earlier attempt and returns its result; a call approved but never reported done in an earlier attempt is asked again, flagged "may already have run"; `approval_rule` (allow/deny per tool) decides; otherwise an approval card (Allow once / Always allow / Deny). Other dialogs become question cards. Open dialogs expire when their run ends or moves, and on server start | §7.4 adds System 1 (M3) and irreversible-action classes |
+| Effect ledger (M1.2) | `effect` rows per (run, fence, tool call): pending → approved/denied → completed/failed, with who decided and a 2,000-character result | §3.4 |
 | Node link | WebSocket `/node`, bearer token checked before upgrade, `hello` first; the newest connection wins and anything leased under its name is re-queued; the server pings every 30 s and drops a node silent for 75 s | Ed25519 enrolment (M1.3), heartbeats with load (§4.1) |
 | Engine | One `orphus --mode rpc --session-dir …` per link, started on the first turn; text deltas, final assistant messages, rejected prompts and model errors are mapped to frames | §4.2 |
 | Sign-in | Shared UI token, HttpOnly `SameSite=Strict` cookie | Passkeys (§12) |

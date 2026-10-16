@@ -27,6 +27,13 @@
   button:disabled { opacity: .5; cursor: default; }
   :focus-visible { outline: 2px solid #4c8dff; outline-offset: 2px; }
   [hidden] { display: none !important; }
+  .card { border: 1px solid var(--line); border-radius: .5rem; padding: .75rem; display: flex; flex-direction: column; gap: .5rem; }
+  .card h2 { font-size: 1rem; margin: 0; }
+  .card pre { margin: 0; padding: .5rem; background: var(--bot); border-radius: .25rem; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .875rem; max-height: 16rem; overflow: auto; }
+  .card .row { display: flex; gap: .5rem; flex-wrap: wrap; }
+  .card .warn { color: var(--bad); margin: 0; }
+  .card .outcome { color: var(--muted); font-size: .875rem; margin: 0; }
+  .card.closed button, .card.closed textarea { display: none; }
 </style>
 </head>
 <body>
@@ -71,8 +78,71 @@ function setStatus() {
   $("stop").hidden = run === null;
 }
 
+const cards = new Map(); // dialog id -> card element
+
+function button(label, onClick) {
+  const b = document.createElement("button");
+  b.type = "button"; b.textContent = label; b.addEventListener("click", onClick);
+  return b;
+}
+
+async function answer(body) {
+  const r = await fetch("/api/dialogs/answer", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+  }).catch(() => null);
+  if (!r || !r.ok) $("err").textContent = r ? await r.text() : "Could not reach the server";
+}
+
+// Approval or question card. All text goes in with textContent: it comes from the bot.
+function card(d) {
+  const el = document.createElement("section");
+  el.className = "card"; el.setAttribute("aria-label", "Needs your answer");
+  const h = document.createElement("h2");
+  const row = document.createElement("div"); row.className = "row";
+  const id = d.id;
+  if (d.kind.kind === "approval") {
+    h.textContent = "Allow the bot to use " + d.kind.tool + "?";
+    el.append(h);
+    if (d.kind.uncertain) {
+      const w = document.createElement("p"); w.className = "warn";
+      w.textContent = "An interrupted attempt may already have run this. Check before allowing it again.";
+      el.append(w);
+    }
+    const pre = document.createElement("pre"); pre.textContent = JSON.stringify(d.kind.input, null, 2);
+    el.append(pre);
+    row.append(
+      button("Allow once", () => answer({ id, decision: "allow" })),
+      button("Always allow " + d.kind.tool, () => answer({ id, decision: "always" })),
+      button("Deny", () => answer({ id, decision: "deny" })),
+    );
+  } else {
+    const q = d.kind;
+    h.textContent = q.title || "The bot has a question";
+    el.append(h);
+    if (q.message) { const p = document.createElement("p"); p.textContent = q.message; el.append(p); }
+    if (q.method === "select") q.options.forEach((o) => row.append(button(o, () => answer({ id, value: o }))));
+    else if (q.method === "confirm") row.append(button("Yes", () => answer({ id, confirmed: true })), button("No", () => answer({ id, confirmed: false })));
+    else {
+      const t = document.createElement("textarea"); t.rows = 3; t.setAttribute("aria-label", "Your answer");
+      el.append(t);
+      row.append(button("Send answer", () => answer({ id, value: t.value })));
+    }
+    row.append(button("Dismiss", () => answer({ id })));
+  }
+  const outcome = document.createElement("p"); outcome.className = "outcome";
+  el.append(row, outcome);
+  log.append(el); el.scrollIntoView({ block: "end" });
+  cards.set(id, el);
+}
+
 function handle(ev) {
   switch (ev.type) {
+    case "dialog_opened": card(ev.dialog); break;
+    case "dialog_closed": {
+      const el = cards.get(ev.id);
+      if (el) { el.classList.add("closed"); el.querySelector(".outcome").textContent = ev.outcome; cards.delete(ev.id); }
+      break;
+    }
     case "message":
       if (ev.role === "assistant" && pending) { pending.textContent = ev.text; pending = null; }
       else bubble(ev.role, ev.text);

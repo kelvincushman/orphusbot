@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into effect (run_id, fence, tool_call_id, tool, input, state, decided_by)\n         values ($1, $2, $3, $4, $5, $6::text::effect_state, $7)\n         on conflict (run_id, fence, tool_call_id) do nothing",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "40ff9bf1dbe7ef7b869ecfc7f5929db9f559c8e2da01b81ef3670e5c66bcadb2"
+}

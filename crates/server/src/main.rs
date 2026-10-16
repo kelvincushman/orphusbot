@@ -7,8 +7,10 @@
 //! (DESIGN §3.2, §3.3).
 
 mod db;
+mod gate;
 mod runs;
 
+use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -22,9 +24,12 @@ use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Form, Json, Router};
 use futures_util::{SinkExt, Stream, StreamExt};
-use orphusbot_proto::{Attempt, FromNode, Role, RunOutcome, ThreadEvent, ToNode};
+use orphusbot_proto::{
+    Attempt, Dialog, DialogKind, FromNode, Role, RunOutcome, ThreadEvent, ToNode,
+};
 use runs::{Outcome, Submitted};
 use serde::Deserialize;
+use serde_json::{Value, json};
 use sqlx::PgPool;
 use subtle::ConstantTimeEq;
 use tokio::sync::{broadcast, mpsc};
@@ -54,6 +59,14 @@ struct NodeLink {
     tx: mpsc::Sender<ToNode>,
 }
 
+/// A dialog the engine is blocked on.
+#[derive(Clone)]
+struct Pending {
+    attempt: Attempt,
+    /// Set for approval gates: the tool call being decided.
+    tool_call_id: Option<String>,
+}
+
 /// In-memory view of the link. Postgres stays the source of truth for runs;
 /// `active` only lets the server drop stale frames without a query per delta.
 #[derive(Default)]
@@ -61,7 +74,12 @@ struct Runtime {
     node: Option<NodeLink>,
     next_conn: u64,
     active: Option<Attempt>,
+    /// Open dialogs by Orphus request id.
+    dialogs: HashMap<String, Pending>,
 }
+
+/// Title the bridge extension gives its approval requests (bridge/orphusbot-bridge.ts).
+const GATE_TITLE: &str = "orphusbot-gate";
 
 struct App {
     db: PgPool,
@@ -93,6 +111,13 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("running migrations")?;
     let orphaned = runs::release_all(&db).await?;
+    let expired = db::expire_open_dialogs(&db).await?;
+    if expired > 0 {
+        info!(
+            expired,
+            "closed dialogs left open by the last server process"
+        );
+    }
     if orphaned > 0 {
         info!(
             orphaned,
@@ -115,6 +140,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/login", post(login))
         .route("/api/messages", post(send_message))
         .route("/api/runs/cancel", post(cancel_run))
+        .route("/api/dialogs/answer", post(answer_dialog))
         .route("/api/events", get(events))
         .route("/node", get(node_link))
         .with_state(app);
@@ -256,6 +282,203 @@ async fn cancel_run(State(app): State<Shared>, headers: HeaderMap) -> Result<Sta
     Ok(StatusCode::ACCEPTED)
 }
 
+#[derive(Deserialize)]
+struct Answer {
+    id: String,
+    /// For approvals: "allow", "always" or "deny".
+    decision: Option<String>,
+    /// For questions: the chosen option or typed text.
+    value: Option<String>,
+    /// For yes/no questions.
+    confirmed: Option<bool>,
+}
+
+fn ui_response(id: &str, field: &str, value: Value) -> Value {
+    let mut r = json!({ "type": "extension_ui_response", "id": id });
+    r[field] = value;
+    r
+}
+
+/// The owner answers an approval card or a question (B-RUN-05, B-CLI-04).
+async fn answer_dialog(
+    State(app): State<Shared>,
+    headers: HeaderMap,
+    Json(answer): Json<Answer>,
+) -> Result<StatusCode, ApiError> {
+    if !signed_in(&app, &headers) {
+        return Err((StatusCode::UNAUTHORIZED, "Sign in first"));
+    }
+    let Some(pending) = lock(&app.rt).dialogs.remove(&answer.id) else {
+        return Err((StatusCode::GONE, "That question is no longer open"));
+    };
+    let id = answer.id.clone();
+    let (response, outcome) = match (&pending.tool_call_id, answer.decision.as_deref()) {
+        (Some(call), Some(decision @ ("allow" | "always" | "deny"))) => {
+            let allow = decision != "deny";
+            let always = decision == "always";
+            if let Err(e) = gate::owner_decides(&app.db, pending.attempt, call, allow, always).await
+            {
+                lock(&app.rt).dialogs.insert(id, pending);
+                return Err(internal("recording approval", e));
+            }
+            let value = if allow {
+                "allow"
+            } else {
+                "deny:The owner did not approve this tool call."
+            };
+            let outcome = match decision {
+                "always" => "Always allowed",
+                "allow" => "Allowed once",
+                _ => "Denied",
+            };
+            (ui_response(&id, "value", json!(value)), outcome.to_owned())
+        }
+        (Some(_), _) => {
+            lock(&app.rt).dialogs.insert(id, pending);
+            return Err((
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Choose allow, always or deny",
+            ));
+        }
+        (None, _) => match (answer.value, answer.confirmed) {
+            (Some(value), _) => {
+                let outcome = format!("Answered: {value}");
+                (ui_response(&id, "value", json!(value)), outcome)
+            }
+            (None, Some(yes)) => {
+                let outcome = if yes { "Yes" } else { "No" }.to_owned();
+                (ui_response(&id, "confirmed", json!(yes)), outcome)
+            }
+            (None, None) => (
+                ui_response(&id, "cancelled", json!(true)),
+                "Dismissed".to_owned(),
+            ),
+        },
+    };
+    respond(&app, pending.attempt, response).await;
+    dialog_closed(&app, id, outcome).await;
+    Ok(StatusCode::ACCEPTED)
+}
+
+async fn respond(app: &App, attempt: Attempt, response: Value) {
+    if let Some(tx) = node_for(app, attempt) {
+        let _ = tx.send(ToNode::DialogResponse { attempt, response }).await;
+    }
+}
+
+async fn dialog_closed(app: &App, id: String, outcome: String) {
+    let event = ThreadEvent::DialogClosed { id, outcome };
+    match db::append(&app.db, &event).await {
+        Ok(seq) => publish(app, Some(seq), event),
+        Err(e) => warn!("storing dialog close: {e}"),
+    }
+}
+
+/// Closes every open dialog for `run`: its attempt ended, so nobody is waiting.
+async fn expire_dialogs(app: &App, run: i64) {
+    let ids: Vec<String> = {
+        let mut rt = lock(&app.rt);
+        let ids: Vec<String> = rt
+            .dialogs
+            .iter()
+            .filter(|(_, p)| p.attempt.run == run)
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in &ids {
+            rt.dialogs.remove(id);
+        }
+        ids
+    };
+    for id in ids {
+        dialog_closed(app, id, "Expired: the run moved on".to_owned()).await;
+    }
+}
+
+/// The engine is waiting on a dialog: decide gates here, ask the owner otherwise.
+async fn on_dialog(app: &App, attempt: Attempt, request: Value) {
+    let Some(id) = request["id"].as_str().map(str::to_owned) else {
+        return warn!("dialog without an id");
+    };
+    let method = request["method"].as_str().unwrap_or_default().to_owned();
+    let title = request["title"].as_str().unwrap_or_default().to_owned();
+
+    let (kind, tool_call_id) = if method == "input" && title == GATE_TITLE {
+        let call: Value = request["placeholder"]
+            .as_str()
+            .and_then(|p| serde_json::from_str(p).ok())
+            .unwrap_or_default();
+        let (Some(call_id), Some(tool)) = (call["toolCallId"].as_str(), call["tool"].as_str())
+        else {
+            let deny = json!("deny:Malformed approval request.");
+            return respond(app, attempt, ui_response(&id, "value", deny)).await;
+        };
+        let input = call["input"].clone();
+        let gate_call = gate::Call {
+            attempt,
+            tool_call_id: call_id,
+            tool,
+            input: &input,
+        };
+        let verdict = gate::decide(&app.db, &gate_call).await.unwrap_or_else(|e| {
+            warn!("deciding a tool call: {e}");
+            gate::Verdict::Deny("OrphusBot could not check this call, so it was blocked.".into())
+        });
+        match verdict {
+            gate::Verdict::Allow => {
+                return respond(app, attempt, ui_response(&id, "value", json!("allow"))).await;
+            }
+            gate::Verdict::Deny(reason) => {
+                let value = json!(format!("deny:{reason}"));
+                return respond(app, attempt, ui_response(&id, "value", value)).await;
+            }
+            gate::Verdict::Ask { uncertain } => (
+                DialogKind::Approval {
+                    tool: tool.to_owned(),
+                    input,
+                    uncertain,
+                },
+                Some(call_id.to_owned()),
+            ),
+        }
+    } else {
+        let message = ["message", "placeholder", "prefill"]
+            .iter()
+            .find_map(|k| request[*k].as_str())
+            .map(str::to_owned);
+        let options = request["options"]
+            .as_array()
+            .map(|o| {
+                o.iter()
+                    .filter_map(|v| v.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let kind = DialogKind::Question {
+            method,
+            title,
+            message,
+            options,
+        };
+        (kind, None)
+    };
+
+    let pending = Pending {
+        attempt,
+        tool_call_id,
+    };
+    lock(&app.rt).dialogs.insert(id.clone(), pending);
+    let dialog = Dialog {
+        id,
+        run: attempt.run,
+        kind,
+    };
+    let event = ThreadEvent::DialogOpened { dialog };
+    match db::append(&app.db, &event).await {
+        Ok(seq) => publish(app, Some(seq), event),
+        Err(e) => warn!("storing dialog: {e}"),
+    }
+}
+
 /// The node's sender if it is working on exactly this attempt.
 fn node_for(app: &App, attempt: Attempt) -> Option<mpsc::Sender<ToNode>> {
     let rt = lock(&app.rt);
@@ -335,6 +558,7 @@ async fn announce_released(app: &App, released: Vec<runs::Released>) {
                 rt.active = None;
             }
         }
+        expire_dialogs(app, r.run).await;
         if r.failed {
             let error = Some("The bot lost its node too many times".to_owned());
             run_ended(app, r.run, RunOutcome::Failed, error).await;
@@ -598,6 +822,19 @@ async fn on_node_message(app: &App, msg: FromNode) {
                 Err(e) => warn!("finishing run: {e}"),
             }
         }
+        FromNode::Dialog { attempt, request } if active == Some(attempt) => {
+            on_dialog(app, attempt, request).await;
+        }
+        FromNode::ToolDone {
+            attempt,
+            tool_call_id,
+            ok,
+            result,
+        } if active == Some(attempt) => {
+            if let Err(e) = gate::tool_done(&app.db, attempt, &tool_call_id, ok, &result).await {
+                warn!("recording tool result: {e}");
+            }
+        }
         other => warn!(
             ?other,
             "ignoring a frame for an attempt that is not current"
@@ -606,6 +843,7 @@ async fn on_node_message(app: &App, msg: FromNode) {
 }
 
 async fn run_ended(app: &App, run: i64, outcome: RunOutcome, error: Option<String>) {
+    expire_dialogs(app, run).await;
     let event = ThreadEvent::RunEnded {
         run,
         outcome,

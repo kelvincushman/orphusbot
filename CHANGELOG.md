@@ -13,6 +13,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **Pick a bot's model from a list (M8.1):** the Model field suggests every model your machines can use (Claude through Claude Code, Codex, local models such as Qwen on the GPU box), and says which machine has each.
 - **A setup script for the Mac:** `sh scripts/macos-setup.sh <user>@<gpu-box>` builds and installs the app and keeps the tunnel to your server open.
 - **Sign in to MCP servers (M6.5):** a connection with an address has **Sign in**: you sign in on the provider's page and come back connected. OrphusBot keeps the sign-in fresh before each run, and the tokens stay on the server.
 - **MCP servers that run as a command (M6.4):** a connection can be a command such as `npx -y @modelcontextprotocol/server-github`, with the variable its token goes in (`GITHUB_TOKEN`). It runs on your machine only if that node lists the program in `ORPHUSBOT_MCP_COMMANDS`.

@@ -543,6 +543,12 @@ fn BotSheet(bot: Option<Bot>, editing: RwSignal<Option<Option<Bot>>>) -> impl In
             Ok(())
         });
     };
+    // The models the connected nodes can use, offered as suggestions.
+    let models = RwSignal::new(Vec::<Value>::new());
+    ctx.run(async move {
+        models.set(api::get("/api/models").await?);
+        Ok(())
+    });
     let thinking_levels = [
         "", "off", "minimal", "low", "medium", "high", "xhigh", "max",
     ];
@@ -559,7 +565,14 @@ fn BotSheet(bot: Option<Bot>, editing: RwSignal<Option<Option<Bot>>>) -> impl In
                 <label>"Instructions"<textarea rows=5 maxlength="8000" bind:value=instructions
                     placeholder="How it should work, what to avoid, who it works for"></textarea></label>
                 <div class="row two">
-                    <label>"Model"<input maxlength="100" bind:value=model placeholder="Orphus default" /></label>
+                    <label>"Model"<input maxlength="100" bind:value=model placeholder="Orphus default" list="node-models" /></label>
+                    <datalist id="node-models">
+                        {move || models.get().into_iter().map(|m| {
+                            let id = m["id"].as_str().unwrap_or_default().to_owned();
+                            let on: Vec<String> = m["nodes"].as_array().into_iter().flatten().filter_map(|n| n.as_str().map(str::to_owned)).collect();
+                            view! { <option value=id.clone()>{format!("on {}", on.join(", "))}</option> }
+                        }).collect_view()}
+                    </datalist>
                     <label>"Thinking"
                         // The chosen option is marked on the option itself: a select's value set
                         // before its options exist falls back to the first one.

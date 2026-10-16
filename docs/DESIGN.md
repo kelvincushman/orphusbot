@@ -627,6 +627,10 @@ Cards and cues follow the wearable's existing tiers. Nothing escalates to red fo
 
 ---
 
+### 11.3 Models
+
+- **Built (M8.1):** when a node connects it runs `orphus --list-models` and sends `FromNode::Models` (`provider/model` names). `GET /api/models` lists every model with the nodes that have it, and the bot editor offers them as suggestions for **Model** (still free text). Whatever Orphus on a node can reach is available: subscription logins (`openai-codex/…`, Claude through the `claude-bridge` extension, which drives the official Claude Code with its own login and switches off Claude's own tools, so every call still reaches the gate), and local models declared in the node's Orphus `models.json` (vLLM or Ollama, `local/…`). Placement doesn't yet route a bot to a node that has its model.
+
 ## 12. Clients
 
 - **Leptos CSR (`crates/ui`)** shares `proto` with the server: typed requests, the event types and the **reducer** that folds events into view state. One reducer, so web, desktop and Android can't disagree.

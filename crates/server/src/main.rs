@@ -87,6 +87,8 @@ struct NodeLink {
     load: u32,
     on_battery: bool,
     quiet: bool,
+    /// `provider/model` names its Orphus can use.
+    models: Vec<String>,
 }
 
 impl NodeLink {
@@ -259,6 +261,7 @@ fn router(app: Shared) -> Router {
         .route("/api/passkeys/remove", post(auth::remove_passkey))
         .route("/api/logout", post(auth::logout))
         .route("/api/bots", get(bots::list).post(bots::create))
+        .route("/api/models", get(models))
         .route("/api/bots/update", post(bots::update))
         .route("/api/decisions", get(system1::list))
         .route("/api/decisions/health", get(system1::health))
@@ -788,6 +791,22 @@ fn node_for(app: &App, attempt: Attempt) -> Option<mpsc::Sender<ToNode>> {
     rt.nodes.get(&active.node).map(|n| n.tx.clone())
 }
 
+/// Every model a connected node can use, with the nodes that have it.
+async fn models(State(app): State<Shared>) -> Json<Value> {
+    let rt = lock(&app.rt);
+    let mut all: std::collections::BTreeMap<&str, Vec<&str>> = Default::default();
+    for link in rt.nodes.values() {
+        for m in &link.models {
+            all.entry(m).or_default().push(&link.name);
+        }
+    }
+    let list: Vec<Value> = all
+        .into_iter()
+        .map(|(id, nodes)| json!({ "id": id, "nodes": nodes }))
+        .collect();
+    Json(json!(list))
+}
+
 /// Sends every client the node list.
 fn publish_nodes(app: &App) {
     let event = nodes_event(&lock(&app.rt));
@@ -1147,6 +1166,7 @@ async fn run_node(app: Shared, socket: WebSocket) {
             load: 0,
             on_battery: false,
             quiet: false,
+            models: Vec::new(),
         };
         (conn, rt.nodes.insert(name.clone(), link))
     };
@@ -1226,6 +1246,12 @@ async fn on_node_message(app: &App, node: &str, msg: FromNode) {
     // Frames for an attempt that's no longer current (a fenced-off retry) are dropped.
     let current = |attempt: Attempt| lock(&app.rt).current(attempt).cloned();
     match msg {
+        FromNode::Models { models } => {
+            info!(node, count = models.len(), "node reported its models");
+            if let Some(link) = lock(&app.rt).nodes.get_mut(node) {
+                link.models = models;
+            }
+        }
         FromNode::Heartbeat {
             load,
             on_battery,

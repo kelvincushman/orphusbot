@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select exists (select 1 from discussion_post p join run r on r.id = $1\n                          join thread th on th.id = r.thread_id join bot b on b.id = th.bot_id\n                          where p.discussion_id = $2 and p.round = $3 and p.bot = b.slug) as \"posted!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "posted!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "14739290faf9f81eca2fee90684d07dcc09e71a03c547ddf0005223f7f728769"
+}

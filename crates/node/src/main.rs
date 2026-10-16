@@ -619,10 +619,11 @@ impl Engine {
                 "--mode",
                 "rpc",
                 "--name",
-                &bot.slug,
-                // One lasting conversation per bot, so a resumed run keeps its context.
+                bot.name.as_deref().unwrap_or(&bot.slug),
+                // One lasting conversation per bot, so a resumed run keeps its context;
+                // a discussion has its own (DESIGN §11.4).
                 "--session-id",
-                &bot.slug,
+                bot.session.as_deref().unwrap_or(&bot.slug),
                 "--session-dir",
                 &dir,
                 "--extension",

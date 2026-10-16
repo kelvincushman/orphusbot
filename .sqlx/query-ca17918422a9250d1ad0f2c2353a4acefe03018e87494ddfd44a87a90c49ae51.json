@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select body->>'text' as \"text!\" from event where thread_id = $1 and body->>'type' = 'message'\n           and body->>'role' = 'assistant' order by seq desc limit 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "text!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ca17918422a9250d1ad0f2c2353a4acefe03018e87494ddfd44a87a90c49ae51"
+}

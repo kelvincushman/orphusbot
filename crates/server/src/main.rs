@@ -14,6 +14,7 @@ mod capture;
 mod connections;
 mod db;
 mod device;
+mod discussions;
 mod e2b;
 mod fleets;
 mod gate;
@@ -274,6 +275,11 @@ fn router(app: Shared) -> Router {
             get(connections::list).post(connections::create),
         )
         .route("/api/connections/delete", post(connections::delete))
+        .route(
+            "/api/discussions",
+            get(discussions::list).post(discussions::create),
+        )
+        .route("/api/discussions/{id}", get(discussions::get))
         .route("/api/fleets", get(fleets::list).post(fleets::save))
         .route("/api/fleets/delete", post(fleets::delete))
         .route("/api/connections/grant", post(connections::grant))
@@ -407,6 +413,15 @@ async fn send_message(
         return Err((StatusCode::CONFLICT, "That bot is disabled"));
     }
     let thread = bot_thread(&app, &bot.slug).await?;
+    if discussions::in_turn(&app.db, thread.id)
+        .await
+        .map_err(|e| internal("checking the bot", e))?
+    {
+        return Err((
+            StatusCode::CONFLICT,
+            "It's taking its turn in a discussion; send this when it's done",
+        ));
+    }
     let files = attachments::check(&app.db, &bot.slug, &msg.attachments).await?;
 
     if !text.is_empty() {
@@ -740,6 +755,9 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
             });
         match verdict {
             gate::Verdict::Allow => {
+                if tool == "roundtable" {
+                    discussions::posted(app, attempt.run, &active.thread.bot, &input).await;
+                }
                 return respond(app, attempt, ui_response(&id, "value", json!("allow"))).await;
             }
             gate::Verdict::Deny(reason) => {
@@ -952,6 +970,10 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
         Err(e) => return warn!("finding the run's thread: {e}"),
     };
     let mut spec = bot.spec();
+    if let Some((session, name)) = discussions::session(&app.db, run, &bot.slug).await {
+        spec.session = Some(session);
+        spec.name = Some(name);
+    }
     if bot.computer == "e2b" {
         match app.e2b.computer(&app.db, &bot.slug).await {
             Ok(computer) => spec.e2b = Some(computer),
@@ -1460,6 +1482,7 @@ async fn run_ended(
         error,
     };
     record(app, thread, event).await;
+    discussions::advance(app).await;
 }
 
 /// Failures always reach the phone; finished work does when the owner didn't

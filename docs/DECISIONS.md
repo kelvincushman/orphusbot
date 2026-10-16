@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-036: Discussions are rounds of ordinary bot runs in one Orphus room (2026-10-16)
+
+- **Context:** Kelvin wants OrphusBot's bots to deliberate the way Orphus agents do: outside their context windows, so each task stays clean, with what was decided kept in memory. Orphus offers this inside one engine as a fleet's `deliberate` team (helper sessions in one room).
+- **Decision:** the server runs the rounds. Each bot takes each round as its own run, in a session kept for that discussion, on its own model, instructions and computer, and joins one Orphus room; a chair writes the verdict as the `librarian` and files the room into memory. The gate, which already sees every tool call, records each post for the live view and allows one per bot per round.
+- **Alternatives:** a generated fleet blueprint with a seat per bot (all seats then share one bot's engine, computer and approvals, and seat models are not yet honoured by Orphus); bots messaging each other's threads (every message enters every context, which is what rooms exist to avoid); reading the room server directly for the live view (an undocumented socket protocol).
+- **Revisit if:** bots run on different machines (rooms are per machine), or Orphus exposes room events over RPC.
+
 ## D-035: The bar panel plays faces as pre-rendered WebPs (2026-10-16)
 
 - **Context:** the Omarchy bar panel is QML (Quickshell), which has no Rive runtime; the faces should still move there.

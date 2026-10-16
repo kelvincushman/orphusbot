@@ -291,7 +291,8 @@ impl Session {
                                 outcome: RunOutcome::Completed,
                                 ..
                             } => {
-                                desktop(&format!("{name} finished"), "", "normal");
+                                let said = views.get(&bot).map(last_reply).unwrap_or_default();
+                                desktop(&format!("{name} finished"), &said, "normal");
                             }
                             ThreadEvent::RunEnded {
                                 outcome: RunOutcome::Failed,
@@ -363,11 +364,28 @@ fn status(bots: &[(String, String)], views: &BTreeMap<String, ThreadView>) -> Va
                 RunState::Queued => "queued",
                 RunState::Running { .. } => "running",
             };
-            json!({ "slug": slug, "name": name, "state": state, "waiting": view.waiting() })
+            json!({ "slug": slug, "name": name, "state": state, "waiting": view.waiting(), "reply": last_reply(view) })
         })
         .collect();
     let running = list.iter().filter(|b| b["state"] == "running").count();
     json!({ "running": running, "needs_you": waiting.len(), "bots": list, "waiting": waiting })
+}
+
+/// The bot's latest answer, shortened for the bar and notifications.
+fn last_reply(view: &ThreadView) -> String {
+    let text = view.items.iter().rev().find_map(|i| match i {
+        Item::Message {
+            role: orphusbot_proto::Role::Assistant,
+            text,
+        } => Some(text.as_str()),
+        _ => None,
+    });
+    let text = text.unwrap_or_default().trim();
+    if text.chars().count() > 400 {
+        format!("{}…", text.chars().take(400).collect::<String>())
+    } else {
+        text.to_owned()
+    }
 }
 
 /// A desktop notification through `notify-send` (mako on Omarchy). Best effort.
@@ -410,6 +428,10 @@ mod tests {
             role: Role::User,
             text: "hi".into(),
         });
+        coder.apply(ThreadEvent::Message {
+            role: Role::Assistant,
+            text: "Hi!".into(),
+        });
         let views = BTreeMap::from([("coder".to_owned(), coder)]);
         let s = status(&bots, &views);
         assert_eq!(
@@ -418,5 +440,6 @@ mod tests {
         );
         assert_eq!(s["waiting"][0]["text"], "May it use bash?");
         assert_eq!(s["bots"][1]["state"], "idle");
+        assert_eq!(s["bots"][0]["reply"], "Hi!");
     }
 }

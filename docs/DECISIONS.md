@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-028: No in-process Laya (OrtLaya) for now; laya-serve stays System 1's runtime (2026-10-16)
+
+- **Context:** M5 planned `OrtLaya`: Laya's ONNX graph run inside the server through ONNX Runtime, gated by parity with Laya's golden fixtures. Laya has ports in Go, Java, TypeScript and .NET, but none in Rust; the Go one is about 13,000 lines (tokenizer, CPython-exact JSON, language detection, sequence building, decoding with temperatures and binning). The graph is a 1.3 GB export the laptop doesn't have.
+- **Decision:** don't build it now. laya-serve is Laya's reference implementation, already runs on the GPU box beside the server, and the HTTP hop costs milliseconds against the model's own time. Every failure already abstains safely.
+- **Alternatives:** a Rust port in this repo (a fifth port that drifts every time Laya changes, for no change in answers); the `tokenizers` and `ort` crates plus a partial port (still needs exact state serialisation and decoding to pass parity).
+- **Consequences:** System 1 needs the laya-serve process (Python, about 2.5 GB of memory). Revisit if that process becomes the problem (a smaller box, or a node that must decide offline); the right home then is a `laya-rs` port in Laya's own repository, sharing its fixtures.
+
 ## D-027: Thresholds are fitted in the server with Laya's cut; temperatures stay with Laya (2026-10-16)
 
 - **Context:** DESIGN §7.5 planned to run `laya.calibrate` on the GPU box. It fits per-bucket temperatures from Laya's raw logits, which needs the model and the full state; receipts keep only the calibrated `answer_confidence`, and states are cleared after 30 days.

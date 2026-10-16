@@ -271,9 +271,9 @@ Receipts( Fallback( OrtLaya?, HttpLaya(gpu-box), NullModel ), sink = Postgres + 
 ```
 
 - **v1** runs `HttpLaya` → laya-serve on the GPU box (`LAYA_PRELOAD=1`, bound to 127.0.0.1 because the server is on the same box). Timeouts: 1.5 s for triage, 1 s for the gate.
-- **M5** adds `OrtLaya` in-process. It is enabled only when `decide`'s parity test passes against Laya's committed golden fixtures for the exact `laya.onnx` + `tokenizer.json` + `rl_agent_config.json` hash being loaded.
+- **M5** was to add `OrtLaya` in-process, enabled only when `decide`'s parity test passes against Laya's committed golden fixtures for the exact `laya.onnx` + `tokenizer.json` + `rl_agent_config.json` hash being loaded. **Deferred (D-028):** laya-serve stays the only System 1 runtime.
 - `NullModel` always abstains. If everything fails, every decision takes its safe default.
-- **Built (M3.2):** `server::system1` calls laya-serve's `POST /v1/systemone` with `reqwest` (`ORPHUSBOT_LAYA_URL`; no URL means it always abstains). Each ask is bounded by `ORPHUSBOT_LAYA_TIMEOUT_MS` (default 1500); a timeout, an error or an unreadable answer abstains. The confidence used is Laya's calibrated `answer_confidence`. The `decide` crate and the `DecisionModel` trait arrive when a second model does (in-process ONNX, M5).
+- **Built (M3.2):** `server::system1` calls laya-serve's `POST /v1/systemone` with `reqwest` (`ORPHUSBOT_LAYA_URL`; no URL means it always abstains). Each ask is bounded by `ORPHUSBOT_LAYA_TIMEOUT_MS` (default 1500); a timeout, an error or an unreadable answer abstains. The confidence used is Laya's calibrated `answer_confidence`. The `decide` crate and the `DecisionModel` trait arrive when a second model does (D-028 deferred the in-process one).
 
 ### 7.2 Question catalogue
 
@@ -744,7 +744,7 @@ Mapped to the PRD milestones. The wearable lands at M3, alongside System 1, beca
 | M2 | §4.4, §5 (ops), §6.1, §6.3 (no Laya) | Containers, takeover, GPU-box node |
 | M3 | §7.1–7.4, §7.6, §9 (channel, duplex habitat, button → task), §3.5; firmware/app W-1…W-5 | Laya triage and gate, wearable tasks with the full duplex loop, tickets, routines |
 | M4 | §6.2, §8 (quota), §10 (capture, profiles), §12 (Android, ntfy) | E2B, ambient capture, phone |
-| M5 | §7.5, OrtLaya | Calibration, apply/rollback, in-process Laya |
+| M5 | §7.5 | Label capture, calibration, apply/rollback (in-process Laya deferred, D-028) |
 | M6 | §11 | MCP breadth, lazy catalogue, secrets UI |
 
 ### 18.1 Built so far (M0 and M1.1)

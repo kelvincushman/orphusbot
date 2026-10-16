@@ -12,6 +12,7 @@ mod device;
 mod gate;
 mod links;
 mod nodes;
+mod notify;
 mod placement;
 mod routines;
 mod runs;
@@ -149,6 +150,7 @@ struct App {
     auth: auth::Auth,
     system1: system1::System1,
     devices: device::Devices,
+    notifier: notify::Notifier,
     /// The built web UI (crates/ui/dist), served at `/`.
     ui_dir: String,
 }
@@ -208,6 +210,7 @@ async fn main() -> anyhow::Result<()> {
         auth,
         system1,
         devices: device::Devices::default(),
+        notifier: notify::Notifier::from_env(&origin),
         ui_dir,
     });
     tokio::spawn(reconcile_forever(app.clone()));
@@ -685,7 +688,46 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
         run: attempt.run,
         kind,
     };
+    push_dialog(app, &active.thread.bot, &dialog).await;
     record(app, &active.thread, ThreadEvent::DialogOpened { dialog }).await;
+}
+
+/// The bot's display name, for pushes.
+async fn bot_name(app: &App, slug: &str) -> String {
+    bots::get(&app.db, slug)
+        .await
+        .ok()
+        .flatten()
+        .map_or_else(|| slug.to_owned(), |b| b.name)
+}
+
+/// A card that needs the owner goes to the phone too (PRD B-CLI-05).
+async fn push_dialog(app: &App, slug: &str, dialog: &Dialog) {
+    let name = bot_name(app, slug).await;
+    let (title, body, tags) = match &dialog.kind {
+        DialogKind::Approval { tool, input, .. } => (
+            format!("{name} asks to use {tool}"),
+            serde_json::to_string(input).unwrap_or_default(),
+            "raising_hand",
+        ),
+        DialogKind::Question { title, message, .. } => (
+            format!("{name} has a question"),
+            message.clone().unwrap_or_else(|| title.clone()),
+            "question",
+        ),
+        DialogKind::Takeover { reason } => (
+            format!("{name} needs you on its screen"),
+            reason.clone(),
+            "computer",
+        ),
+    };
+    app.notifier.send(notify::Push {
+        title,
+        body,
+        priority: 4,
+        tags,
+        bot: Some(slug),
+    });
 }
 
 /// The node's sender if it is working on exactly this attempt.
@@ -1212,12 +1254,57 @@ async fn run_ended(
         RunOutcome::Cancelled => device::RunNews::Cancelled,
     };
     device::run_news(app, run, news).await;
+    push_run_end(app, thread, run, outcome, error.as_deref()).await;
     let event = ThreadEvent::RunEnded {
         run,
         outcome,
         error,
     };
     record(app, thread, event).await;
+}
+
+/// Failures always reach the phone; finished work does when the owner didn't
+/// start it from a chat (a routine, a ticket or the wearable).
+async fn push_run_end(
+    app: &App,
+    thread: &db::Thread,
+    run: i64,
+    outcome: RunOutcome,
+    error: Option<&str>,
+) {
+    let unattended = sqlx::query_scalar!(
+        r#"select (routine_id is not null or ticket_id is not null or device_id is not null) as "u!"
+           from run where id = $1"#,
+        run
+    )
+    .fetch_optional(&app.db)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or(false);
+    let name = bot_name(app, &thread.bot).await;
+    let (title, body, priority, tags) = match outcome {
+        RunOutcome::Failed => (
+            format!("{name}'s task failed"),
+            error.unwrap_or("It stopped with an error.").to_owned(),
+            4,
+            "warning",
+        ),
+        RunOutcome::Completed if unattended => (
+            format!("{name} finished"),
+            "Its result is in its thread.".to_owned(),
+            3,
+            "white_check_mark",
+        ),
+        _ => return,
+    };
+    app.notifier.send(notify::Push {
+        title,
+        body,
+        priority,
+        tags,
+        bot: Some(&thread.bot),
+    });
 }
 
 fn publish(app: &App, id: Option<i64>, bot: Option<&str>, event: ThreadEvent) {

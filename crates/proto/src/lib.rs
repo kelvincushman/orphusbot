@@ -115,6 +115,18 @@ pub enum FromNode {
     },
     /// The screen stream ended, or couldn't start (`error` says why).
     ScreenClosed { stream: u64, error: Option<String> },
+    /// What one assistant message used, as the model's provider reported it
+    /// (PRD M4 quota tracker). `cost_micros` is US dollars × 1,000,000.
+    Usage {
+        attempt: Attempt,
+        provider: String,
+        model: String,
+        input: u64,
+        output: u64,
+        cache_read: u64,
+        cache_write: u64,
+        cost_micros: u64,
+    },
     /// One complete assistant message. A run that uses tools can produce several.
     Reply { attempt: Attempt, text: String },
     /// The attempt is over; `error` says why if it failed.

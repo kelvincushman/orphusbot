@@ -57,11 +57,26 @@ pub fn map_line(line: &str, attempt: Attempt, state: &mut TurnState) -> Vec<From
                 .filter_map(|c| c["text"].as_str())
                 .collect::<Vec<_>>()
                 .join("\n");
-            if text.trim().is_empty() {
-                Vec::new()
-            } else {
-                vec![FromNode::Reply { attempt, text }]
+            let mut out = Vec::new();
+            let usage = &msg["usage"];
+            if usage.is_object() {
+                let n = |k: &str| usage[k].as_u64().unwrap_or(0);
+                let cost = usage["cost"]["total"].as_f64().unwrap_or(0.0);
+                out.push(FromNode::Usage {
+                    attempt,
+                    provider: msg["provider"].as_str().unwrap_or("unknown").to_owned(),
+                    model: msg["model"].as_str().unwrap_or("unknown").to_owned(),
+                    input: n("input"),
+                    output: n("output"),
+                    cache_read: n("cacheRead"),
+                    cache_write: n("cacheWrite"),
+                    cost_micros: (cost.max(0.0) * 1_000_000.0).round() as u64,
+                });
             }
+            if !text.trim().is_empty() {
+                out.push(FromNode::Reply { attempt, text });
+            }
+            out
         }
         Some("extension_ui_request")
             if matches!(
@@ -203,5 +218,32 @@ mod tests {
             r#"{"type":"tool_execution_start","toolName":"bash"}"#,
         ]);
         assert!(out.is_empty());
+    }
+
+    #[test]
+    fn usage_is_reported_per_assistant_message() {
+        let mut state = TurnState::default();
+        let line = r#"{"type":"message_end","message":{"role":"assistant","provider":"anthropic","model":"claude-x",
+            "content":[{"type":"text","text":"Hi"}],"stopReason":"stop",
+            "usage":{"input":100,"output":50,"cacheRead":7,"cacheWrite":3,"cost":{"total":0.00105}}}}"#;
+        assert_eq!(
+            map_line(line, A, &mut state),
+            vec![
+                FromNode::Usage {
+                    attempt: A,
+                    provider: "anthropic".into(),
+                    model: "claude-x".into(),
+                    input: 100,
+                    output: 50,
+                    cache_read: 7,
+                    cache_write: 3,
+                    cost_micros: 1050,
+                },
+                FromNode::Reply {
+                    attempt: A,
+                    text: "Hi".into()
+                },
+            ]
+        );
     }
 }

@@ -19,6 +19,7 @@ mod runs;
 mod screens;
 mod system1;
 mod tickets;
+mod usage;
 
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -242,6 +243,7 @@ fn router(app: Shared) -> Router {
         .route("/api/bots/update", post(bots::update))
         .route("/api/decisions", get(system1::list))
         .route("/api/decisions/health", get(system1::health))
+        .route("/api/usage", get(usage::summary))
         .route("/api/routines", get(routines::list).post(routines::save))
         .route("/api/routines/delete", post(routines::delete))
         .route("/api/routines/run", post(routines::run_now))
@@ -1182,6 +1184,30 @@ async fn on_node_message(app: &App, node: &str, msg: FromNode) {
                     text,
                 };
                 publish(app, None, Some(&a.thread.bot), event);
+            }
+        }
+        FromNode::Usage {
+            attempt,
+            provider,
+            model,
+            input,
+            output,
+            cache_read,
+            cache_write,
+            cost_micros,
+        } => {
+            if let Some(a) = current(attempt) {
+                let tokens = [input, output, cache_read, cache_write];
+                usage::record(
+                    app,
+                    attempt.run,
+                    &a.thread.bot,
+                    &provider,
+                    &model,
+                    tokens,
+                    cost_micros,
+                )
+                .await;
             }
         }
         FromNode::Reply { attempt, text } => {

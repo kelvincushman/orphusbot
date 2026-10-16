@@ -55,12 +55,12 @@ Full detail: [docs/DESIGN.md](docs/DESIGN.md).
 | Milestone | Delivers |
 |---|---|
 | **M0 Skeleton** ✅ | A message from the browser streams a reply from Orphus on your laptop |
-| **M1 Durable runs** | Approvals, crash recovery, desktop app |
-| **M2 Computers** | Per-bot containers, live screen, takeover, GPU-box node |
-| **M3 System 1 + wearable** | Laya triage and approvals, tickets, routines, wearable tasks with the full duplex loop |
-| **M4 Reach + capture** | E2B overflow, Android app, push, ambient capture |
-| **M5 Learning** | Calibration, apply and rollback, in-process Laya |
-| **M6 Breadth** | MCP integrations, artifacts, secrets |
+| **M1 Durable runs** ✅ | Approvals, crash recovery, desktop app |
+| **M2 Computers** ✅ | Per-bot containers, live screen, takeover, multi-node placement (the GPU box joins as a node when it's set up) |
+| **M3 System 1 + wearable** ✅ | Laya triage and approvals, tickets, routines, wearable tasks with the full duplex loop |
+| **M4 Reach + capture** ✅ | Android app, push, usage tracking, ambient capture. E2B overflow waits for an E2B account |
+| **M5 Learning** ✅ | Label capture, calibration, apply and rollback. In-process Laya deferred ([D-028](docs/DECISIONS.md)) |
+| **M6 Breadth** ✅ | MCP connections, secrets, artifacts. Fleets and workflows as run targets wait on Orphus ([D-030](docs/DECISIONS.md)) |
 
 ## Documentation
 

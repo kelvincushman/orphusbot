@@ -1236,6 +1236,8 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
     let passkeys = RwSignal::new(Vec::<Passkey>::new());
     let nodes = RwSignal::new(Vec::<Node>::new());
     let decisions = RwSignal::new(Vec::<Decision>::new());
+    let wearables = RwSignal::new(Value::Null);
+    let pairing = RwSignal::new(None::<String>);
     let name = RwSignal::new("This device".to_owned());
     let command = RwSignal::new(None::<String>);
 
@@ -1244,6 +1246,7 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
             passkeys.set(api::get("/api/passkeys").await?);
             nodes.set(api::get("/api/nodes").await?);
             decisions.set(api::get("/api/decisions").await?);
+            wearables.set(api::get("/api/devices").await?);
             Ok(())
         })
     };
@@ -1376,6 +1379,36 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
                         <pre>{c}</pre>
                         <button on:click=copy>"Copy"</button>
                     })}
+                </div>
+                <div>
+                    <h3>"Wearable"</h3>
+                    <ul>
+                        {move || wearables.with(|w| w["devices"].as_array().cloned().unwrap_or_default()).into_iter().map(|d| {
+                            let seen = d["last_seen"].as_str().map_or("never", day).to_owned();
+                            view! { <li><span>{d["label"].as_str().filter(|l| !l.is_empty()).or(d["id"].as_str()).unwrap_or_default().to_owned()}
+                                <small>{format!("last seen {seen}{}", if d["hands_free"] == true { " · hands-free on" } else { "" })}</small></span></li> }
+                        }).collect_view()}
+                    </ul>
+                    <button on:click=move |_| ctx.run(async move {
+                        let res: Value = api::post("/api/devices/pairing-code", &json!({})).await?.json().await.map_err(|e| e.to_string())?;
+                        pairing.set(res["code"].as_str().map(str::to_owned));
+                        Ok(())
+                    })>"Pair a wearable"</button>
+                    {move || pairing.get().map(|code| {
+                        let origin = web_sys::window().and_then(|w| w.location().origin().ok()).unwrap_or_default();
+                        view! {
+                            <p class="muted">"In the wearable app's pairing page, use this server address and paste the code as the token. It works once, for 10 minutes."</p>
+                            <pre>{format!("Server: {origin}\nToken:  {code}")}</pre>
+                        }
+                    })}
+                    <h3>"Signals to the wrist"</h3>
+                    <ul class="decisions">
+                        {move || wearables.with(|w| w["messages"].as_array().cloned().unwrap_or_default()).into_iter().take(12).map(|m| {
+                            let text = format!("{} · {} · {}", m["cue"].as_str().unwrap_or_default().replace('_', " "),
+                                m["state"].as_str().unwrap_or_default(), m["outcome"].as_str().unwrap_or(""));
+                            view! { <li><span>{text}<small>{format!("{} · {}", m["kind"].as_str().unwrap_or_default(), m["subject"].as_str().unwrap_or_default())}</small></span></li> }
+                        }).collect_view()}
+                    </ul>
                 </div>
                 <div>
                     <h3>"Decisions"</h3>

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update habitat_message set state = 'superseded', closed_at = now()\n         where device_id = $1 and subject = $2 and kind = 'inform' and state in ('sent', 'delivered')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f1d428c004eb5915faba73edabf6d958b068ab3334b2607c5414b9930c572976"
+}

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "insert into run (thread_id, prompt, routine_id, ticket_id) values ($1, $2, $3, $4)\n                 returning id",
+  "query": "insert into habitat_message (device_id, kind, cue, subject, state, sent_at)\n         values ($1, 'inform', $2, $3, 'sent', now()) returning id",
   "describe": {
     "columns": [
       {
@@ -9,7 +9,7 @@
         "type_info": "Int8",
         "origin": {
           "Table": {
-            "table": "run",
+            "table": "habitat_message",
             "name": "id"
           }
         }
@@ -17,15 +17,14 @@
     ],
     "parameters": {
       "Left": [
-        "Int8",
         "Text",
-        "Int8",
-        "Int8"
+        "Text",
+        "Text"
       ]
     },
     "nullable": [
       false
     ]
   },
-  "hash": "c77293800f3fdd3093b7d4ac234a46f2aed09d82ce09950c3a010393218d2309"
+  "hash": "17cdbd389f73dc677526f42210ae6514dffdc955e723730c73fbfd72c70559c2"
 }

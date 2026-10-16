@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select id, subject, tap from habitat_message\n         where device_id = $1 and kind = 'ask' and state in ('sent', 'delivered') order by id limit 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "habitat_message",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "subject",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "habitat_message",
+            "name": "subject"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "tap",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "habitat_message",
+            "name": "tap"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "44302f0a79bc336c5569f3610617defa142f1bae4effe204255f756b0bfd1fcd"
+}

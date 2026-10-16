@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update habitat_message set state = 'delivered' where id = any($1) and state = 'sent'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ffdb594b3008b08aeb8147ced3f94c33dae3332b0f9d4bda429da3f32d25e099"
+}

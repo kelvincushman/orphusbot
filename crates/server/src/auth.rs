@@ -464,6 +464,7 @@ pub(crate) mod tests {
             rt: Mutex::default(),
             auth: Auth::new(ORIGIN, SETUP.into()).unwrap(),
             system1: crate::system1::System1::off(),
+            devices: Default::default(),
             ui_dir: String::new(),
         })
     }

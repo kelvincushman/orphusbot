@@ -160,6 +160,7 @@ Queries are checked at compile time. CI builds with `SQLX_OFFLINE=true` against 
 | `crates/proto/src/view.rs` | The thread reducer every client uses to turn events into what it shows |
 | `crates/ui` | The Leptos web UI (browser only; built with Trunk) |
 | `crates/desktop` | The Tauri 2 desktop app: a window onto the server |
+| `crates/device` | The wearable's wire constants and cue table, tested against its firmware and app |
 | `crates/ui/novnc` | noVNC 1.7.0, vendored unmodified (MPL-2.0), for the screen panel |
 | `images/desktop` | The bot computer image with a screen (VNC, openbox, Chromium) |
 | `crates/node` | The node daemon: server link and the Orphus engine |

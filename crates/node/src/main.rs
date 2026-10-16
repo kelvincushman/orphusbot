@@ -179,6 +179,18 @@ async fn session(cfg: &Config, key: &NodeKey) -> anyhow::Result<()> {
     let (screen_tx, mut screen_rx) = mpsc::channel::<Vec<u8>>(256);
     let mut screens: HashMap<u64, (Child, ChildStdin)> = HashMap::new();
     let mut heartbeat = tokio::time::interval(Duration::from_secs(10));
+    // The models it can use, so bots can be pointed at them by name.
+    {
+        let (out, orphus) = (out_tx.clone(), cfg.orphus.clone());
+        tokio::spawn(async move {
+            match list_models(&orphus).await {
+                Ok(models) => {
+                    let _ = out.send(FromNode::Models { models }).await;
+                }
+                Err(e) => warn!("listing Orphus's models: {e:#}"),
+            }
+        });
+    }
 
     loop {
         tokio::select! {
@@ -346,6 +358,28 @@ async fn extract(orphus: &str, system: &str, text: &str) -> anyhow::Result<Strin
         bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// `orphus --list-models` as `provider/model` names.
+async fn list_models(orphus: &str) -> anyhow::Result<Vec<String>> {
+    let out = Command::new(orphus)
+        .arg("--list-models")
+        .output()
+        .await
+        .with_context(|| format!("running {orphus} --list-models"))?;
+    Ok(parse_models(&String::from_utf8_lossy(&out.stdout)))
+}
+
+/// The table's first two columns, skipping its header.
+fn parse_models(table: &str) -> Vec<String> {
+    table
+        .lines()
+        .filter_map(|line| {
+            let mut cols = line.split_whitespace();
+            let (provider, model) = (cols.next()?, cols.next()?);
+            (provider != "provider").then(|| format!("{provider}/{model}"))
+        })
+        .collect()
 }
 
 /// The Orphus extension that sends every tool call to OrphusBot for approval.
@@ -581,4 +615,16 @@ async fn start_turn(
         "run started"
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn reads_the_model_table() {
+        let table = "provider       model                 context  max-out\nlocal          qwen3.8-27b-abl       65.5K    8.2K\nclaude-bridge  claude-sonnet-5       1M       128K\n";
+        assert_eq!(
+            super::parse_models(table),
+            ["local/qwen3.8-27b-abl", "claude-bridge/claude-sonnet-5"]
+        );
+    }
 }

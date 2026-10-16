@@ -57,6 +57,20 @@ This guide uses Cloudflare for DNS and [Caddy](https://caddyserver.com) for HTTP
 
 10. **First sign-in.** Open `https://bots.example.com` from a device on NetBird, enter the setup token (`ORPHUSBOT_SETUP_TOKEN`), and add a passkey when asked. From then on, sign in with the passkey. Add one passkey per device, or use a passkey manager that syncs them.
 
+## Before the domain: running it now, over an SSH tunnel
+
+Everything except HTTPS can run today without the domain or Caddy. This is how the GPU box runs it until steps 1–5 are done:
+
+- **Programs:** build on the box (`SQLX_OFFLINE=true cargo build --release -p orphusbot-server -p orphusbot-node`), and copy `crates/ui/dist` from a machine with Trunk.
+- **Database:** its own container, loopback only: `docker run -d --name orphusbot-postgres --restart unless-stopped -p 127.0.0.1:5433:5432 --env-file ~/.config/orphusbot/pg.env -v orphusbot-pg:/var/lib/postgresql/data postgres:16-alpine`.
+- **Settings:** `~/.config/orphusbot/server.env` and `node.env`, mode `0600` (the database URL, `ORPHUSBOT_SETUP_TOKEN`, `ORPHUSBOT_BIND=127.0.0.1:7480`, `ORPHUSBOT_ORIGIN=http://localhost:7480`, `ORPHUSBOT_SECRET_KEY_FILE`; the node's `ORPHUSBOT_SERVER=ws://127.0.0.1:7480/node`, `ORPHUS_BIN`, `ORPHUSBOT_COMPUTER_IMAGE`).
+- **Services:** systemd user units `orphusbot-server` and `orphusbot-node` with `EnvironmentFile=`, and `loginctl enable-linger` so they start at boot.
+- **Computers:** rootless Podman (`apt install podman uidmap passt nftables`) and `podman build -t localhost/orphusbot-desktop images/desktop`.
+- **Two things Ubuntu needs, or computers won't start (they fail closed):**
+  - the node's `PATH` must include `/usr/sbin`, where `nft` is;
+  - the `nft_reject_inet`, `nft_reject_ipv4` and `nft_reject_ipv6` kernel modules must be loaded (`modprobe`, and list them in `/etc/modules-load.d/orphusbot.conf`), because a rootless container can't load them itself.
+- **Clients:** each laptop keeps a tunnel open, `ssh -N -L 127.0.0.1:7480:127.0.0.1:7480 <user>@<gpu-box>` (a systemd user unit with `Restart=always` works well), and uses `http://localhost:7480`. Passkeys work there, because browsers treat `localhost` as secure. Passkeys made on `localhost` don't carry over to the domain later; add new ones then.
+
 ## Troubleshooting
 
 | Symptom | Cause and fix |

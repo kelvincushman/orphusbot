@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into run (thread_id, prompt, routine_id, ticket_id) values ($1, $2, $3, $4)\n                 returning id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "run",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c77293800f3fdd3093b7d4ac234a46f2aed09d82ce09950c3a010393218d2309"
+}

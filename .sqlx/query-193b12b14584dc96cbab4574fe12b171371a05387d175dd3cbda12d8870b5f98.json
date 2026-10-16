@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update ticket set status = 'doing' where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "193b12b14584dc96cbab4574fe12b171371a05387d175dd3cbda12d8870b5f98"
+}

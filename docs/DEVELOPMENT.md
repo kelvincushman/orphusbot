@@ -170,7 +170,7 @@ These are known simplifications, each marked `ponytail:` in the code, with the m
 
 | Simplification | Replaced in |
 |---|---|
-| System 1 asks one triage question (which bot) and one gate question (pass or ask); urgency, act-now and untrusted come later | M3.3+ |
+| System 1 asks which bot (inbox messages), which bot / urgency / act-now (tickets), pass or ask (gate) and worth running (routines); untrusted comes with E2B | M4 |
 | Streaming text isn't stored; only finished messages are replayed after a reconnect | M2 (batched progress events) |
 | Read-only tools still round-trip to the server before running | When it measurably slows bots down |
 | Live events fan out inside one server process, not through Postgres `NOTIFY` | When there's more than one server process |

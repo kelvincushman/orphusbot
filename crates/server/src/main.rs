@@ -16,6 +16,7 @@ mod routines;
 mod runs;
 mod screens;
 mod system1;
+mod tickets;
 
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -236,6 +237,9 @@ fn router(app: Shared) -> Router {
         .route("/api/routines", get(routines::list).post(routines::save))
         .route("/api/routines/delete", post(routines::delete))
         .route("/api/routines/run", post(routines::run_now))
+        .route("/api/tickets", get(tickets::list).post(tickets::create))
+        .route("/api/tickets/update", post(tickets::update))
+        .route("/api/tickets/start", post(tickets::start_now))
         .route("/api/screen", get(screens::open))
         .route("/api/links/{code}", get(links::lookup))
         .route("/api/links/approve", post(links::approve))
@@ -328,25 +332,32 @@ async fn send_message(
         .map_err(|e| internal("storing message", e))?;
     publish(&app, Some(id), Some(&thread.bot), event);
 
+    // Tickets named in the message (OB-12) go to the bot as labelled data (B-TKT-03).
+    let run_text = format!("{text}{}", tickets::referenced(&app.db, &text).await);
     // A new task for the inbox goes to System 1 first; a follow-up joins the inbox's run.
     if thread.bot == "inbox" && app.system1.enabled() {
         let busy = runs::busy(&app.db, thread.id)
             .await
             .map_err(|e| internal("checking the inbox", e))?;
         if !busy {
-            tokio::spawn(triage(app.clone(), thread, text));
+            tokio::spawn(triage(app.clone(), thread, text, run_text));
             return Ok(StatusCode::ACCEPTED);
         }
     }
-    submit(&app, &thread, text)
+    submit(&app, &thread, run_text, runs::Source::default())
         .await
         .map_err(|e| internal("queueing run", e))?;
     Ok(StatusCode::ACCEPTED)
 }
 
 /// Queues `text` as a run in `thread`, or adds it to the thread's active run.
-async fn submit(app: &App, thread: &db::Thread, text: String) -> sqlx::Result<()> {
-    match runs::submit(&app.db, thread.id, &text).await? {
+async fn submit(
+    app: &App,
+    thread: &db::Thread,
+    text: String,
+    source: runs::Source,
+) -> sqlx::Result<()> {
+    match runs::submit(&app.db, thread.id, &text, source).await? {
         Submitted::Queued(run) => {
             lock(&app.rt).waiting.remove(&run);
             let event = ThreadEvent::RunQueued { run, waiting: None };
@@ -369,7 +380,7 @@ async fn submit(app: &App, thread: &db::Thread, text: String) -> sqlx::Result<()
 /// Asks System 1 which bot an inbox message is for (DESIGN §7.2). If it's sure,
 /// the message moves to that bot's thread and the inbox says so; otherwise the
 /// inbox keeps it (PRD B-BOT-03).
-async fn triage(app: Shared, inbox: db::Thread, text: String) {
+async fn triage(app: Shared, inbox: db::Thread, text: String, run_text: String) {
     let roster = bots::all(&app.db).await.unwrap_or_default();
     let routed = app.system1.route(&app.db, &text, &roster).await;
     let target = match &routed {
@@ -394,7 +405,7 @@ async fn triage(app: Shared, inbox: db::Thread, text: String) {
         }
         _ => inbox,
     };
-    if let Err(e) = submit(&app, &thread, text).await {
+    if let Err(e) = submit(&app, &thread, run_text, runs::Source::default()).await {
         warn!("queueing a run: {e}");
     }
 }
@@ -1161,6 +1172,7 @@ async fn run_ended(
     error: Option<String>,
 ) {
     expire_dialogs(app, run).await;
+    tickets::run_ended(&app.db, run, outcome).await;
     let event = ThreadEvent::RunEnded {
         run,
         outcome,

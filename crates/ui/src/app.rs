@@ -324,6 +324,7 @@ fn Shell() -> impl IntoView {
     desk.load_bots(ctx);
     let settings = RwSignal::new(false);
     let routines = RwSignal::new(false);
+    let tickets = RwSignal::new(false);
     let menu = RwSignal::new(false);
     // `None`: closed; `Some(None)`: a new bot; `Some(Some(bot))`: editing it.
     let editing = RwSignal::new(None::<Option<Bot>>);
@@ -372,6 +373,7 @@ fn Shell() -> impl IntoView {
                 } />
                 <button class="new-bot" on:click=move |_| { editing.set(Some(None)); menu.set(false); }>"+ New bot"</button>
                 <div class="spacer"></div>
+                <button on:click=move |_| { tickets.set(true); menu.set(false); }>"Tickets"</button>
                 <button on:click=move |_| { routines.set(true); menu.set(false); }>"Routines"</button>
                 <button on:click=move |_| settings.set(true)>"Settings"</button>
             </nav>
@@ -407,6 +409,9 @@ fn Shell() -> impl IntoView {
             </Show>
             <Show when=move || routines.get()>
                 <Routines open=routines />
+            </Show>
+            <Show when=move || tickets.get()>
+                <Tickets open=tickets />
             </Show>
             {move || editing.get().map(|bot| view! { <BotSheet bot editing /> })}
         </div>
@@ -771,6 +776,143 @@ fn BotScreen() -> impl IntoView {
                     }
                 }}</p>
                 <div class="vnc" node_ref=host></div>
+            </section>
+        </div>
+    }
+}
+
+/// A ticket, as the server lists it (server `tickets::Ticket`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+struct Ticket {
+    id: i64,
+    title: String,
+    body: String,
+    status: String,
+    urgency: String,
+    bot: Option<String>,
+    act_now: bool,
+}
+
+const STATUSES: [(&str, &str); 5] = [
+    ("todo", "To do"),
+    ("doing", "Doing"),
+    ("review", "Review"),
+    ("blocked", "Blocked"),
+    ("done", "Done"),
+];
+const URGENCIES: [(&str, &str); 4] = [
+    ("now", "Now"),
+    ("hour", "Within the hour"),
+    ("today", "Today"),
+    ("whenever", "Whenever"),
+];
+
+/// The ticket board (PRD B-TKT-01..03).
+#[component]
+fn Tickets(open: RwSignal<bool>) -> impl IntoView {
+    let ctx = expect_context::<Ctx>();
+    let desk = expect_context::<Desk>();
+    let list = RwSignal::new(Vec::<Ticket>::new());
+    let title = RwSignal::new(String::new());
+    let body = RwSignal::new(String::new());
+    let load = move || {
+        ctx.run(async move {
+            list.set(api::get("/api/tickets").await?);
+            Ok(())
+        })
+    };
+    // Reload whenever a thread changes, so tickets move as their runs do.
+    Effect::new(move |_| {
+        desk.threads.track();
+        load();
+    });
+    let create = move |ev: SubmitEvent| {
+        ev.prevent_default();
+        let new = json!({ "title": title.get_untracked(), "body": body.get_untracked() });
+        ctx.run(async move {
+            api::post("/api/tickets", &new).await?;
+            title.set(String::new());
+            body.set(String::new());
+            load();
+            Ok(())
+        })
+    };
+    let save = move |t: Ticket| {
+        ctx.run(async move {
+            api::post(
+                "/api/tickets/update",
+                &serde_json::to_value(&t).map_err(|e| e.to_string())?,
+            )
+            .await?;
+            load();
+            Ok(())
+        })
+    };
+    let column = move |status: &'static str| -> Vec<Ticket> {
+        list.get()
+            .into_iter()
+            .filter(|t| t.status == status)
+            .collect()
+    };
+    let start = move |id: i64| {
+        ctx.run(async move {
+            api::post("/api/tickets/start", &json!({ "id": id })).await?;
+            load();
+            Ok(())
+        })
+    };
+    view! {
+        <div class="overlay" on:keydown=move |ev: KeyboardEvent| if ev.key() == "Escape" { open.set(false) }>
+            <section class="sheet board-sheet" role="dialog" aria-modal="true" aria-labelledby="tickets-title">
+                <header>
+                    <h2 id="tickets-title">"Tickets"</h2>
+                    <button autofocus on:click=move |_| open.set(false)>"Close"</button>
+                </header>
+                <form class="row new-ticket" on:submit=create>
+                    <input required maxlength="200" aria-label="New ticket" placeholder="New ticket: what needs doing?" bind:value=title style="flex: 2" />
+                    <input maxlength="8000" aria-label="Details" placeholder="Details (optional)" bind:value=body style="flex: 3" />
+                    <button class="primary">"Add"</button>
+                </form>
+                <div class="board">
+                    {STATUSES.map(|(status, label)| view! {
+                        <section class="column" aria-label=label>
+                            <h3>{label}" "<span class="muted">{move || column(status).len()}</span></h3>
+                            <For each=move || column(status)
+                                key=|t| (t.id, t.status.clone(), t.bot.clone(), t.urgency.clone())
+                                children=move |t| {
+                                    let (for_bot, for_urgency, for_status) = (t.clone(), t.clone(), t.clone());
+                                    let can_start = t.bot.is_some() && t.status == "todo";
+                                    let id = t.id;
+                                    view! {
+                                        <article class="ticket" class:urgent=t.urgency == "now" || t.urgency == "hour">
+                                            <strong>{format!("OB-{} {}", t.id, t.title)}</strong>
+                                            {(!t.body.is_empty()).then(|| view! { <p class="muted">{t.body.clone()}</p> })}
+                                            <select aria-label="Bot" on:change=move |ev| {
+                                                let v = event_target_value(&ev);
+                                                save(Ticket { bot: (!v.is_empty()).then_some(v), ..for_bot.clone() });
+                                            } prop:value=t.bot.clone().unwrap_or_default()>
+                                                <option value="">"Unassigned"</option>
+                                                {desk.bots.get_untracked().into_iter().filter(|b| !b.disabled).map(|b| view! {
+                                                    <option value=b.slug.clone()>{b.name.clone()}</option>
+                                                }).collect_view()}
+                                            </select>
+                                            <select aria-label="Urgency" on:change=move |ev| {
+                                                save(Ticket { urgency: event_target_value(&ev), ..for_urgency.clone() });
+                                            } prop:value=t.urgency.clone()>
+                                                {URGENCIES.map(|(u, l)| view! { <option value=u>{l}</option> })}
+                                            </select>
+                                            <select aria-label="Status" on:change=move |ev| {
+                                                save(Ticket { status: event_target_value(&ev), ..for_status.clone() });
+                                            } prop:value=t.status.clone()>
+                                                {STATUSES.map(|(st, l)| view! { <option value=st>{l}</option> })}
+                                            </select>
+                                            {can_start.then(|| view! { <button class="primary" on:click=move |_| start(id)>"Start"</button> })}
+                                        </article>
+                                    }
+                                } />
+                        </section>
+                    })}
+                </div>
             </section>
         </div>
     }

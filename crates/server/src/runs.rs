@@ -21,8 +21,20 @@ pub enum Submitted {
     Steer { run: i64, fence: i64 },
 }
 
+/// What started a run, kept on it from the moment it's created.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Source {
+    pub routine: Option<i64>,
+    pub ticket: Option<i64>,
+}
+
 /// Queues the message as a run, or attaches it to the thread's active run.
-pub async fn submit(db: &PgPool, thread: i64, text: &str) -> sqlx::Result<Submitted> {
+pub async fn submit(
+    db: &PgPool,
+    thread: i64,
+    text: &str,
+    source: Source,
+) -> sqlx::Result<Submitted> {
     let mut tx = db.begin().await?;
     // Lock the thread row so two submits can't both see "no active run".
     sqlx::query!("select id from thread where id = $1 for update", thread)
@@ -52,9 +64,12 @@ pub async fn submit(db: &PgPool, thread: i64, text: &str) -> sqlx::Result<Submit
         }
         None => {
             let id = sqlx::query_scalar!(
-                "insert into run (thread_id, prompt) values ($1, $2) returning id",
+                "insert into run (thread_id, prompt, routine_id, ticket_id) values ($1, $2, $3, $4)
+                 returning id",
                 thread,
-                text
+                text,
+                source.routine,
+                source.ticket
             )
             .fetch_one(&mut *tx)
             .await?;
@@ -253,11 +268,12 @@ mod tests {
 
     #[sqlx::test]
     async fn second_message_joins_or_steers(db: PgPool) {
-        let Submitted::Queued(run) = submit(&db, INBOX, "one").await.unwrap() else {
+        let Submitted::Queued(run) = submit(&db, INBOX, "one", Source::default()).await.unwrap()
+        else {
             panic!("expected a new run")
         };
         assert_eq!(
-            submit(&db, INBOX, "two").await.unwrap(),
+            submit(&db, INBOX, "two", Source::default()).await.unwrap(),
             Submitted::Joined(run)
         );
         assert_eq!(
@@ -271,7 +287,9 @@ mod tests {
         assert_eq!(c.prompt, "one\n\ntwo");
         assert!(!c.resumed);
         assert_eq!(
-            submit(&db, INBOX, "three").await.unwrap(),
+            submit(&db, INBOX, "three", Source::default())
+                .await
+                .unwrap(),
             Submitted::Steer {
                 run,
                 fence: c.fence
@@ -281,7 +299,8 @@ mod tests {
 
     #[sqlx::test]
     async fn stale_fence_cannot_finish_and_requeue_bumps_the_fence(db: PgPool) {
-        let Submitted::Queued(run) = submit(&db, INBOX, "work").await.unwrap() else {
+        let Submitted::Queued(run) = submit(&db, INBOX, "work", Source::default()).await.unwrap()
+        else {
             panic!("expected a new run")
         };
         let first = claim(&db, run, "laptop").await.unwrap().unwrap();
@@ -320,7 +339,8 @@ mod tests {
 
     #[sqlx::test]
     async fn expired_leases_requeue_until_attempts_run_out(db: PgPool) {
-        let Submitted::Queued(run) = submit(&db, INBOX, "work").await.unwrap() else {
+        let Submitted::Queued(run) = submit(&db, INBOX, "work", Source::default()).await.unwrap()
+        else {
             panic!("expected a new run")
         };
         for attempt in 1..=MAX_ATTEMPTS {
@@ -341,7 +361,8 @@ mod tests {
 
     #[sqlx::test]
     async fn renewing_keeps_a_lease_alive(db: PgPool) {
-        let Submitted::Queued(run) = submit(&db, INBOX, "work").await.unwrap() else {
+        let Submitted::Queued(run) = submit(&db, INBOX, "work", Source::default()).await.unwrap()
+        else {
             panic!("expected a new run")
         };
         claim(&db, run, "laptop").await.unwrap().unwrap();

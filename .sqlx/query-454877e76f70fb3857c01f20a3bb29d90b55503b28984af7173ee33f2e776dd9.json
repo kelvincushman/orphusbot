@@ -1,0 +1,93 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select t.id, t.title, t.body, t.status::text as \"status!\", t.urgency, b.slug as \"bot?\", t.act_now\n           from ticket t left join bot b on b.id = t.bot_id\n           order by t.status = 'done', array_position(array['now', 'hour', 'today', 'whenever'], t.urgency), t.id desc",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ticket",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ticket",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "body",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ticket",
+            "name": "body"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "status!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "urgency",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ticket",
+            "name": "urgency"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "bot?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "slug"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "act_now",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "ticket",
+            "name": "act_now"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "454877e76f70fb3857c01f20a3bb29d90b55503b28984af7173ee33f2e776dd9"
+}

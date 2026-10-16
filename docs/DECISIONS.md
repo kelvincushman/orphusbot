@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-018: The web UI is Leptos CSR built with Trunk and served as static files (2026-10-16)
+
+**Decided:** `crates/ui` is a client-side Leptos app built to WebAssembly with Trunk. The server serves the built folder; the Tauri apps will load the same bundle. View state comes from one reducer in `proto` (`view::ThreadView`). The crate's dependencies are declared for `wasm32` only, so native workspace builds skip Leptos. Passkey prompts use a small inline JavaScript shim around `PublicKeyCredential.parse*OptionsFromJSON` and `toJSON()`.
+**Why:** CSR needs no server-side rendering and fits Tauri, which loads static files. Trunk is the standard CSR build tool. Keeping the reducer in `proto` means it's tested natively and shared by every client. The browser's own WebAuthn JSON helpers make the shim a few lines; binding the same API through `web-sys` would be far more code.
+**Alternatives:** Leptos SSR with `cargo-leptos` (needs a server render path the Tauri apps don't use); embedding the bundle in the server binary (couples server builds to the WebAssembly toolchain); `web-sys` WebAuthn bindings.
+**Revisit if:** first load is too slow on the phone, at which point add SSR or split the bundle.
+
 ## D-017: Nodes prove who they are by signing a server challenge inside the link, with OpenSSL's Ed25519 (2026-10-16)
 
 **Decided:** the shared node token is gone. Each node has its own Ed25519 key, registered once with a one-time code the owner creates while signed in. Enrolment and the signed hello both happen over the existing `/node` WebSocket: the server's first frame is a random nonce; the node answers with a signature over its name and the nonce, or with an enrolment request. Signing and verifying use the `openssl` crate.

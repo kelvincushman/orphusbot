@@ -463,6 +463,7 @@ mod tests {
             live: tokio::sync::broadcast::channel(16).0,
             rt: Mutex::default(),
             auth: Auth::new(ORIGIN, SETUP.into()).unwrap(),
+            ui_dir: String::new(),
         })
     }
 

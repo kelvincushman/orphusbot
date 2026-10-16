@@ -6,6 +6,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub mod view;
+
 /// Identifies one attempt at a run. A node tags everything it reports with
 /// this; the server ignores reports whose fence is no longer current
 /// (DESIGN §3.3).

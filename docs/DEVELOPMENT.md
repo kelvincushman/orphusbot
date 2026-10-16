@@ -62,6 +62,15 @@ Needs WebKitGTK 4.1 and its development files (Arch: `webkit2gtk-4.1`; Debian an
 ORPHUSBOT_URL=http://localhost:7480 cargo run -p orphusbot-desktop
 ```
 
+**A bot computer with a screen.** Build the desktop image once, then point the node at it:
+
+```sh
+podman build -t localhost/orphusbot-desktop images/desktop
+export ORPHUSBOT_COMPUTER_IMAGE=localhost/orphusbot-desktop
+```
+
+The chat header's **Screen** button shows the bot's screen live; **Take control** lets you use it.
+
 Without `ORPHUSBOT_URL`, the first run asks for the server address and saves it; `--reset` forgets it. Sign in with **Sign in with another device**: approve the code it shows from a browser where you have a passkey (Settings → Link a device, or open the link it shows). To build installable packages (`.deb`, `.rpm`, AppImage): `cd crates/desktop && npx @tauri-apps/cli@2 build`.
 
 ## Settings
@@ -131,6 +140,8 @@ Queries are checked at compile time. CI builds with `SQLX_OFFLINE=true` against 
 | `crates/proto/src/view.rs` | The thread reducer every client uses to turn events into what it shows |
 | `crates/ui` | The Leptos web UI (browser only; built with Trunk) |
 | `crates/desktop` | The Tauri 2 desktop app: a window onto the server |
+| `crates/ui/novnc` | noVNC 1.7.0, vendored unmodified (MPL-2.0), for the screen panel |
+| `images/desktop` | The bot computer image with a screen (VNC, openbox, Chromium) |
 | `crates/node` | The node daemon: server link and the Orphus engine |
 
 ## What M0 deliberately leaves out

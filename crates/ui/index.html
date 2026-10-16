@@ -7,6 +7,12 @@
   <title>OrphusBot</title>
   <link data-trunk rel="css" href="style.css">
   <link data-trunk rel="rust" data-wasm-opt="z">
+  <link data-trunk rel="copy-dir" href="novnc">
+  <!-- noVNC (MPL-2.0, unmodified, novnc/VERSION) for the bot's screen; the app reaches it as window.OrphusRFB. -->
+  <script type="module">
+    import RFB from "./novnc/core/rfb.js";
+    window.OrphusRFB = RFB;
+  </script>
 </head>
 <body></body>
 </html>

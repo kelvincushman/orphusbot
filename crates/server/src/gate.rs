@@ -9,8 +9,17 @@ use serde_json::Value;
 use sqlx::PgPool;
 use sqlx::types::Json;
 
-/// Tools that only read, so they run without asking and aren't ledgered.
-const READ_ONLY: &[&str] = &["read", "ls", "find", "grep", "search", "glob"];
+/// Tools that run without asking and aren't ledgered: they only read, or (like
+/// `request_takeover`) only ask the owner something.
+const READ_ONLY: &[&str] = &[
+    "read",
+    "ls",
+    "find",
+    "grep",
+    "search",
+    "glob",
+    "request_takeover",
+];
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Verdict {

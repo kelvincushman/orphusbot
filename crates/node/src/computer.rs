@@ -14,7 +14,7 @@ use std::process::Stdio;
 
 use anyhow::{Context, bail};
 use tokio::io::AsyncWriteExt;
-use tokio::process::Command;
+use tokio::process::{Child, Command};
 use tracing::info;
 
 /// The home folder inside every computer; the engine's working folder maps onto it.
@@ -110,6 +110,20 @@ impl Spec<'_> {
             return Err(e.context("blocking local networks for the computer"));
         }
         Ok(name)
+    }
+
+    /// A raw VNC stream to the computer's screen, on the child's stdin and stdout.
+    /// The VNC server listens only inside the container (images/desktop).
+    pub async fn open_screen(&self) -> anyhow::Result<Child> {
+        let name = self.ensure().await?;
+        Command::new(self.runtime)
+            .args(["exec", "-i", &name, "socat", "STDIO", "TCP:127.0.0.1:5900"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .context("starting the screen stream")
     }
 
     async fn fence(&self, name: &str) -> anyhow::Result<()> {

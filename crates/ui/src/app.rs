@@ -28,6 +28,8 @@ struct Ctx {
     needs_passkey: RwSignal<bool>,
     /// The last error or confirmation; click to dismiss.
     toast: RwSignal<String>,
+    /// The bot's screen panel is open.
+    bot_screen: RwSignal<bool>,
 }
 
 impl Ctx {
@@ -62,6 +64,7 @@ pub fn App() -> impl IntoView {
         screen: RwSignal::new(Screen::Loading),
         needs_passkey: RwSignal::new(false),
         toast: RwSignal::new(String::new()),
+        bot_screen: RwSignal::new(false),
     };
     provide_context(ctx);
     ctx.reload();
@@ -278,6 +281,7 @@ fn Shell() -> impl IntoView {
                         <h1>"Orphus"</h1>
                         <span class="status" role="status">{move || status.get()}</span>
                     </div>
+                    <button aria-label="Show the bot's screen" on:click=move |_| ctx.bot_screen.set(true)>"Screen"</button>
                     <button aria-label="Settings" on:click=move |_| settings.set(true)>"⚙"</button>
                 </header>
                 <Show when=move || ctx.needs_passkey.get()>
@@ -291,6 +295,9 @@ fn Shell() -> impl IntoView {
             </main>
             <Show when=move || settings.get()>
                 <Settings open=settings link_code />
+            </Show>
+            <Show when=move || ctx.bot_screen.get()>
+                <BotScreen />
             </Show>
         </div>
     }
@@ -372,6 +379,18 @@ fn Card(dialog: Dialog, outcome: Option<String>) -> impl IntoView {
                     {choice("Allow once", json!({ "id": id, "decision": "allow" }), "primary")}
                     {choice(format!("Always allow {tool}"), json!({ "id": id, "decision": "always" }), "")}
                     {choice("Deny", json!({ "id": id, "decision": "deny" }), "danger")}
+                </div>
+            })}
+        }
+        .into_any(),
+        DialogKind::Takeover { reason } => view! {
+            <h2>"Orphus needs you on its screen"</h2>
+            <p>{reason}</p>
+            {open.then(|| view! {
+                <div class="row">
+                    <button type="button" class="primary" on:click=move |_| ctx.bot_screen.set(true)>"Open screen"</button>
+                    {choice("Done", json!({ "id": id, "confirmed": true }), "")}
+                    {choice("I can't", json!({ "id": id, "confirmed": false }), "")}
                 </div>
             })}
         }
@@ -470,6 +489,69 @@ fn Composer(thread: RwSignal<ThreadView>) -> impl IntoView {
                 </Show>
                 <button class="primary" disabled=move || busy.get()>"Send"</button>
             </form>
+        </div>
+    }
+}
+
+/// The bot's screen, watched live; "Take control" lets your mouse and keyboard through.
+#[component]
+fn BotScreen() -> impl IntoView {
+    let ctx = expect_context::<Ctx>();
+    let control = RwSignal::new(false);
+    let ended = RwSignal::new(false);
+    let host = NodeRef::<leptos::html::Div>::new();
+    let rfb = StoredValue::new_local(None::<JsValue>);
+    Effect::new(move |_| {
+        let Some(el) = host.get() else { return };
+        if rfb.with_value(Option::is_some) {
+            return;
+        }
+        let on_end = Closure::<dyn Fn()>::new(move || ended.set(true));
+        let screen = api::open_screen(&el, true, on_end.as_ref().unchecked_ref());
+        // ponytail: one small closure per opened panel is left for the page's lifetime.
+        on_end.forget();
+        rfb.set_value(Some(screen));
+    });
+    Effect::new(move |_| {
+        let view_only = !control.get();
+        rfb.with_value(|r| {
+            if let Some(r) = r {
+                api::set_view_only(r, view_only);
+            }
+        });
+    });
+    let close = move |_| {
+        rfb.with_value(|r| {
+            if let Some(r) = r {
+                api::close_screen(r);
+            }
+        });
+        ctx.bot_screen.set(false);
+    };
+    view! {
+        <div class="overlay">
+            <section class="sheet screen" role="dialog" aria-modal="true" aria-labelledby="screen-title">
+                <header>
+                    <h2 id="screen-title">"Orphus's screen"</h2>
+                    <div class="row">
+                        <button class:primary=move || control.get() aria-pressed=move || control.get().to_string()
+                            on:click=move |_| control.update(|c| *c = !*c)>
+                            {move || if control.get() { "Release control" } else { "Take control" }}
+                        </button>
+                        <button on:click=close>"Close"</button>
+                    </div>
+                </header>
+                <p class="muted" role="status">{move || {
+                    if ended.get() {
+                        "The screen closed. The bot's computer may have no screen, or its node went away."
+                    } else if control.get() {
+                        "You have control: your mouse and keyboard go to the bot's computer."
+                    } else {
+                        "Watching. Take control to use the screen yourself."
+                    }
+                }}</p>
+                <div class="vnc" node_ref=host></div>
+            </section>
         </div>
     }
 }

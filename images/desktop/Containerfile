@@ -1,0 +1,16 @@
+# A bot's computer with a screen (DESIGN §4.4): a VNC display, a window manager
+# and Chromium. The VNC server listens only inside the container; the node reaches
+# it through `podman exec … socat`, so no port is ever published.
+FROM docker.io/library/debian:trixie-slim
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      tigervnc-standalone-server openbox chromium socat xdotool x11-utils \
+      fonts-dejavu-core ca-certificates curl git python3 \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY start-screen /usr/local/bin/start-screen
+ENV DISPLAY=:1 HOME=/home/bot
+WORKDIR /home/bot
+ENTRYPOINT ["/usr/local/bin/start-screen"]
+CMD ["sleep", "infinity"]

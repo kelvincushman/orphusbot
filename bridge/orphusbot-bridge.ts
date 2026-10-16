@@ -17,6 +17,7 @@
 // in RPC mode under orphusbot-node, so in any other mode it blocks everything.
 
 import { spawn } from "node:child_process";
+import { Type } from "typebox";
 import type { ExtensionAPI } from "@orphus/coding-agent";
 import {
   type BashOperations,
@@ -29,12 +30,14 @@ import {
 } from "@orphus/coding-agent";
 
 export const GATE_TITLE = "orphusbot-gate";
+/** Title of the dialog that asks the owner to take over the screen (DESIGN §4.4). */
+export const TAKEOVER_TITLE = "orphusbot-takeover";
 
 const computer = process.env.ORPHUSBOT_COMPUTER;
 const runtime = process.env.ORPHUSBOT_RUNTIME ?? "podman";
 const home = process.env.ORPHUSBOT_COMPUTER_HOME ?? "/home/bot";
 /** In a computer, only these run: each one is redirected into it. */
-const COMPUTER_TOOLS = ["read", "write", "edit", "bash"];
+const COMPUTER_TOOLS = ["read", "write", "edit", "bash", "request_takeover"];
 const IMAGES: Record<string, string> = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
 };
@@ -119,6 +122,32 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool(createWriteTool(cwd, { operations: write }));
   pi.registerTool(createEditTool(cwd, { operations: { readFile: read.readFile, access: read.access, writeFile: write.writeFile } }));
   pi.registerTool(createBashTool(cwd, { operations: bash }));
+  // Runs here, not in the computer, but only asks the owner a question.
+  pi.registerTool({
+    name: "request_takeover",
+    label: "Ask the owner to take over",
+    description:
+      "Ask the owner to use your computer's screen themselves, for example to log in, solve a captcha or approve a payment page. Waits until they say they're done or can't help.",
+    promptSnippet: "Ask the owner to do something on your screen, such as log in",
+    promptGuidelines: [
+      "Your computer has a screen (DISPLAY=:1). Open a web page on it with bash: `setsid chromium --no-sandbox --disable-dev-shm-usage <url> >/dev/null 2>&1 &`.",
+      "Use request_takeover when a page needs the owner (a login, a captcha, a payment); leave the page open on the screen first, then carry on when it returns.",
+    ],
+    parameters: Type.Object({
+      reason: Type.String({ description: "What the owner should do, in one short sentence" }),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const hasScreen = await inComputer("command -v Xvnc").then(() => true, () => false);
+      if (!hasScreen) {
+        return { content: [{ type: "text", text: "This computer has no screen, so the owner can't take over." }], details: {} };
+      }
+      const done = await ctx.ui.confirm(TAKEOVER_TITLE, params.reason);
+      const text = done
+        ? "The owner says they're done. Check the screen, then carry on."
+        : "The owner couldn't do it. Find another way, or say what is blocking you.";
+      return { content: [{ type: "text", text }], details: {} };
+    },
+  });
   // Offer only the redirected tools (find, grep and ls are done with bash, in the computer).
   // Set before every agent start, since other tools can register after the session starts.
   const onlyComputerTools = async () => pi.setActiveTools(COMPUTER_TOOLS);

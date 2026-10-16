@@ -12,6 +12,7 @@ mod gate;
 mod links;
 mod nodes;
 mod runs;
+mod screens;
 
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -62,6 +63,8 @@ struct NodeLink {
     tx: mpsc::Sender<ToNode>,
     /// Drops the link, when the node is removed.
     kick: Arc<Notify>,
+    /// Binary screen frames for the node (see `screens`).
+    screen: mpsc::Sender<Vec<u8>>,
 }
 
 /// A dialog the engine is blocked on.
@@ -70,6 +73,8 @@ struct Pending {
     attempt: Attempt,
     /// Set for approval gates: the tool call being decided.
     tool_call_id: Option<String>,
+    /// A takeover request: its yes and no read "Done" and "Couldn't help".
+    takeover: bool,
 }
 
 /// In-memory view of the link. Postgres stays the source of truth for runs;
@@ -81,10 +86,15 @@ struct Runtime {
     active: Option<Attempt>,
     /// Open dialogs by Orphus request id.
     dialogs: HashMap<String, Pending>,
+    /// Open screen viewers by stream number.
+    screens: HashMap<u64, mpsc::Sender<screens::ToViewer>>,
+    next_screen: u64,
 }
 
 /// Title the bridge extension gives its approval requests (bridge/orphusbot-bridge.ts).
 const GATE_TITLE: &str = "orphusbot-gate";
+/// Title of the bridge's `request_takeover` confirm dialog.
+const TAKEOVER_TITLE: &str = "orphusbot-takeover";
 
 struct App {
     db: PgPool,
@@ -170,6 +180,7 @@ fn router(app: Shared) -> Router {
         .route("/api/passkeys/finish", post(auth::register_finish))
         .route("/api/passkeys/remove", post(auth::remove_passkey))
         .route("/api/logout", post(auth::logout))
+        .route("/api/screen", get(screens::open))
         .route("/api/links/{code}", get(links::lookup))
         .route("/api/links/approve", post(links::approve))
         .route("/api/nodes", get(nodes::list))
@@ -343,7 +354,13 @@ async fn answer_dialog(
                 (ui_response(&id, "value", json!(value)), outcome)
             }
             (None, Some(yes)) => {
-                let outcome = if yes { "Yes" } else { "No" }.to_owned();
+                let outcome = match (pending.takeover, yes) {
+                    (true, true) => "Done",
+                    (true, false) => "Couldn't help",
+                    (false, true) => "Yes",
+                    (false, false) => "No",
+                }
+                .to_owned();
                 (ui_response(&id, "confirmed", json!(yes)), outcome)
             }
             (None, None) => (
@@ -450,17 +467,24 @@ async fn on_dialog(app: &App, attempt: Attempt, request: Value) {
                     .collect()
             })
             .unwrap_or_default();
-        let kind = DialogKind::Question {
-            method,
-            title,
-            message,
-            options,
+        let kind = if method == "confirm" && title == TAKEOVER_TITLE {
+            DialogKind::Takeover {
+                reason: message.unwrap_or_default(),
+            }
+        } else {
+            DialogKind::Question {
+                method,
+                title,
+                message,
+                options,
+            }
         };
         (kind, None)
     };
 
     let pending = Pending {
         attempt,
+        takeover: matches!(kind, DialogKind::Takeover { .. }),
         tool_call_id,
     };
     lock(&app.rt).dialogs.insert(id.clone(), pending);
@@ -714,6 +738,7 @@ async fn run_node(app: Shared, socket: WebSocket) {
 
     let (tx, mut rx) = mpsc::channel::<ToNode>(16);
     let kick = Arc::new(Notify::new());
+    let (screen_tx, mut screen_rx) = mpsc::channel::<Vec<u8>>(256);
     let (conn, replaced) = {
         let mut rt = lock(&app.rt);
         rt.next_conn += 1;
@@ -724,6 +749,7 @@ async fn run_node(app: Shared, socket: WebSocket) {
             name: name.clone(),
             tx,
             kick: kick.clone(),
+            screen: screen_tx,
         };
         (conn, rt.node.replace(link))
     };
@@ -757,12 +783,18 @@ async fn run_node(app: Shared, socket: WebSocket) {
             frame = stream.next() => {
                 let Some(Ok(frame)) = frame else { break };
                 last_heard = Instant::now();
-                if let WsMessage::Text(text) = frame {
-                    match serde_json::from_str::<FromNode>(&text) {
+                match frame {
+                    WsMessage::Text(text) => match serde_json::from_str::<FromNode>(&text) {
                         Ok(msg) => on_node_message(&app, msg).await,
                         Err(e) => warn!("unreadable frame from node: {e}"),
-                    }
+                    },
+                    WsMessage::Binary(data) => screens::from_node(&app, &data).await,
+                    _ => {}
                 }
+            }
+            frame = screen_rx.recv() => {
+                let Some(frame) = frame else { break };
+                if sink.send(WsMessage::Binary(frame.into())).await.is_err() { break; }
             }
             _ = kick.notified() => {
                 warn!(node = %name, "node removed; dropping its link");
@@ -785,6 +817,8 @@ async fn run_node(app: Shared, socket: WebSocket) {
         if current {
             rt.node = None;
             rt.active = None;
+            // Dropping the senders ends every viewer's stream.
+            rt.screens.clear();
         }
         current
     };
@@ -809,6 +843,7 @@ async fn on_node_message(app: &App, msg: FromNode) {
     let active = lock(&app.rt).active;
     match msg {
         FromNode::Hello { .. } | FromNode::Enrol { .. } => {}
+        FromNode::ScreenClosed { stream, error } => screens::closed(app, stream, error).await,
         FromNode::Delta { attempt, text } if active == Some(attempt) => {
             let event = ThreadEvent::Delta {
                 run: attempt.run,

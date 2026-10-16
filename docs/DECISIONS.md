@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-021: Screens travel through the server and the node link, into the computer with `podman exec socat` (2026-10-16)
+
+**Decided:** the browser's noVNC connects to the server (`/api/screen`, same origin, same session cookie). The server relays the VNC bytes over the node's existing link as binary frames tagged with a stream number, and the node pipes them into the computer with `podman exec -i … socat STDIO TCP:127.0.0.1:5900`. The VNC server listens only inside the container. noVNC 1.7.0 (MPL-2.0) is vendored unmodified.
+**Why:** clients only ever talk to the server, so phones and the desktop app need no route or certificate to each node, and there are no screen tokens to seal, check and expire. The computer publishes no port at all, so nothing on the network can reach its screen. Reusing the authenticated node link means no second listener on the node.
+**Alternatives:** the first plan, a node listener on `:7481` with server-sealed tokens; websockify in the container with a published port; streaming screenshots instead of VNC.
+**Revisit if:** screen traffic measurably slows the node link for runs, at which point give screens their own connection.
+
 ## D-020: The bridge runs tools in the bot's computer with `podman exec`, and the node drives the Podman CLI (2026-10-16)
 
 **Decided:** the bridge re-registers `read`, `write`, `edit` and `bash` with Orphus's own tool factories and operations that run `podman exec` into the bot's container, as Orphus's `ssh.ts` example does with ssh; it offers no other tool and blocks any other at the gate. The node creates and fences the container with the `podman` CLI. Local networks are blocked with nftables rules set inside the container's network namespace from outside.

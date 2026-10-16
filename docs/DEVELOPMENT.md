@@ -107,6 +107,8 @@ All settings are environment variables.
 | `ORPHUSBOT_NTFY_URL` | none | An ntfy topic to push to, such as `https://ntfy.example.com/orphusbot-<random>`; nothing is pushed without it |
 | `ORPHUSBOT_NTFY_TOKEN` | none | ntfy access token, if the topic needs one |
 | `ORPHUSBOT_DAILY_TOKEN_BUDGET` | none | Input + output tokens a day; crossing it warns on the wrist and by push, once a day |
+| `ORPHUSBOT_HANDS_FREE_ALLOWED` | on | Set to `false` to switch hands-free capture off for every device (the kill switch) |
+| `ORPHUSBOT_CAPTURE_RETENTION_DAYS` | `7` | Days to keep captured conversation text |
 | `ORPHUSBOT_BIND` | `127.0.0.1:7480` | Address to listen on. Bind to your NetBird address to reach it from other machines; **never** to a public interface |
 | `RUST_LOG` | off | Log level, e.g. `info` |
 
@@ -114,6 +116,7 @@ All settings are environment variables.
 
 | Variable | Default | Meaning |
 |---|---|---|
+| `ORPHUSBOT_EXTRACT_MODEL` | Orphus default | Model for capture extraction (pick a cheap or local one) |
 | `ORPHUSBOT_QUIET_HOURS` | none | Local hours when this node takes no new work, such as `22-7` |
 | `ORPHUSBOT_RUNTIME` | `podman` | The container runtime for bots' computers, or `none` to run tools on this machine (not isolated) |
 | `ORPHUSBOT_COMPUTER_IMAGE` | `docker.io/library/debian:trixie-slim` | Image for a bot's computer |

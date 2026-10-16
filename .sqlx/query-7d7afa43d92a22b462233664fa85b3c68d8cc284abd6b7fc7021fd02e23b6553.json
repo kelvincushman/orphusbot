@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update capture_window set text = text || E'\\n' || $2, last_at = now()\n         where device_id = $1 and state = 'open' and opened_at > now() - interval '10 minutes'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7d7afa43d92a22b462233664fa85b3c68d8cc284abd6b7fc7021fd02e23b6553"
+}

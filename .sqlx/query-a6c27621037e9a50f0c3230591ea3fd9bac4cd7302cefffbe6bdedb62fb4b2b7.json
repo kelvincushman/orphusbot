@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select kind, title, detail, who, due, quote from proposal where id = $1 and state = 'proposed'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "proposal",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "proposal",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "detail",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "proposal",
+            "name": "detail"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "who",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "proposal",
+            "name": "who"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "due",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "proposal",
+            "name": "due"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "quote",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "proposal",
+            "name": "quote"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a6c27621037e9a50f0c3230591ea3fd9bac4cd7302cefffbe6bdedb62fb4b2b7"
+}

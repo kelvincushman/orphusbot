@@ -588,6 +588,16 @@ Profiles are presets over the same settings:
 
 Cards and cues follow the wearable's existing tiers. Nothing escalates to red for a missed personal task; red is reserved for system errors.
 
+### 10.6 Built (M4.3)
+
+- **Intake:** overheard text on `/api/device/text` (or text without a recent button press) is captured only while the device's hands-free is on **and** `ORPHUSBOT_HANDS_FREE_ALLOWED` isn't `false` (the kill switch); otherwise it's dropped unread. Lines are `speaker: words`, using the app's `talker` label.
+- **Windows** (`capture_window`) close after 20 s of quiet or 10 minutes. System 1 (`capture` catalogue, `worth_keeping`, receipted) skips windows it's sure hold nothing; abstaining extracts.
+- **Extraction:** the server sends `ToNode::Extract` to the least busy ready node, which runs **one** `orphus --print --no-session --no-tools --no-extensions --no-skills --no-context-files --system-prompt <brief>` call (optional `ORPHUSBOT_EXTRACT_MODEL`) and returns the text. The brief tells it to file only the owner's commitments, things asked of the owner and follow-ups owed to them, as a JSON array; anything malformed is dropped, at most 10 per window, quotes capped at 200 characters.
+- **Proposals** (`proposal`) wait under **Captures**; a push says how many. **Accept** makes an unassigned ticket (follow-ups, appointments and notes are titled as such); **Dismiss** closes it. Nothing starts a run.
+- **Retention:** window text is cleared after `ORPHUSBOT_CAPTURE_RETENTION_DAYS` (default 7). No audio reaches the server on this path.
+- **Visibility:** while any device listens, every screen shows a banner with **Pause**; Captures toggles hands-free per device.
+- **Not yet:** the audio WebSocket and server STT, voice profiles, profiles (digests, nudges, auto-filed notes, re-surfacing), calendar drafts and Obsidian notes on accept, and labels from accept/dismiss.
+
 ---
 
 ## 11. Integrations and secrets
@@ -754,6 +764,7 @@ M0 implemented the smallest slice of §3 and §4 that carries a message from a b
 | Engine | One `orphus --mode rpc --session-dir …` per link, started on the first turn; text deltas, final assistant messages, rejected prompts and model errors are mapped to frames | §4.2 |
 | Sign-in (M1.3) | `webauthn-rs` passkeys for one owner. While no passkey exists, `ORPHUSBOT_SETUP_TOKEN` gives a one-hour setup session that can only be used to add one; adding it upgrades that session and ends any other setup session. Sessions are 32 random bytes in an HttpOnly `SameSite=Strict` cookie (`Secure` on HTTPS), stored as SHA-256 hashes, 30 days fixed. Removing a passkey ends its sessions; removing all of them reopens setup (the recovery path). The relying-party ID is the host of `ORPHUSBOT_ORIGIN`; deployment behind Caddy with a DNS-01 certificate (D-016, [DEPLOY.md](DEPLOY.md)) | Device tokens for Android (§12) |
 | Computers (M2.1) | Per-bot rootless Podman container (`node::computer`), fenced as in §4.4; the bridge runs `read`, `write`, `edit`, `bash` in it with `podman exec` and allows no other tool (§5). `ORPHUSBOT_RUNTIME=none` keeps M1 behaviour (tools on the host, still gated), with a warning | Desktop image, screens and takeover (M2.2), placement (M2.3) |
+| Ambient capture (M4.3) | §10.6 | Profiles, server STT, calendar and note targets |
 | Quota tracker (M4.2) | The node reports each assistant message's provider, model, input, output and cache tokens and cost (`FromNode::Usage`, from Orphus's `message_end` usage); the server keeps a `usage` row per message with its run and bot. `GET /api/usage`: today and the last 7 days by provider and model, today by bot, and the budget. `ORPHUSBOT_DAILY_TOKEN_BUDGET` (input + output tokens): the message that crosses it plays `budget_warn` on every wrist and pushes once | Per-provider subscription windows (rolling limits) when Orphus exposes them |
 | Push (M4.1) | `server::notify` → self-hosted ntfy (§12) | Quiet hours and Focus digests (capture profiles) |
 | Decisions view (M3.6) | **Decisions** in the sidebar: a health line per catalogue (asked, abstained, labelled, agreement, latency), a filter (routing, tool calls, routines) and each receipt with its state, outcome, confidence against its threshold, latency and the owner's label | Calibration, apply and rollback (M5); the JSONL mirror for orphus-desktop |

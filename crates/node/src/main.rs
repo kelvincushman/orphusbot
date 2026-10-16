@@ -222,6 +222,16 @@ async fn session(cfg: &Config, key: &NodeKey) -> anyhow::Result<()> {
                         }
                     }
                     Ok(ToNode::ScreenClose { stream }) => { screens.remove(&stream); }
+                    Ok(ToNode::Extract { id, system, text }) => {
+                        let (out, orphus) = (out_tx.clone(), cfg.orphus.clone());
+                        tokio::spawn(async move {
+                            let (text, error) = match extract(&orphus, &system, &text).await {
+                                Ok(reply) => (Some(reply), None),
+                                Err(e) => (None, Some(format!("{e:#}"))),
+                            };
+                            let _ = out.send(FromNode::Extracted { id, text, error }).await;
+                        });
+                    }
                     Ok(ToNode::Challenge { .. } | ToNode::Enrolled { .. }) => {}
                     Err(e) => warn!("unreadable frame from server: {e}"),
                 }
@@ -295,6 +305,39 @@ async fn open_screen(
         let _ = out.send(FromNode::ScreenClosed { stream, error }).await;
     });
     Ok((child, pipe))
+}
+
+/// One capture extraction (DESIGN §10.2): a single Orphus call with no tools, no
+/// extensions, no skills or context files and no saved session, so ambient text
+/// can't make anything happen. `ORPHUSBOT_EXTRACT_MODEL` picks a cheap model.
+async fn extract(orphus: &str, system: &str, text: &str) -> anyhow::Result<String> {
+    let mut command = Command::new(orphus);
+    command.args([
+        "--print",
+        "--no-session",
+        "--no-tools",
+        "--no-extensions",
+        "--no-skills",
+        "--no-context-files",
+        "--system-prompt",
+        system,
+    ]);
+    if let Ok(model) = std::env::var("ORPHUSBOT_EXTRACT_MODEL") {
+        command.args(["--model", &model]);
+    }
+    let run = command
+        .arg(text)
+        .stdin(Stdio::null())
+        .kill_on_drop(true)
+        .output();
+    let out = tokio::time::timeout(Duration::from_secs(120), run)
+        .await
+        .context("the extractor took over two minutes")?
+        .with_context(|| format!("starting {orphus}"))?;
+    if !out.status.success() {
+        bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
 /// The Orphus extension that sends every tool call to OrphusBot for approval.

@@ -372,6 +372,44 @@ fn most_likely(answer: &Value) -> Option<(usize, f64)> {
         .max_by(|a, b| a.1.total_cmp(&b.1))
 }
 
+impl System1 {
+    /// Capture (DESIGN §10.2): does a hands-free window hold anything worth keeping?
+    /// Only a confident no skips extraction; abstaining extracts.
+    pub async fn worth_extracting(&self, db: &PgPool, window: &str) -> bool {
+        if !self.enabled() {
+            return true;
+        }
+        let state: String = window.chars().take(MAX_STATE_CHARS).collect();
+        let questions = json!({ "worth_keeping": {
+            "type": "noul",
+            "instructions": "Does this conversation contain something the owner should keep: a commitment they made, a task or appointment, something someone owes them, an idea or a thing to remember?",
+        }});
+        let asked = self.ask(&state, questions).await;
+        let yes = asked
+            .answers
+            .as_ref()
+            .and_then(|a| a["worth_keeping"]["noul"].as_f64());
+        let skip = yes.is_some_and(|p| p <= 1.0 - self.route_threshold);
+        let receipt = Receipt {
+            catalogue: "capture",
+            state: &state,
+            threshold: self.route_threshold,
+            confidence: yes.map(|p| 1.0 - p),
+            outcome: if skip {
+                "Nothing worth keeping"
+            } else {
+                "Sent for extraction"
+            }
+            .to_owned(),
+            run: None,
+            tool_call_id: None,
+            ticket: None,
+        };
+        record(db, &receipt, &asked).await;
+        !skip
+    }
+}
+
 /// Laya's calibrated confidence in the chosen answer.
 fn confidence(answer: &Value) -> Option<f64> {
     answer["answer_confidence"].as_f64()

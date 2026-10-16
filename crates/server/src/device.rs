@@ -251,6 +251,9 @@ pub struct Text {
     text: String,
     #[serde(default)]
     overheard: bool,
+    /// The speaker's label from the phone, kept apart from the words.
+    #[serde(default)]
+    talker: String,
 }
 
 /// `POST /api/device/text`: a transcript made on the phone (DESIGN §9.3.5).
@@ -276,8 +279,16 @@ pub async fn text(
         .get(&device)
         .is_some_and(|at| at.elapsed() < EXPLICIT_GRACE);
     if body.overheard || !pressed {
-        // ponytail: ambient capture (DESIGN §10) arrives in M4; until then overheard text isn't kept.
-        return Json(json!({ "ok": true, "chatId": chat_id, "filed": "ignored" })).into_response();
+        // Ambient: never a task or a reply. Kept for mining only while hands-free is on (DESIGN §10).
+        let filed = match crate::capture::overheard(&app, &device, &body.talker, &text).await {
+            Ok(true) => "capture",
+            Ok(false) => "ignored",
+            Err(e) => {
+                warn!("capturing: {e}");
+                "ignored"
+            }
+        };
+        return Json(json!({ "ok": true, "chatId": chat_id, "filed": filed })).into_response();
     }
     lock(&app.devices.intent).remove(&device);
     // A tap on a question opened the mic: this is its answer, if the question is still open.

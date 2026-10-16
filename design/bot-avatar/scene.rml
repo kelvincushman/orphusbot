@@ -3,51 +3,51 @@
 <LayoutComponentStyle name="Artboard Style" id="0:5"/>
 <Node x="100" y="120" name="Bot" id="0:20">
 <Shape x="0" y="4" opacity="0" name="ScanBar" id="0:30">
-    <Rectangle x="0" y="0" width="8" height="54" cornerRadiusTL="4" name="Path"/>
-    <Fill name="Fill"><SolidColor colorValue="FFA8E1FF" name="Color" id="0:31"/></Fill>
+<Rectangle x="0" y="0" width="8" height="54" cornerRadiusTL="4" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FFA8E1FF" name="Color"/></Fill>
 </Shape>
 <Shape x="0" y="26" opacity="0.7" name="Mouth" id="0:32">
-    <Rectangle x="0" y="0" width="22" height="5" cornerRadiusTL="2.5" name="Path"/>
-    <Fill name="Fill"><SolidColor colorValue="FFA8E1FF" name="Color" id="0:33"/></Fill>
+<Rectangle x="0" y="0" width="22" height="5" cornerRadiusTL="2.5" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FFA8E1FF" name="Color"/></Fill>
 </Shape>
-<Shape opacity="0" name="Happy Eyes" id="0:51">
-<PointsPath x="-24" y="0" isClosed="false" name="Happy L"><StraightVertex x="-10" y="4"/><StraightVertex x="0" y="-6" radius="5"/><StraightVertex x="10" y="4"/></PointsPath>
-<PointsPath x="24" y="0" isClosed="false" name="Happy R"><StraightVertex x="-10" y="4"/><StraightVertex x="0" y="-6" radius="5"/><StraightVertex x="10" y="4"/></PointsPath>
+<Shape x="0" y="0" opacity="0" name="Happy Eyes" id="0:51">
+<PointsPath x="-24" y="0" isClosed="false" name="Happy L"><StraightVertex x="-10" y="4"/><StraightVertex x="0" y="-6" radius="5"/><StraightVertex x="10" y="4"/></PointsPath><PointsPath x="24" y="0" isClosed="false" name="Happy R"><StraightVertex x="-10" y="4"/><StraightVertex x="0" y="-6" radius="5"/><StraightVertex x="10" y="4"/></PointsPath>
 <Stroke thickness="6" cap="round" join="round" name="Stroke"><SolidColor colorValue="FFA8E1FF" name="Color"/></Stroke>
 </Shape>
 <Node name="Eyes" id="0:34">
+
 <Shape x="-24" y="0" name="Eye L" id="0:35">
-    <Ellipse width="20" height="26" name="Path"/>
-    <Fill name="Fill"><SolidColor colorValue="FFA8E1FF" name="Color" id="0:36"/></Fill>
+<Ellipse x="0" y="0" width="20" height="26" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FFA8E1FF" name="Color"/></Fill>
 </Shape>
 <Shape x="24" y="0" name="Eye R" id="0:37">
-    <Ellipse width="20" height="26" name="Path"/>
-    <Fill name="Fill"><SolidColor colorValue="FFA8E1FF" name="Color" id="0:38"/></Fill>
+<Ellipse x="0" y="0" width="20" height="26" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FFA8E1FF" name="Color"/></Fill>
 </Shape>
 </Node>
-<Shape x="0" y="4" name="Face" id="0:39">
-    <Rectangle x="0" y="0" width="108" height="70" cornerRadiusTL="26" name="Path"/>
-    <Fill name="Fill"><SolidColor colorValue="FF0A1433" name="Color" id="0:40"/></Fill>
+<Shape x="0" y="4" name="Face">
+<Rectangle x="0" y="0" width="108" height="70" cornerRadiusTL="26" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF0A1433" name="Color"/></Fill>
 </Shape>
-<Shape x="0" y="0" name="Head" id="0:41">
-    <Rectangle x="0" y="0" width="140" height="108" cornerRadiusTL="34" name="Path"/>
-    <Fill name="Fill"><SolidColor colorValue="FF2F6BFF" name="Color" id="0:42"/></Fill>
+<Shape x="0" y="0" name="Head">
+<Rectangle x="0" y="0" width="140" height="108" cornerRadiusTL="34" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF2F6BFF" name="Color" id="0:101"/></Fill>
 </Shape>
-<Shape x="0" y="0" name="Ears" id="0:43">
-    <Rectangle x="-74" y="2" width="12" height="36" cornerRadiusTL="6" name="Ear L"/><Rectangle x="74" y="2" width="12" height="36" cornerRadiusTL="6" name="Ear R"/>
-    <Fill name="Fill"><SolidColor colorValue="FF7FA6FF" name="Color" id="0:44"/></Fill>
+<Shape x="0" y="0" name="Ears">
+<Rectangle x="-74.0" y="2" width="12" height="36" cornerRadiusTL="6" name="Ear L"/><Rectangle x="74.0" y="2" width="12" height="36" cornerRadiusTL="6" name="Ear R"/>
+<Fill name="Fill"><SolidColor colorValue="FF7FA6FF" name="Color" id="0:102"/></Fill>
 </Shape>
-<Shape x="0" y="-80" name="Antenna Light" id="0:45">
-    <Ellipse width="16" height="16" name="Path"/>
-    <Fill name="Fill"><SolidColor colorValue="FF7FA6FF" name="Color" id="0:46"/></Fill>
+<Shape x="0" y="-80.0" name="Antenna Light">
+<Ellipse x="0" y="0" width="16" height="16" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF7FA6FF" name="Color" id="0:104"/></Fill>
 </Shape>
-<Shape x="0" y="-80" opacity="0.35" name="Antenna Glow" id="0:47">
-    <Ellipse width="32" height="32" name="Path"/>
-    <Fill name="Fill"><SolidColor colorValue="FF5C8DFF" name="Color" id="0:48"/></Fill>
+<Shape x="0" y="-80.0" opacity="0.35" name="Antenna Glow" id="0:47">
+<Ellipse x="0" y="0" width="32" height="32" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF5C8DFF" name="Color" id="0:105"/></Fill>
 </Shape>
-<Shape x="0" y="-64" name="Antenna Stem" id="0:49">
-    <Rectangle x="0" y="0" width="5" height="26" cornerRadiusTL="2.5" name="Path"/>
-    <Fill name="Fill"><SolidColor colorValue="FF7FA6FF" name="Color" id="0:50"/></Fill>
+<Shape x="0" y="-64.0" name="Antenna Stem">
+<Rectangle x="0" y="0" width="5" height="26" cornerRadiusTL="2.5" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF7FA6FF" name="Color" id="0:103"/></Fill>
 </Shape>
 </Node>
 <StateMachine name="Bot" id="0:7">
@@ -143,44 +143,34 @@
 <KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:42">
+<KeyedObject objectId="0:51">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:101">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FF2F6BFF" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:44">
+<KeyedObject objectId="0:102">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FF7FA6FF" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:50">
+<KeyedObject objectId="0:103">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FF7FA6FF" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:46">
+<KeyedObject objectId="0:104">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FF7FA6FF" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:48">
+<KeyedObject objectId="0:105">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FF5C8DFF" frame="0" interpolationType="hold"/>
-</KeyedProperty>
-</KeyedObject>
-<KeyedObject objectId="0:36">
-<KeyedProperty property="colorValue">
-<KeyFrameColor value="FFA8E1FF" frame="0" interpolationType="hold"/>
-</KeyedProperty>
-</KeyedObject>
-<KeyedObject objectId="0:38">
-<KeyedProperty property="colorValue">
-<KeyFrameColor value="FFA8E1FF" frame="0" interpolationType="hold"/>
-</KeyedProperty>
-</KeyedObject>
-<KeyedObject objectId="0:51">
-<KeyedProperty property="opacity">
-<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
 </LinearAnimation>
@@ -263,46 +253,36 @@
 <KeyFrameDouble value="1" frame="180" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1"/></KeyFrameDouble>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:42">
+<KeyedObject objectId="0:51">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:101">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FF2F6BFF" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:44">
+<KeyedObject objectId="0:102">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FF7FA6FF" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:50">
+<KeyedObject objectId="0:103">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FF7FA6FF" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:46">
+<KeyedObject objectId="0:104">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FF7FA6FF" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1"/></KeyFrameColor>
 <KeyFrameColor value="FFFFFFFF" frame="90" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1"/></KeyFrameColor>
 <KeyFrameColor value="FF7FA6FF" frame="180" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1"/></KeyFrameColor>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:48">
+<KeyedObject objectId="0:105">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FF5C8DFF" frame="0" interpolationType="hold"/>
-</KeyedProperty>
-</KeyedObject>
-<KeyedObject objectId="0:36">
-<KeyedProperty property="colorValue">
-<KeyFrameColor value="FFA8E1FF" frame="0" interpolationType="hold"/>
-</KeyedProperty>
-</KeyedObject>
-<KeyedObject objectId="0:38">
-<KeyedProperty property="colorValue">
-<KeyFrameColor value="FFA8E1FF" frame="0" interpolationType="hold"/>
-</KeyedProperty>
-</KeyedObject>
-<KeyedObject objectId="0:51">
-<KeyedProperty property="opacity">
-<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
 </LinearAnimation>
@@ -355,9 +335,9 @@
 </KeyedObject>
 <KeyedObject objectId="0:30">
 <KeyedProperty property="x">
-<KeyFrameDouble value="-44" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1"/></KeyFrameDouble>
-<KeyFrameDouble value="44" frame="30" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1"/></KeyFrameDouble>
-<KeyFrameDouble value="-44" frame="60" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1"/></KeyFrameDouble>
+<KeyFrameDouble value="-44.0" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1"/></KeyFrameDouble>
+<KeyFrameDouble value="44.0" frame="30" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1"/></KeyFrameDouble>
+<KeyFrameDouble value="-44.0" frame="60" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1"/></KeyFrameDouble>
 </KeyedProperty>
 <KeyedProperty property="opacity">
 <KeyFrameDouble value="0.85" frame="0" interpolationType="hold"/>
@@ -379,22 +359,27 @@
 <KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:42">
+<KeyedObject objectId="0:51">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:101">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FF2F6BFF" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:44">
+<KeyedObject objectId="0:102">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FF7FA6FF" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:50">
+<KeyedObject objectId="0:103">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FF7FA6FF" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:46">
+<KeyedObject objectId="0:104">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FFFFFFFF" frame="0" interpolationType="hold"/>
 <KeyFrameColor value="FF7FA6FF" frame="10" interpolationType="hold"/>
@@ -404,24 +389,9 @@
 <KeyFrameColor value="FF7FA6FF" frame="50" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:48">
+<KeyedObject objectId="0:105">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FF5C8DFF" frame="0" interpolationType="hold"/>
-</KeyedProperty>
-</KeyedObject>
-<KeyedObject objectId="0:36">
-<KeyedProperty property="colorValue">
-<KeyFrameColor value="FFA8E1FF" frame="0" interpolationType="hold"/>
-</KeyedProperty>
-</KeyedObject>
-<KeyedObject objectId="0:38">
-<KeyedProperty property="colorValue">
-<KeyFrameColor value="FFA8E1FF" frame="0" interpolationType="hold"/>
-</KeyedProperty>
-</KeyedObject>
-<KeyedObject objectId="0:51">
-<KeyedProperty property="opacity">
-<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
 </LinearAnimation>
@@ -501,46 +471,36 @@
 <KeyFrameDouble value="1" frame="60" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1"/></KeyFrameDouble>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:42">
+<KeyedObject objectId="0:51">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:101">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FFFF5A4F" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:44">
+<KeyedObject objectId="0:102">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FFFF9A8F" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:50">
+<KeyedObject objectId="0:103">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FFFF9A8F" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:46">
+<KeyedObject objectId="0:104">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FFFFB547" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1"/></KeyFrameColor>
 <KeyFrameColor value="FFFFFFFF" frame="12" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1"/></KeyFrameColor>
 <KeyFrameColor value="FFFFB547" frame="60" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1"/></KeyFrameColor>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:48">
+<KeyedObject objectId="0:105">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FFFFB547" frame="0" interpolationType="hold"/>
-</KeyedProperty>
-</KeyedObject>
-<KeyedObject objectId="0:36">
-<KeyedProperty property="colorValue">
-<KeyFrameColor value="FFA8E1FF" frame="0" interpolationType="hold"/>
-</KeyedProperty>
-</KeyedObject>
-<KeyedObject objectId="0:38">
-<KeyedProperty property="colorValue">
-<KeyFrameColor value="FFA8E1FF" frame="0" interpolationType="hold"/>
-</KeyedProperty>
-</KeyedObject>
-<KeyedObject objectId="0:51">
-<KeyedProperty property="opacity">
-<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
 </LinearAnimation>
@@ -626,46 +586,36 @@
 <KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:42">
+<KeyedObject objectId="0:51">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+<KeyFrameDouble value="1" frame="6" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:101">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FF2F6BFF" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:44">
+<KeyedObject objectId="0:102">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FF7FA6FF" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:50">
+<KeyedObject objectId="0:103">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FF7FA6FF" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:46">
+<KeyedObject objectId="0:104">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FFFFFFFF" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1"/></KeyFrameColor>
 <KeyFrameColor value="FF7FA6FF" frame="54" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1"/></KeyFrameColor>
 </KeyedProperty>
 </KeyedObject>
-<KeyedObject objectId="0:48">
+<KeyedObject objectId="0:105">
 <KeyedProperty property="colorValue">
 <KeyFrameColor value="FF5C8DFF" frame="0" interpolationType="hold"/>
-</KeyedProperty>
-</KeyedObject>
-<KeyedObject objectId="0:36">
-<KeyedProperty property="colorValue">
-<KeyFrameColor value="FFA8E1FF" frame="0" interpolationType="hold"/>
-</KeyedProperty>
-</KeyedObject>
-<KeyedObject objectId="0:38">
-<KeyedProperty property="colorValue">
-<KeyFrameColor value="FFA8E1FF" frame="0" interpolationType="hold"/>
-</KeyedProperty>
-</KeyedObject>
-<KeyedObject objectId="0:51">
-<KeyedProperty property="opacity">
-<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
-<KeyFrameDouble value="1" frame="6" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
 </LinearAnimation>

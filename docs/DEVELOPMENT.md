@@ -105,7 +105,7 @@ flutter test                       # the reducer tests
 flutter build linux --release      # build/linux/x64/release/bundle/orphusbot-app
 ```
 
-The bot face comes from `design/bot-avatar`: after changing it, run `python3 gen.py 0 > scene.rml && ~/.rive/bin/rive . --verify && ~/.rive/bin/rive . --once` there (the [Rive CLI](https://rive.app/docs/cli/overview), no account needed) and copy `build/bot-avatar.riv` to `apps/orphusbot_app/assets/`.
+The bot faces come from `design/bot-avatar` and are built with the [Rive CLI](https://rive.app/docs/cli/overview) (no account needed); its README has the commands, which put one `.riv` per style in `apps/orphusbot_app/assets/faces/` and animated WebPs for the bar panel in `omarchy/kelvincushman.orphusbot/faces/`.
 
 On Omarchy, copy the bundle to `~/.local/share/orphusbot-app`, link `orphusbot-app` into `~/.local/bin`, and the bar panel's **Open chat** starts it.
 

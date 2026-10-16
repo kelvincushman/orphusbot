@@ -54,7 +54,7 @@ Rules that follow from it:
 
 ## Rust practices
 
-These apply from the first crate onwards (milestone M0). The Rust CI workflow lands with that first crate.
+These apply to every crate. CI (`.github/workflows/rust.yml`) runs fmt, Clippy, the tests against Postgres, and `cargo deny`. Local setup is in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 - **Toolchain:** stable, pinned in `rust-toolchain.toml`. Edition 2024.
 - **Formatting and lints:** `cargo fmt --check` and `cargo clippy --all-targets --all-features -- -D warnings` must pass.

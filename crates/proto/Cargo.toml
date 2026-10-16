@@ -1,0 +1,17 @@
+[package]
+name = "orphusbot-proto"
+version = "0.1.0"
+description = "Wire types shared by the OrphusBot server, node and UI"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+serde_json = "1.0.154"
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }

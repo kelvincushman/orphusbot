@@ -717,13 +717,30 @@ Mapped to the PRD milestones. The wearable lands at M3, alongside System 1, beca
 
 | Milestone | Design sections | Adds |
 |---|---|---|
-| M0 | §2, §3.1 (api, events), §4.1–4.2, §12 (web) | One engine on the laptop streams to a browser |
+| M0 | §2, §3.1 (api, events), §4.1–4.2 | One engine on the laptop streams to a browser (**built**; see §18.1) |
 | M1 | §3.2–3.4, §5 (gate only), §7.4 (static part), §12 (desktop) | Durable runs, ledger, approvals |
 | M2 | §4.4, §5 (ops), §6.1, §6.3 (no Laya) | Containers, takeover, GPU-box node |
 | M3 | §7.1–7.4, §7.6, §9 (channel, duplex habitat, button → task), §3.5; firmware/app W-1…W-5 | Laya triage and gate, wearable tasks with the full duplex loop, tickets, routines |
 | M4 | §6.2, §8 (quota), §10 (capture, profiles), §12 (Android, ntfy) | E2B, ambient capture, phone |
 | M5 | §7.5, OrtLaya | Calibration, apply/rollback, in-process Laya |
 | M6 | §11 | MCP breadth, lazy catalogue, secrets UI |
+
+### 18.1 M0 as built
+
+M0 implements the smallest slice of §3 and §4 that carries a message from a browser to an Orphus engine and streams the reply back. Where it is simpler than the full design, the code carries a `ponytail:` comment and [DEVELOPMENT.md](DEVELOPMENT.md#what-m0-deliberately-leaves-out) lists the milestone that replaces it.
+
+| Area | M0 | Full design |
+|---|---|---|
+| Crates | `proto`, `server`, `node` | §2 |
+| Threads, bots, nodes | One of each; thread id 1 | Many |
+| Event log | Postgres `thread` + `event` tables, gap-free per-thread `seq`; `Message` and `TurnEnded` persisted; deltas live only | §3.1, plus batched progress events |
+| Fan-out | In-process `tokio::sync::broadcast` | `PgListener` + `NOTIFY` once there are several server processes |
+| Client API | `POST /api/messages`, `GET /api/events` (SSE; resumes from `Last-Event-ID`), `POST /login` | Typed RPC over JSON (§3.1) |
+| Turn control | One turn at a time; a second send gets `409`; the user message's `seq` is the turn id | Runs, leases and fences (§3.3) |
+| Node link | WebSocket `/node`, bearer token checked before upgrade, `hello` first; the newest connection wins | Ed25519 enrolment, heartbeats (§4.1) |
+| Engine | One `orphus --mode rpc --session-dir …` per link, started on the first turn; text deltas, final assistant messages, rejected prompts and model errors are mapped to frames | §4.2 |
+| Sign-in | Shared UI token, HttpOnly `SameSite=Strict` cookie | Passkeys (§12) |
+| UI | One plain HTML page with `EventSource` (D-013) | Leptos in Tauri (§12) |
 
 Capture (§10) waits for M4 on purpose: it needs receipts, proposals and the Android app to be useful, and it's the most privacy-sensitive part, so it should land on a stable base.
 

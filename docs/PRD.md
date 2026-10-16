@@ -291,7 +291,7 @@ A Rust **orphusbot-server** (axum, sqlx, Postgres, `graphile_worker` jobs, crone
 
 | Milestone | Scope | Exit criteria |
 |---|---|---|
-| **M0 Skeleton** | Proto crate, server (axum, sqlx, events, SSE), node link over NetBird, one engine over RPC on the laptop, bare Leptos web UI | Journey 1 up to "watch it stream" |
+| **M0 Skeleton** | Proto crate, server (axum, sqlx, events, SSE), node link over NetBird, one engine over RPC on the laptop, a minimal web page (the Leptos UI moves to M1, DECISIONS D-013) | Journey 1 up to "watch it stream" |
 | **M1 Durable runs** | Leases, fences, steering, reconciler, effect ledger; bridge gate with static rules; approval cards; Tauri desktop shell; passkeys | Approve a write from the desktop app; kill the node mid-run and it recovers |
 | **M2 Computers** | Podman computers, tool redirect, noVNC view and takeover; GPU-box node; placement rules without System 1 | Journey 3 on desktop |
 | **M3 System 1 + wearable** | HttpLaya triage + tool gate + receipts + strict thresholds; tickets; routines with pre-flight; Decisions view; wearable device channel, button → task, cues | Journeys 2 (desktop), 6 and 7 |

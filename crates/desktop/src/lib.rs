@@ -62,6 +62,8 @@ fn open_server(app: &AppHandle, server: Url) -> tauri::Result<()> {
         // Shown on the approve screen when this device is linked (D-019).
         .user_agent(if cfg!(target_os = "android") {
             "OrphusBot Android app"
+        } else if cfg!(target_os = "macos") {
+            "OrphusBot desktop app (macOS)"
         } else {
             "OrphusBot desktop app (linux)"
         })

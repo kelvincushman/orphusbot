@@ -617,7 +617,7 @@ Cards and cues follow the wearable's existing tiers. Nothing escalates to red fo
 
 ### 11.2 Fleets and workflows as run targets
 
-- **Deferred (D-030).** Orphus runs fleets and Goal workflows through subagents and in-process stage sessions, whose tools would run on the node outside the bot's computer and outside the bridge's gate, and it has no structured RPC for their state yet (H-B6). A run stays a single engine turn until both exist upstream.
+- **Deferred (D-030), and blocked.** The bridge and the gate refuse `subagent`, `workflow` and `fleet` everywhere, because a forked subagent's tool calls were seen to skip the bridge entirely. Orphus runs fleets and Goal workflows through subagents and in-process stage sessions, whose tools would run on the node outside the bot's computer and outside the bridge's gate, and it has no structured RPC for their state yet (H-B6). A run stays a single engine turn until both exist upstream.
 
 ---
 

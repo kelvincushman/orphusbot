@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-020: The bridge runs tools in the bot's computer with `podman exec`, and the node drives the Podman CLI (2026-10-16)
+
+**Decided:** the bridge re-registers `read`, `write`, `edit` and `bash` with Orphus's own tool factories and operations that run `podman exec` into the bot's container, as Orphus's `ssh.ts` example does with ssh; it offers no other tool and blocks any other at the gate. The node creates and fences the container with the `podman` CLI. Local networks are blocked with nftables rules set inside the container's network namespace from outside.
+**Why:** engine and computer are on the same node, so a socket between them (the earlier plan) added a protocol, a server loop and a path to secure for nothing `podman exec` doesn't already do. The CLI needs no daemon or client library and works the same rootless. Orphus already exports tool factories that take custom operations, so the harness change H-B1 wasn't needed. Rules in the container's own namespace work rootless, where a host firewall would need root.
+**Alternatives:** the bridge socket with `Op` frames (DESIGN's first plan); `bollard` against the Podman API socket; a dedicated Podman network with host nftables rules (needs root).
+**Revisit if:** computers live on a different machine from their engine (E2B, M4), which needs operations to travel through the server.
+
 ## D-019: The desktop app is a window onto the server's UI, signed in by device linking (2026-10-16)
 
 **Decided:** the Tauri desktop app loads the server's web UI from the server, locked to its origin, instead of bundling the UI. Because WebKitGTK (Tauri's Linux webview) has no WebAuthn, devices without passkeys sign in by **linking**: the device shows a short code, the owner approves it from a device that has a passkey, and the device's poll receives its own session tied to that passkey. The same flow will sign in the Android app.

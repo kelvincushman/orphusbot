@@ -8,6 +8,7 @@ How to build, run and test OrphusBot on your own machine. This covers what is bu
 |---|---|---|
 | [rustup](https://rustup.rs) | Builds the Rust code | The exact toolchain is pinned in `rust-toolchain.toml`; rustup installs it on first build |
 | PostgreSQL 16 or newer | The server's database | Any local install, a container, or the GPU box |
+| [Podman](https://podman.io), rootless | Runs each bot's computer | Your distribution's package (Arch: `podman`), set up for rootless use (`/etc/subuid` and `/etc/subgid` entries for your user); `nft` and `nsenter` must be installed. Set `ORPHUSBOT_RUNTIME=none` to run tools on this machine instead, without isolation |
 | [Trunk](https://trunkrs.dev) | Builds the web UI to WebAssembly | `cargo install --locked trunk`, or a release binary. The `wasm32-unknown-unknown` target comes with the pinned toolchain |
 | [Orphus](https://github.com/kelvincushman/orphus) | The agent the node runs | `orphus --mode rpc` must work, and you must be signed in to a model provider (`orphus` then `/login`) |
 
@@ -82,6 +83,8 @@ All settings are environment variables.
 
 | Variable | Default | Meaning |
 |---|---|---|
+| `ORPHUSBOT_RUNTIME` | `podman` | The container runtime for bots' computers, or `none` to run tools on this machine (not isolated) |
+| `ORPHUSBOT_COMPUTER_IMAGE` | `docker.io/library/debian:trixie-slim` | Image for a bot's computer |
 | `ORPHUSBOT_NODE_KEY` | `~/.config/orphusbot/node.json` | The node's name and private key, written by `enrol` |
 | `ORPHUSBOT_SERVER` | `ws://127.0.0.1:7480/node` | The server's node endpoint; `wss://` when the server is behind HTTPS ([DEPLOY.md](DEPLOY.md)) |
 | `ORPHUSBOT_NODE_NAME` | the host name | The name to enrol under (letters, digits, `.`, `_`, `-`). After enrolling, the name comes from the key file |
@@ -100,6 +103,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo clippy -p orphusbot-ui --target wasm32-unknown-unknown -- -D warnings
 cargo fmt --all --check
 ```
+
+The computer test needs rootless Podman, so it only runs when asked: `cargo test -p orphusbot-node -- --ignored`.
 
 Database tests use `#[sqlx::test]`, which creates and drops a temporary database for each test, so `DATABASE_URL` must point at a server where you can create databases.
 

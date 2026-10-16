@@ -1,21 +1,70 @@
-// orphusbot-bridge: an Orphus extension that asks OrphusBot before every tool call.
+// orphusbot-bridge: an Orphus extension that asks OrphusBot before every tool call,
+// and runs the tools in the bot's computer.
 //
-// It holds no policy. Each call becomes an `input` dialog titled
+// Gate: it holds no policy. Each call becomes an `input` dialog titled
 // "orphusbot-gate", which the node relays to the server. The server answers
 // "allow", or "deny:<reason>" from its rules, its effect ledger, or the owner
 // (DESIGN §5, §7.4). Anything else, including no answer, blocks the call.
 //
+// Computer: when the node gives it a computer (ORPHUSBOT_COMPUTER), read,
+// write, edit and bash run inside that container through `podman exec`, the
+// same way Orphus's ssh.ts example runs them over ssh, and every other tool is
+// switched off, so nothing runs on the host. The engine and its logins stay on
+// the host (DESIGN §4.4, DECISIONS D-020). If the container can't be reached,
+// the tool fails; it never falls back to the host.
+//
 // The node embeds this file and loads it with `orphus -e`; it is only valid
 // in RPC mode under orphusbot-node, so in any other mode it blocks everything.
 
+import { spawn } from "node:child_process";
 import type { ExtensionAPI } from "@orphus/coding-agent";
+import {
+  type BashOperations,
+  createBashTool,
+  createEditTool,
+  createReadTool,
+  createWriteTool,
+  type ReadOperations,
+  type WriteOperations,
+} from "@orphus/coding-agent";
 
 export const GATE_TITLE = "orphusbot-gate";
+
+const computer = process.env.ORPHUSBOT_COMPUTER;
+const runtime = process.env.ORPHUSBOT_RUNTIME ?? "podman";
+const home = process.env.ORPHUSBOT_COMPUTER_HOME ?? "/home/bot";
+/** In a computer, only these run: each one is redirected into it. */
+const COMPUTER_TOOLS = ["read", "write", "edit", "bash"];
+const IMAGES: Record<string, string> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
+};
+
+/** Runs a bash script in the computer. `args` become $1, $2…, so paths need no quoting. */
+function inComputer(script: string, args: string[] = [], input?: Buffer): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(runtime, ["exec", "-i", "-w", home, computer!, "bash", "-c", script, "bash", ...args], {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    const out: Buffer[] = [];
+    const err: Buffer[] = [];
+    child.stdout.on("data", (d) => out.push(d));
+    child.stderr.on("data", (d) => err.push(d));
+    child.on("error", reject);
+    child.on("close", (code) =>
+      code === 0 ? resolve(Buffer.concat(out)) : reject(new Error(Buffer.concat(err).toString().trim() || `exit ${code}`)),
+    );
+    child.stdin.end(input);
+  });
+}
 
 export default function (pi: ExtensionAPI) {
   pi.on("tool_call", async (event, ctx) => {
     if (ctx.mode !== "rpc") {
       return { block: true, reason: "orphusbot-bridge only runs under orphusbot-node." };
+    }
+    // Anything else (an MCP tool, another extension's tool) would run on the host.
+    if (computer && !COMPUTER_TOOLS.includes(event.toolName)) {
+      return { block: true, reason: `${event.toolName} isn't available in this bot's computer; use bash.` };
     }
     const request = JSON.stringify({
       toolCallId: event.toolCallId,
@@ -29,4 +78,50 @@ export default function (pi: ExtensionAPI) {
       : "OrphusBot did not approve this tool call.";
     return { block: true, reason };
   });
+
+  if (!computer) return; // ORPHUSBOT_RUNTIME=none: tools run on the host, still gated.
+
+  // The engine's working folder on the host stands for the computer's home.
+  const cwd = process.cwd();
+  const inside = (p: string) => (p === cwd || p.startsWith(cwd + "/") ? home + p.slice(cwd.length) : p);
+
+  const read: ReadOperations = {
+    readFile: (p) => inComputer('cat -- "$1"', [inside(p)]),
+    access: (p) => inComputer('test -r "$1"', [inside(p)]).then(() => {}),
+    detectImageMimeType: async (p) => IMAGES[p.split(".").pop()?.toLowerCase() ?? ""] ?? null,
+  };
+  const write: WriteOperations = {
+    writeFile: (p, content) => inComputer('cat > "$1"', [inside(p)], Buffer.from(content)).then(() => {}),
+    mkdir: (dir) => inComputer('mkdir -p -- "$1"', [inside(dir)]).then(() => {}),
+  };
+  const bash: BashOperations = {
+    exec: (command, dir, { onData, signal, timeout }) =>
+      new Promise((resolve, reject) => {
+        // ponytail: stopping the podman client doesn't stop the command inside; the in-container
+        // `timeout` covers time limits, and an aborted command runs on until it ends.
+        const limited = timeout ? ["timeout", "-s", "KILL", String(timeout), "bash", "-c", command] : ["bash", "-c", command];
+        const child = spawn(runtime, ["exec", "-w", inside(dir), computer, ...limited], { stdio: ["ignore", "pipe", "pipe"] });
+        child.stdout.on("data", onData);
+        child.stderr.on("data", onData);
+        child.on("error", reject);
+        const onAbort = () => child.kill();
+        signal?.addEventListener("abort", onAbort, { once: true });
+        child.on("close", (code) => {
+          signal?.removeEventListener("abort", onAbort);
+          if (signal?.aborted) reject(new Error("aborted"));
+          else if (timeout && code === 137) reject(new Error(`timeout:${timeout}`));
+          else resolve({ exitCode: code });
+        });
+      }),
+  };
+
+  pi.registerTool(createReadTool(cwd, { operations: read }));
+  pi.registerTool(createWriteTool(cwd, { operations: write }));
+  pi.registerTool(createEditTool(cwd, { operations: { readFile: read.readFile, access: read.access, writeFile: write.writeFile } }));
+  pi.registerTool(createBashTool(cwd, { operations: bash }));
+  // Offer only the redirected tools (find, grep and ls are done with bash, in the computer).
+  // Set before every agent start, since other tools can register after the session starts.
+  const onlyComputerTools = async () => pi.setActiveTools(COMPUTER_TOOLS);
+  pi.on("session_start", onlyComputerTools);
+  pi.on("before_agent_start", onlyComputerTools);
 }

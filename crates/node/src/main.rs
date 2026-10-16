@@ -1,6 +1,7 @@
 //! orphusbot-node, milestone M0: connects out to the server and runs one
 //! `orphus --mode rpc` engine for the one bot (DESIGN §4).
 
+mod computer;
 mod engine;
 mod key;
 
@@ -25,6 +26,9 @@ struct Config {
     key_path: PathBuf,
     orphus: String,
     session_dir: String,
+    /// `None` (`ORPHUSBOT_RUNTIME=none`): tools run on this machine, not isolated.
+    runtime: Option<String>,
+    image: String,
 }
 
 #[tokio::main]
@@ -44,7 +48,17 @@ async fn main() -> anyhow::Result<()> {
         orphus: std::env::var("ORPHUS_BIN").unwrap_or_else(|_| "orphus".into()),
         session_dir: std::env::var("ORPHUSBOT_SESSION_DIR")
             .unwrap_or_else(|_| format!("{home}/.local/share/orphusbot/sessions")),
+        runtime: match std::env::var("ORPHUSBOT_RUNTIME").as_deref() {
+            Ok("none") => None,
+            Ok(other) => Some(other.to_owned()),
+            Err(_) => Some("podman".to_owned()),
+        },
+        image: std::env::var("ORPHUSBOT_COMPUTER_IMAGE")
+            .unwrap_or_else(|_| "docker.io/library/debian:trixie-slim".into()),
     };
+    if cfg.runtime.is_none() {
+        warn!("ORPHUSBOT_RUNTIME=none: the bot's tools run on this machine, not in a computer");
+    }
     if !cfg.server.starts_with("ws://") && !cfg.server.starts_with("wss://") {
         bail!("ORPHUSBOT_SERVER must be a ws:// or wss:// URL");
     }
@@ -207,12 +221,30 @@ struct Engine {
 }
 
 impl Engine {
-    fn spawn(cfg: &Config, out: mpsc::Sender<FromNode>) -> anyhow::Result<Self> {
+    async fn spawn(cfg: &Config, out: mpsc::Sender<FromNode>) -> anyhow::Result<Self> {
         std::fs::create_dir_all(&cfg.session_dir)
             .with_context(|| format!("creating {}", cfg.session_dir))?;
         let bridge = format!("{}/orphusbot-bridge.ts", cfg.session_dir);
         std::fs::write(&bridge, BRIDGE).with_context(|| format!("writing {bridge}"))?;
-        let mut child = Command::new(&cfg.orphus)
+        let mut command = Command::new(&cfg.orphus);
+        if let Some(runtime) = &cfg.runtime {
+            let spec = computer::Spec {
+                runtime,
+                image: &cfg.image,
+                bot: "orphus",
+            };
+            let name = spec.ensure().await?;
+            // The engine works in an empty folder here; the bridge maps it onto the
+            // computer's home and runs every tool there.
+            let work = format!("{}/work", cfg.session_dir);
+            std::fs::create_dir_all(&work).with_context(|| format!("creating {work}"))?;
+            command
+                .current_dir(&work)
+                .env("ORPHUSBOT_COMPUTER", name)
+                .env("ORPHUSBOT_RUNTIME", runtime)
+                .env("ORPHUSBOT_COMPUTER_HOME", computer::HOME);
+        }
+        let mut child = command
             .args([
                 "--mode",
                 "rpc",
@@ -290,7 +322,7 @@ async fn start_turn(
 ) -> anyhow::Result<()> {
     // Start the engine on first use, or again if it has exited.
     if engine.as_ref().is_none_or(|e| e.attempts.is_closed()) {
-        *engine = Some(Engine::spawn(cfg, out.clone())?);
+        *engine = Some(Engine::spawn(cfg, out.clone()).await?);
     }
     let Some(e) = engine.as_mut() else {
         bail!("no engine")

@@ -62,6 +62,24 @@ pub struct BotSpec {
     pub e2b: Option<E2bComputer>,
 }
 
+/// An Orphus fleet blueprint the owner set up (DESIGN §11.2), written into the
+/// bot's work folder as `.orphus/fleets/<name>.fleet.yaml` before each run.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FleetFile {
+    pub name: String,
+    pub yaml: String,
+}
+
+/// A fleet name Orphus accepts, which is also safe as a file name: `[a-z0-9][a-z0-9_-]*`, up to 48.
+pub fn is_fleet_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    name.len() <= 48
+        && chars
+            .next()
+            .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
+}
+
 /// A file the owner sent a bot. `data` is base64.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SentFile {
@@ -173,6 +191,9 @@ pub enum ToNode {
         /// Files the owner sent with it: into the computer's `inbox/`, pictures to the model too.
         #[serde(default)]
         files: Vec<SentFile>,
+        /// Every fleet the owner set up, so `/fleet <name>` finds it.
+        #[serde(default)]
+        fleets: Vec<FleetFile>,
     },
     /// Extra instructions for the run in progress.
     Steer {
@@ -424,6 +445,25 @@ impl ThreadEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fleet_names_are_safe_file_names() {
+        for good in ["council", "coding-team", "a", "x_1"] {
+            assert!(is_fleet_name(good), "{good}");
+        }
+        for bad in [
+            "",
+            "Council",
+            "-x",
+            "../x",
+            "a/b",
+            "a.b",
+            "é",
+            &"a".repeat(49),
+        ] {
+            assert!(!is_fleet_name(bad), "{bad}");
+        }
+    }
 
     #[test]
     fn screen_frames_round_trip() {

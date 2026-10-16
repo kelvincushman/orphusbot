@@ -14,7 +14,8 @@ use anyhow::{Context, bail};
 use futures_util::{SinkExt, Stream, StreamExt};
 use key::NodeKey;
 use orphusbot_proto::{
-    Attempt, BotSpec, FromNode, SentFile, ToNode, screen_frame, split_screen_frame,
+    Attempt, BotSpec, FleetFile, FromNode, SentFile, ToNode, is_fleet_name, screen_frame,
+    split_screen_frame,
 };
 use std::collections::HashMap;
 
@@ -211,7 +212,11 @@ async fn session(cfg: &Config, key: &NodeKey) -> anyhow::Result<()> {
                     _ => continue,
                 };
                 match serde_json::from_str::<ToNode>(&text) {
-                    Ok(ToNode::StartTurn { attempt, text, resumed, bot, files }) => {
+                    Ok(ToNode::StartTurn { attempt, text, resumed, bot, files, fleets }) => {
+                        let work = PathBuf::from(format!("{}/{}/work", cfg.session_dir, bot.slug));
+                        if let Err(e) = write_fleets(&work, &fleets) {
+                            warn!("writing the owner's fleets: {e:#}");
+                        }
                         if let Err(e) = deliver(cfg, &bot, &files).await {
                             warn!("saving the owner's files in the computer: {e:#}");
                         }
@@ -386,6 +391,35 @@ fn images(files: &[SentFile]) -> Vec<serde_json::Value> {
         .filter(|f| f.is_image())
         .map(|f| serde_json::json!({ "type": "image", "data": f.data, "mimeType": f.mime }))
         .collect()
+}
+
+/// Puts the owner's fleets where Orphus looks for a project's (`work/.orphus/fleets/`),
+/// replacing what was there: that folder holds only the fleets OrphusBot sent.
+fn write_fleets(work: &std::path::Path, fleets: &[FleetFile]) -> anyhow::Result<()> {
+    let dir = work.join(".orphus/fleets");
+    std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+    for entry in std::fs::read_dir(&dir)? {
+        let path = entry?.path();
+        let keep = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .and_then(|n| n.strip_suffix(".fleet.yaml"))
+            .is_some_and(|name| fleets.iter().any(|f| f.name == name));
+        if !keep {
+            std::fs::remove_file(&path).ok();
+        }
+    }
+    for fleet in fleets {
+        // The name becomes a file name, so it is checked here too.
+        if !is_fleet_name(&fleet.name) {
+            warn!(name = %fleet.name, "skipping a fleet with an unsafe name");
+            continue;
+        }
+        let path = dir.join(format!("{}.fleet.yaml", fleet.name));
+        std::fs::write(&path, &fleet.yaml)
+            .with_context(|| format!("writing {}", path.display()))?;
+    }
+    Ok(())
 }
 
 /// Saves the owner's files in the bot's computer under `inbox/`: through envd
@@ -692,6 +726,29 @@ async fn start_turn(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn writes_fleets_and_drops_old_ones() {
+        let work = std::env::temp_dir().join(format!("orphusbot-fleets-{}", std::process::id()));
+        let fleet = |name: &str| orphusbot_proto::FleetFile {
+            name: name.into(),
+            yaml: format!("name: {name}\n"),
+        };
+        super::write_fleets(&work, &[fleet("council"), fleet("old")]).unwrap();
+        super::write_fleets(&work, &[fleet("council"), fleet("../escape")]).unwrap();
+        let dir = work.join(".orphus/fleets");
+        let mut names: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        names.sort();
+        assert_eq!(names, ["council.fleet.yaml"]);
+        assert!(!work.join(".orphus/escape.fleet.yaml").exists());
+        assert_eq!(
+            std::fs::read_to_string(dir.join("council.fleet.yaml")).unwrap(),
+            "name: council\n"
+        );
+        std::fs::remove_dir_all(&work).ok();
+    }
     #[test]
     fn reads_the_model_table() {
         let table = "provider       model                 context  max-out\nlocal          qwen3.8-27b-abl       65.5K    8.2K\nclaude-bridge  claude-sonnet-5       1M       128K\n";

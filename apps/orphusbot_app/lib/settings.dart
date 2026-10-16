@@ -25,6 +25,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<Map<String, dynamic>> bots = [];
   List<dynamic> passkeys = [];
   List<dynamic> nodes = [];
+  List<dynamic> fleets = [];
   Map<String, dynamic> connections = {};
   Map<String, dynamic> usage = {};
   Map<String, dynamic> wearables = {};
@@ -54,6 +55,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       api.get('/api/connections'),
       api.get('/api/usage'),
       api.get('/api/devices'),
+      api.get('/api/fleets'),
     ]);
     setState(() {
       bots = (got[0] as List).cast<Map<String, dynamic>>();
@@ -62,6 +64,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       connections = got[3] as Map<String, dynamic>;
       usage = got[4] as Map<String, dynamic>;
       wearables = got[5] as Map<String, dynamic>;
+      fleets = got[6] as List;
     });
   });
 
@@ -118,6 +121,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (_) => BotEditor(api: widget.api, bot: bot),
     );
     if (saved == true) _load();
+  }
+
+  Future<void> _editFleet(Map<String, dynamic>? fleet) async {
+    final changed = await showDialog<bool>(
+      context: context,
+      builder: (_) => FleetEditor(api: widget.api, fleet: fleet),
+    );
+    if (changed == true) _load();
+  }
+
+  /// Sends a bot `/fleet <name> <task>`; the run shows in that bot's chat.
+  Future<void> _runFleet(String name) async {
+    final task = TextEditingController();
+    String bot = bots.isEmpty ? 'inbox' : bots.first['slug'] as String;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, set) => AlertDialog(
+          title: Text('Run $name'),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: bot,
+                  decoration: const InputDecoration(labelText: 'Run it as'),
+                  items: [
+                    for (final b in bots)
+                      DropdownMenuItem(
+                        value: b['slug'] as String,
+                        child: Text(b['name'] as String),
+                      ),
+                  ],
+                  onChanged: (v) => set(() => bot = v ?? bot),
+                ),
+                TextField(
+                  controller: task,
+                  autofocus: true,
+                  minLines: 2,
+                  maxLines: 6,
+                  decoration: const InputDecoration(
+                    labelText: 'The task or question',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Run'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final text = task.text.trim();
+    task.dispose();
+    if (go != true || text.isEmpty) return;
+    await _act(
+      () => widget.api.send(bot, '/fleet $name $text'),
+      done: 'Started. It shows in that bot\'s chat.',
+    );
   }
 
   Future<void> _addConnection() async {
@@ -200,6 +271,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _note(
                   'To save tokens, set ORPHUSBOT_SECRET_KEY_FILE on the server.',
                 ),
+
+              heading(
+                'Fleets',
+                'Teams of agents, each seat on its own model, that argue in a '
+                    'room or split up the work. Run one by sending a bot '
+                    '/fleet <name> <task>, or with ▶ here.',
+              ),
+              for (final f in fleets)
+                ListTile(
+                  leading: const Icon(Icons.groups_outlined),
+                  title: Text(f['name'] as String),
+                  subtitle: Text(f['description'] as String),
+                  onTap: () => _editFleet(f as Map<String, dynamic>),
+                  trailing: IconButton(
+                    tooltip: 'Run',
+                    icon: const Icon(Icons.play_arrow),
+                    onPressed: () => _runFleet(f['name'] as String),
+                  ),
+                ),
+              _buttons([
+                OutlinedButton.icon(
+                  onPressed: () => _editFleet(null),
+                  icon: const Icon(Icons.add),
+                  label: const Text('New fleet'),
+                ),
+              ]),
 
               heading('Machines', 'The computers your bots run on (nodes).'),
               for (final n in nodes)
@@ -684,6 +781,163 @@ class _BotEditorState extends State<BotEditor> {
           onPressed: _save,
           child: Text(isNew ? 'Create bot' : 'Save'),
         ),
+      ],
+    );
+  }
+}
+
+/// Edits a fleet blueprint (Orphus's YAML), or makes a new one from a council
+/// template. Pops true when it was saved or deleted.
+class FleetEditor extends StatefulWidget {
+  const FleetEditor({super.key, required this.api, this.fleet});
+  final Api api;
+  final Map<String, dynamic>? fleet;
+  @override
+  State<FleetEditor> createState() => _FleetEditorState();
+}
+
+class _FleetEditorState extends State<FleetEditor> {
+  static const template = '''name: my-council
+description: Four seats argue a decision to a verdict, strongest dissent kept.
+version: 1
+
+teams:
+  council:
+    mode: deliberate          # argue in a room; or dispatch: split up the work
+    rounds: 2
+    members:
+      - agent: worker
+        model: provider/model   # pick from the list below; a different one per seat
+        tools: [read, roundtable]
+        brief: Architect. Propose the structure that best fits; cite evidence.
+      - agent: worker
+        model: provider/model
+        tools: [read, roundtable]
+        brief: Skeptic. Find the failure mode in every proposal.
+      - agent: worker
+        model: provider/model
+        tools: [read, roundtable]
+        brief: Pragmatist. Argue for the smallest change that ships.
+      - agent: worker
+        model: provider/model
+        tools: [read, roundtable]
+        brief: Critic. State the strongest opposing view plainly.
+''';
+  late final name = TextEditingController(
+    text: widget.fleet?['name'] as String? ?? 'my-council',
+  );
+  late final yaml = TextEditingController(
+    text: widget.fleet?['yaml'] as String? ?? template,
+  );
+  List<String> models = [];
+  String? error;
+  bool get isNew => widget.fleet == null;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.api.get('/api/models').then((list) {
+      if (mounted) {
+        setState(
+          () => models = [for (final m in list as List) m['id'] as String],
+        );
+      }
+    }, onError: (_) {});
+  }
+
+  @override
+  void dispose() {
+    name.dispose();
+    yaml.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    try {
+      await widget.api.post('/api/fleets', {
+        'name': name.text.trim(),
+        'yaml': yaml.text,
+      });
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      setState(() => error = '$e');
+    }
+  }
+
+  Future<void> _delete() async {
+    try {
+      await widget.api.post('/api/fleets/delete', {
+        'name': widget.fleet!['name'],
+      });
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      setState(() => error = '$e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final small = Theme.of(context).textTheme.bodySmall;
+    return AlertDialog(
+      title: Text(isNew ? 'New fleet' : 'Fleet ${widget.fleet!['name']}'),
+      content: SizedBox(
+        width: 720,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: name,
+                enabled: isNew,
+                maxLength: 48,
+                // Keeps the blueprint's own name line in step with the name.
+                onChanged: (v) => yaml.text = yaml.text.replaceFirst(
+                  RegExp(r'^name:.*$', multiLine: true),
+                  'name: ${v.trim()}',
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'Name (lower case; also the name: line below)',
+                ),
+              ),
+              TextField(
+                controller: yaml,
+                minLines: 14,
+                maxLines: 24,
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                decoration: const InputDecoration(
+                  labelText: 'Blueprint (Orphus fleet YAML)',
+                  alignLabelWithHint: true,
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Check it by sending a bot "/fleet validate <name>". Every seat '
+                'is a live model session, so more seats cost more.',
+                style: small,
+              ),
+              if (models.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text('Models your machines can use:', style: small),
+                SelectableText(models.join('\n'), style: small),
+              ],
+              if (error != null)
+                Text(
+                  error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        if (!isNew) TextButton(onPressed: _delete, child: const Text('Delete')),
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _save, child: const Text('Save')),
       ],
     );
   }

@@ -64,6 +64,14 @@ void main() {
           ],
           '/api/usage' => {'today_tokens': 1234, 'budget': null},
           '/api/devices' => {'devices': []},
+          '/api/fleets' => [
+            {
+              'name': 'council',
+              'description': 'Four argue to a verdict',
+              'yaml': 'name: council\nteams: {}\n',
+              'updated_at': '2026-10-16T20:00:00Z',
+            },
+          ],
           '/api/models' => [
             {
               'id': 'local/qwen',
@@ -90,6 +98,23 @@ void main() {
     expect(find.text('docs'), findsOneWidget);
     expect(find.text('gpu-box'), findsOneWidget);
     expect(find.textContaining('1234 tokens today'), findsOneWidget);
+    expect(find.text('Four argue to a verdict'), findsOneWidget);
+
+    // A new fleet: renaming it renames the blueprint's own name line too.
+    await t.tap(find.text('New fleet'));
+    await settle(t);
+    await t.enterText(
+      find.widgetWithText(
+        TextField,
+        'Name (lower case; also the name: line below)',
+      ),
+      'review',
+    );
+    await t.tap(find.text('Save'));
+    await settle(t);
+    final fleet = posted['/api/fleets'] as Map<String, dynamic>;
+    expect(fleet['name'], 'review');
+    expect((fleet['yaml'] as String).startsWith('name: review\n'), isTrue);
 
     // Edit the bot's instructions and save: the whole bot goes back.
     await t.tap(find.text('openai-codex/gpt-5.5 · team'));

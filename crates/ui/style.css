@@ -46,6 +46,14 @@ input, textarea { background: var(--bg); border: 1px solid var(--line); border-r
 .avatar { width: 2.1rem; height: 2.1rem; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--accent-fg); font-weight: 700; flex: none; }
 .badge { background: var(--bad); color: #fff; border-radius: 999px; font-size: .75rem; min-width: 1.3rem; padding: 0 .35rem; text-align: center; }
 .spacer { flex: 1; }
+.bot.disabled { opacity: .55; }
+.new-bot { margin-top: .4rem; border-style: dashed; }
+.sheet label { display: flex; flex-direction: column; gap: .3rem; font-size: .9rem; }
+.sheet label.inline { flex-direction: row; align-items: center; gap: .5rem; }
+.sheet label.inline input { width: auto; }
+.sheet fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding: .5rem .8rem; display: flex; flex-direction: column; gap: .3rem; }
+.sheet .row.two { display: grid; grid-template-columns: 1fr 1fr; }
+select { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: .5rem; }
 
 .chat { display: flex; flex-direction: column; min-width: 0; height: 100%; }
 .chat header { display: flex; align-items: center; gap: .75rem; padding: .7rem 1rem; border-bottom: 1px solid var(--line); }

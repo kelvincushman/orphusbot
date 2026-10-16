@@ -38,6 +38,24 @@ pub fn split_screen_frame(frame: &[u8]) -> Option<(u64, &[u8])> {
     Some((u64::from_be_bytes(*head), data))
 }
 
+/// How to run one bot's engine: its Orphus settings (DESIGN §4.2, PRD B-BOT-01).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BotSpec {
+    /// Names the engine session, the computer and its home volume.
+    pub slug: String,
+    /// Appended to Orphus's system prompt.
+    pub instructions: String,
+    /// Orphus `--model`; `None` uses Orphus's default.
+    pub model: Option<String>,
+    /// Orphus `--thinking`.
+    pub thinking: Option<String>,
+    /// Orphus `--exclude-tools`.
+    pub exclude_tools: Vec<String>,
+    /// A team bot's computer also mounts the shared team folder at `/shared`.
+    #[serde(default)]
+    pub team: bool,
+}
+
 /// Server → node, over the node link (DESIGN §4.1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -46,8 +64,8 @@ pub enum ToNode {
     Challenge { nonce: String },
     /// Answer to [`FromNode::Enrol`]; the server closes the link after it.
     Enrolled { error: Option<String> },
-    /// Connect a viewer to the bot computer's screen; its bytes follow as binary frames.
-    ScreenOpen { stream: u64 },
+    /// Connect a viewer to a bot computer's screen; its bytes follow as binary frames.
+    ScreenOpen { stream: u64, bot: String },
     /// The viewer went away.
     ScreenClose { stream: u64 },
     /// Work on this run. `resumed` means an earlier attempt was interrupted.
@@ -55,6 +73,7 @@ pub enum ToNode {
         attempt: Attempt,
         text: String,
         resumed: bool,
+        bot: BotSpec,
     },
     /// Extra instructions for the run in progress.
     Steer { attempt: Attempt, text: String },
@@ -213,6 +232,16 @@ pub struct NodeView {
     pub note: Option<String>,
 }
 
+/// What clients receive on the event stream: an event, and the bot whose
+/// thread it belongs to (`None` for events about the whole system, such as `Nodes`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Envelope {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bot: Option<String>,
+    #[serde(flatten)]
+    pub event: ThreadEvent,
+}
+
 /// How a run ended, as clients see it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -248,16 +277,22 @@ mod tests {
 
     #[test]
     fn wire_format_is_tagged_snake_case() {
-        let json =
-            r#"{"type":"start_turn","attempt":{"run":3,"fence":2},"text":"hi","resumed":false}"#;
+        let json = r#"{"type":"start_turn","attempt":{"run":3,"fence":2},"text":"hi","resumed":false,
+            "bot":{"slug":"inbox","instructions":"","model":null,"thinking":null,"exclude_tools":[]}}"#;
         let parsed: ToNode = serde_json::from_str(json).unwrap();
+        assert!(
+            matches!(parsed, ToNode::StartTurn { attempt: Attempt { run: 3, fence: 2 }, ref bot, .. } if bot.slug == "inbox")
+        );
+        let env = Envelope {
+            bot: Some("inbox".into()),
+            event: ThreadEvent::RunQueued {
+                run: 1,
+                waiting: None,
+            },
+        };
         assert_eq!(
-            parsed,
-            ToNode::StartTurn {
-                attempt: Attempt { run: 3, fence: 2 },
-                text: "hi".into(),
-                resumed: false,
-            }
+            serde_json::to_string(&env).unwrap(),
+            r#"{"bot":"inbox","type":"run_queued","run":1,"waiting":null}"#
         );
         let ev = ThreadEvent::RunEnded {
             run: 3,

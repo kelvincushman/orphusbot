@@ -1,12 +1,12 @@
-//! orphusbot-server, milestone M1: durable runs for one thread, one bot, one node.
+//! orphusbot-server: bots, their threads and durable runs, placed on nodes.
 //!
-//! A browser posts a message; it becomes a run in Postgres. When a node is
-//! connected the run is leased to it, and the node's streamed reply comes back
-//! to every open browser over Server-Sent Events. If the node drops or its
-//! lease lapses, the run goes back to the queue and resumes on the next node
-//! (DESIGN §3.2, §3.3).
+//! A browser posts a message to a bot; it becomes a run in Postgres. Placement
+//! leases the run to a node, and the node's streamed reply comes back to every
+//! open browser over Server-Sent Events. If the node drops or its lease lapses,
+//! the run goes back to the queue and resumes on the next node (DESIGN §3, §6.3).
 
 mod auth;
+mod bots;
 mod db;
 mod gate;
 mod links;
@@ -31,7 +31,8 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use futures_util::{SinkExt, Stream, StreamExt};
 use orphusbot_proto::{
-    Attempt, Dialog, DialogKind, FromNode, NodeView, Role, RunOutcome, ThreadEvent, ToNode,
+    Attempt, Dialog, DialogKind, Envelope, FromNode, NodeView, Role, RunOutcome, ThreadEvent,
+    ToNode,
 };
 use runs::{Outcome, Submitted};
 use serde::Deserialize;
@@ -49,10 +50,12 @@ const RECONCILE_EVERY: Duration = Duration::from_secs(30);
 /// A node that sends nothing (not even a pong) for this long is treated as gone.
 const NODE_SILENCE_LIMIT: Duration = Duration::from_secs(75);
 
-/// An event on its way to browsers; `seq` is set for persisted events.
+/// An event on its way to browsers: `id` is set for persisted events, `bot`
+/// for events in a bot's thread.
 #[derive(Clone)]
 struct Live {
-    seq: Option<i64>,
+    id: Option<i64>,
+    bot: Option<String>,
     event: ThreadEvent,
 }
 
@@ -83,13 +86,19 @@ impl NodeLink {
     }
 }
 
-// ponytail: one bot until bots arrive (M3); its computer and runs are keyed by this name.
-const BOT: &str = "orphus";
+/// A running attempt: where it runs and whose thread it's in.
+#[derive(Clone)]
+struct Active {
+    attempt: Attempt,
+    node: String,
+    thread: db::Thread,
+}
 
 /// A dialog the engine is blocked on.
 #[derive(Clone)]
 struct Pending {
     attempt: Attempt,
+    thread: db::Thread,
     /// Set for approval gates: the tool call being decided.
     tool_call_id: Option<String>,
     /// A takeover request: its yes and no read "Done" and "Couldn't help".
@@ -103,10 +112,10 @@ struct Runtime {
     /// Connected nodes by name.
     nodes: HashMap<String, NodeLink>,
     next_conn: u64,
-    /// The running attempt and the node it's on.
-    active: Option<(Attempt, String)>,
-    /// Why the queued run is waiting, as last told to clients.
-    waiting: Option<String>,
+    /// Running attempts by run id.
+    active: HashMap<i64, Active>,
+    /// Why each queued run is waiting, as last told to clients.
+    waiting: HashMap<i64, String>,
     /// Open dialogs by Orphus request id.
     dialogs: HashMap<String, Pending>,
     /// Open screen viewers by stream number, with the node serving each.
@@ -115,8 +124,11 @@ struct Runtime {
 }
 
 impl Runtime {
-    fn active(&self) -> Option<Attempt> {
-        self.active.as_ref().map(|(a, _)| *a)
+    /// The running attempt, if `attempt` is still the current one for its run.
+    fn current(&self, attempt: Attempt) -> Option<&Active> {
+        self.active
+            .get(&attempt.run)
+            .filter(|a| a.attempt == attempt)
     }
 }
 
@@ -209,6 +221,8 @@ fn router(app: Shared) -> Router {
         .route("/api/passkeys/finish", post(auth::register_finish))
         .route("/api/passkeys/remove", post(auth::remove_passkey))
         .route("/api/logout", post(auth::logout))
+        .route("/api/bots", get(bots::list).post(bots::create))
+        .route("/api/bots/update", post(bots::update))
         .route("/api/screen", get(screens::open))
         .route("/api/links/{code}", get(links::lookup))
         .route("/api/links/approve", post(links::approve))
@@ -253,7 +267,19 @@ fn internal(context: &str, e: impl std::fmt::Display) -> ApiError {
 
 #[derive(Deserialize)]
 struct NewMessage {
+    #[serde(default = "inbox")]
+    bot: String,
     text: String,
+}
+
+fn inbox() -> String {
+    "inbox".into()
+}
+
+#[derive(Deserialize)]
+struct WhichBot {
+    #[serde(default = "inbox")]
+    bot: String,
 }
 
 /// Stores the message, then queues a run, joins the waiting one, or steers the
@@ -269,23 +295,36 @@ async fn send_message(
             "Message must be 1 to 32,000 characters",
         ));
     }
+    let bot = bots::get(&app.db, &msg.bot)
+        .await
+        .map_err(|e| internal("finding the bot", e))?
+        .ok_or((StatusCode::NOT_FOUND, "No such bot"))?;
+    if bot.disabled {
+        return Err((StatusCode::CONFLICT, "That bot is disabled"));
+    }
+    let thread = bot_thread(&app, &bot.slug).await?;
 
     let event = ThreadEvent::Message {
         role: Role::User,
         text: text.clone(),
     };
-    let seq = db::append(&app.db, &event)
+    let id = db::append(&app.db, thread.id, &event)
         .await
         .map_err(|e| internal("storing message", e))?;
-    publish(&app, Some(seq), event);
+    publish(&app, Some(id), Some(&thread.bot), event);
 
-    match runs::submit(&app.db, &text)
+    match runs::submit(&app.db, thread.id, &text)
         .await
         .map_err(|e| internal("queueing run", e))?
     {
         Submitted::Queued(run) => {
-            lock(&app.rt).waiting = None;
-            publish(&app, None, ThreadEvent::RunQueued { run, waiting: None });
+            lock(&app.rt).waiting.remove(&run);
+            publish(
+                &app,
+                None,
+                Some(&thread.bot),
+                ThreadEvent::RunQueued { run, waiting: None },
+            );
             dispatch(&app).await;
         }
         Submitted::Joined(_) => {}
@@ -301,9 +340,21 @@ async fn send_message(
     Ok(StatusCode::ACCEPTED)
 }
 
+async fn bot_thread(app: &App, slug: &str) -> Result<db::Thread, ApiError> {
+    db::bot_thread(&app.db, slug)
+        .await
+        .map_err(|e| internal("finding the bot's thread", e))?
+        .ok_or((StatusCode::NOT_FOUND, "No such bot"))
+}
+
 /// Stops the thread's active run (B-RUN-03).
-async fn cancel_run(State(app): State<Shared>) -> Result<StatusCode, ApiError> {
-    let Some((run, fence)) = runs::cancel_active(&app.db)
+async fn cancel_run(
+    State(app): State<Shared>,
+    body: Option<Json<WhichBot>>,
+) -> Result<StatusCode, ApiError> {
+    let slug = body.map_or_else(inbox, |Json(b)| b.bot);
+    let thread = bot_thread(&app, &slug).await?;
+    let Some((run, fence)) = runs::cancel_active(&app.db, thread.id)
         .await
         .map_err(|e| internal("cancelling run", e))?
     else {
@@ -315,11 +366,10 @@ async fn cancel_run(State(app): State<Shared>) -> Result<StatusCode, ApiError> {
     }
     {
         let mut rt = lock(&app.rt);
-        if rt.active() == Some(attempt) {
-            rt.active = None;
-        }
+        rt.active.remove(&run);
+        rt.waiting.remove(&run);
     }
-    run_ended(&app, run, RunOutcome::Cancelled, None).await;
+    run_ended(&app, &thread, run, RunOutcome::Cancelled, None).await;
     dispatch(&app).await;
     Ok(StatusCode::ACCEPTED)
 }
@@ -400,7 +450,7 @@ async fn answer_dialog(
         },
     };
     respond(&app, pending.attempt, response).await;
-    dialog_closed(&app, id, outcome).await;
+    dialog_closed(&app, &pending.thread, id, outcome).await;
     Ok(StatusCode::ACCEPTED)
 }
 
@@ -410,17 +460,21 @@ async fn respond(app: &App, attempt: Attempt, response: Value) {
     }
 }
 
-async fn dialog_closed(app: &App, id: String, outcome: String) {
-    let event = ThreadEvent::DialogClosed { id, outcome };
-    match db::append(&app.db, &event).await {
-        Ok(seq) => publish(app, Some(seq), event),
-        Err(e) => warn!("storing dialog close: {e}"),
+async fn dialog_closed(app: &App, thread: &db::Thread, id: String, outcome: String) {
+    record(app, thread, ThreadEvent::DialogClosed { id, outcome }).await;
+}
+
+/// Stores an event in a thread and sends it to browsers.
+async fn record(app: &App, thread: &db::Thread, event: ThreadEvent) {
+    match db::append(&app.db, thread.id, &event).await {
+        Ok(id) => publish(app, Some(id), Some(&thread.bot), event),
+        Err(e) => warn!("storing an event: {e}"),
     }
 }
 
 /// Closes every open dialog for `run`: its attempt ended, so nobody is waiting.
 async fn expire_dialogs(app: &App, run: i64) {
-    let ids: Vec<String> = {
+    let closed: Vec<(String, db::Thread)> = {
         let mut rt = lock(&app.rt);
         let ids: Vec<String> = rt
             .dialogs
@@ -428,18 +482,18 @@ async fn expire_dialogs(app: &App, run: i64) {
             .filter(|(_, p)| p.attempt.run == run)
             .map(|(id, _)| id.clone())
             .collect();
-        for id in &ids {
-            rt.dialogs.remove(id);
-        }
-        ids
+        ids.into_iter()
+            .filter_map(|id| rt.dialogs.remove(&id).map(|p| (id, p.thread)))
+            .collect()
     };
-    for id in ids {
-        dialog_closed(app, id, "Expired: the run moved on".to_owned()).await;
+    for (id, thread) in closed {
+        dialog_closed(app, &thread, id, "Expired: the run moved on".to_owned()).await;
     }
 }
 
 /// The engine is waiting on a dialog: decide gates here, ask the owner otherwise.
-async fn on_dialog(app: &App, attempt: Attempt, request: Value) {
+async fn on_dialog(app: &App, active: Active, request: Value) {
+    let attempt = active.attempt;
     let Some(id) = request["id"].as_str().map(str::to_owned) else {
         return warn!("dialog without an id");
     };
@@ -514,6 +568,7 @@ async fn on_dialog(app: &App, attempt: Attempt, request: Value) {
 
     let pending = Pending {
         attempt,
+        thread: active.thread.clone(),
         takeover: matches!(kind, DialogKind::Takeover { .. }),
         tool_call_id,
     };
@@ -523,25 +578,20 @@ async fn on_dialog(app: &App, attempt: Attempt, request: Value) {
         run: attempt.run,
         kind,
     };
-    let event = ThreadEvent::DialogOpened { dialog };
-    match db::append(&app.db, &event).await {
-        Ok(seq) => publish(app, Some(seq), event),
-        Err(e) => warn!("storing dialog: {e}"),
-    }
+    record(app, &active.thread, ThreadEvent::DialogOpened { dialog }).await;
 }
 
 /// The node's sender if it is working on exactly this attempt.
 fn node_for(app: &App, attempt: Attempt) -> Option<mpsc::Sender<ToNode>> {
     let rt = lock(&app.rt);
-    match &rt.active {
-        Some((a, node)) if *a == attempt => rt.nodes.get(node).map(|n| n.tx.clone()),
-        _ => None,
-    }
+    let active = rt.current(attempt)?;
+    rt.nodes.get(&active.node).map(|n| n.tx.clone())
 }
 
 /// Sends every client the node list.
 fn publish_nodes(app: &App) {
-    publish(app, None, nodes_event(&lock(&app.rt)));
+    let event = nodes_event(&lock(&app.rt));
+    publish(app, None, None, event);
 }
 
 fn nodes_event(rt: &Runtime) -> ThreadEvent {
@@ -563,75 +613,97 @@ fn nodes_event(rt: &Runtime) -> ThreadEvent {
 
 /// Places the next queued run on a node (DESIGN §6.3), or says why it waits.
 async fn dispatch(app: &App) {
-    let candidates: Vec<placement::Candidate> = {
-        let rt = lock(&app.rt);
-        if rt.active.is_some() {
-            return;
-        }
-        rt.nodes.values().map(NodeLink::candidate).collect()
+    let queued = match runs::queued(&app.db).await {
+        Ok(queued) => queued,
+        Err(e) => return warn!("listing queued runs: {e}"),
     };
-    let home = match db::computer_home(&app.db, BOT).await {
-        Ok(home) => home,
-        Err(e) => return warn!("reading where the computer is: {e}"),
-    };
-    let (node, why) = match placement::choose(&candidates, home.as_deref()) {
-        placement::Placement::Run { node, why } => (node, why),
-        placement::Placement::Wait { why } => {
-            let changed = {
-                let mut rt = lock(&app.rt);
-                let changed = rt.waiting.as_deref() != Some(why.as_str());
-                rt.waiting = Some(why.clone());
-                changed
-            };
-            if changed && let Ok(Some(run)) = runs::queued(&app.db).await {
-                let event = ThreadEvent::RunQueued {
-                    run,
-                    waiting: Some(why),
-                };
-                publish(app, None, event);
+    for q in queued {
+        let bot = match bots::get(&app.db, &q.bot).await {
+            Ok(Some(bot)) => bot,
+            Ok(None) => continue,
+            Err(e) => return warn!("reading a bot: {e}"),
+        };
+        let placed = if bot.disabled {
+            placement::Placement::Wait {
+                why: format!("{} is disabled", bot.name),
             }
-            return;
+        } else {
+            let candidates: Vec<placement::Candidate> = lock(&app.rt)
+                .nodes
+                .values()
+                .map(NodeLink::candidate)
+                .collect();
+            let home = match db::computer_home(&app.db, &q.bot).await {
+                Ok(home) => home,
+                Err(e) => return warn!("reading where the computer is: {e}"),
+            };
+            placement::choose(&candidates, home.as_deref())
+        };
+        match placed {
+            placement::Placement::Run { node, why } => start(app, q.run, &bot, node, why).await,
+            placement::Placement::Wait { why } => {
+                let changed =
+                    lock(&app.rt).waiting.insert(q.run, why.clone()).as_ref() != Some(&why);
+                if changed {
+                    let event = ThreadEvent::RunQueued {
+                        run: q.run,
+                        waiting: Some(why),
+                    };
+                    publish(app, None, Some(&bot.slug), event);
+                }
+            }
         }
-    };
+    }
+}
+
+/// Leases `run` to `node` and starts it there.
+async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
     let Some(link) = lock(&app.rt).nodes.get(&node).cloned() else {
         return;
     };
-    let claimed = match runs::claim(&app.db, &node).await {
+    let claimed = match runs::claim(&app.db, run, &node).await {
         Ok(Some(c)) => c,
         Ok(None) => return,
         Err(e) => return warn!("claiming a run: {e}"),
     };
-    if let Err(e) = db::set_computer_home(&app.db, BOT, &node).await {
+    if let Err(e) = db::set_computer_home(&app.db, &bot.slug, &node).await {
         warn!("recording where the computer is: {e}");
     }
+    let thread = match db::run_thread(&app.db, run).await {
+        Ok(thread) => thread,
+        Err(e) => return warn!("finding the run's thread: {e}"),
+    };
     let attempt = Attempt {
-        run: claimed.run,
+        run,
         fence: claimed.fence,
     };
     {
         let mut rt = lock(&app.rt);
-        rt.active = Some((attempt, node.clone()));
-        rt.waiting = None;
+        let active = Active {
+            attempt,
+            node: node.clone(),
+            thread,
+        };
+        rt.active.insert(run, active);
+        rt.waiting.remove(&run);
     }
-    info!(run = claimed.run, %node, why, "placed run");
-    publish(
-        app,
-        None,
-        ThreadEvent::RunStarted {
-            run: claimed.run,
-            resumed: claimed.resumed,
-            node: Some(node),
-            why: Some(why.to_owned()),
-        },
-    );
+    info!(run, bot = %bot.slug, %node, why, "placed run");
+    let event = ThreadEvent::RunStarted {
+        run,
+        resumed: claimed.resumed,
+        node: Some(node),
+        why: Some(why.to_owned()),
+    };
+    publish(app, None, Some(&bot.slug), event);
     let start = ToNode::StartTurn {
         attempt,
         text: claimed.prompt,
         resumed: claimed.resumed,
+        bot: bot.spec(),
     };
     if link.tx.send(start).await.is_err() {
         // The link closed under us; its disconnect handler re-queues the run.
-        warn!(run = claimed.run, "node went away while starting a run");
+        warn!(run, "node went away while starting a run");
     }
 }
 
@@ -660,23 +732,25 @@ async fn reconcile_forever(app: Shared) {
 
 async fn announce_released(app: &App, released: Vec<runs::Released>) {
     for r in released {
-        {
-            let mut rt = lock(&app.rt);
-            if rt.active().is_some_and(|a| a.run == r.run) {
-                rt.active = None;
-            }
-        }
+        lock(&app.rt).active.remove(&r.run);
         expire_dialogs(app, r.run).await;
+        let thread = match db::run_thread(&app.db, r.run).await {
+            Ok(thread) => thread,
+            Err(e) => {
+                warn!("finding a run's thread: {e}");
+                continue;
+            }
+        };
         if r.failed {
             let error = Some("The bot lost its node too many times".to_owned());
-            run_ended(app, r.run, RunOutcome::Failed, error).await;
+            run_ended(app, &thread, r.run, RunOutcome::Failed, error).await;
         } else {
-            lock(&app.rt).waiting = None;
+            lock(&app.rt).waiting.remove(&r.run);
             let event = ThreadEvent::RunQueued {
                 run: r.run,
                 waiting: None,
             };
-            publish(app, None, event);
+            publish(app, None, Some(&thread.bot), event);
         }
     }
 }
@@ -712,19 +786,19 @@ async fn events(
 
     let stream = async_stream::stream! {
         let mut last = after;
-        for (seq, event) in history {
-            last = seq;
-            yield Ok(sse(Some(seq), &event));
+        for (id, bot, event) in history {
+            last = id;
+            yield Ok(sse(Some(id), Some(bot), event));
         }
-        for event in &current {
-            yield Ok(sse(None, event));
+        for (bot, event) in current {
+            yield Ok(sse(None, bot, event));
         }
         loop {
             match rx.recv().await {
-                Ok(Live { seq: Some(seq), .. }) if seq <= last => continue,
-                Ok(Live { seq, event }) => {
-                    if let Some(seq) = seq { last = seq; }
-                    yield Ok(sse(seq, &event));
+                Ok(Live { id: Some(id), .. }) if id <= last => continue,
+                Ok(Live { id, bot, event }) => {
+                    if let Some(id) = id { last = id; }
+                    yield Ok(sse(id, bot, event));
                 }
                 // ponytail: a slow client that lags just reconnects and replays from Last-Event-ID.
                 Err(_) => break,
@@ -735,21 +809,21 @@ async fn events(
 }
 
 /// The live-only state a newly connected client needs: node status and the active run.
-async fn current_state(app: &App) -> sqlx::Result<Vec<ThreadEvent>> {
+async fn current_state(app: &App) -> sqlx::Result<Vec<(Option<String>, ThreadEvent)>> {
     let (nodes, waiting) = {
         let rt = lock(&app.rt);
         (nodes_event(&rt), rt.waiting.clone())
     };
-    let mut out = vec![nodes];
-    let active = sqlx::query!(
-        r#"select id, status::text as "status!", attempts, node from run
-           where thread_id = $1 and status in ('queued', 'running')"#,
-        db::THREAD
+    let mut out = vec![(None, nodes)];
+    let runs = sqlx::query!(
+        r#"select r.id, r.status::text as "status!", r.attempts, r.node, b.slug from run r
+           join thread t on t.id = r.thread_id join bot b on b.id = t.bot_id
+           where r.status in ('queued', 'running')"#
     )
-    .fetch_optional(&app.db)
+    .fetch_all(&app.db)
     .await?;
-    if let Some(r) = active {
-        out.push(if r.status == "running" {
+    for r in runs {
+        let event = if r.status == "running" {
             ThreadEvent::RunStarted {
                 run: r.id,
                 resumed: r.attempts > 1,
@@ -757,17 +831,21 @@ async fn current_state(app: &App) -> sqlx::Result<Vec<ThreadEvent>> {
                 why: None,
             }
         } else {
-            ThreadEvent::RunQueued { run: r.id, waiting }
-        });
+            ThreadEvent::RunQueued {
+                run: r.id,
+                waiting: waiting.get(&r.id).cloned(),
+            }
+        };
+        out.push((Some(r.slug), event));
     }
     Ok(out)
 }
 
-fn sse(seq: Option<i64>, event: &ThreadEvent) -> Event {
-    let data = serde_json::to_string(event).unwrap_or_default();
+fn sse(id: Option<i64>, bot: Option<String>, event: ThreadEvent) -> Event {
+    let data = serde_json::to_string(&Envelope { bot, event }).unwrap_or_default();
     let ev = Event::default().data(data);
-    match seq {
-        Some(seq) => ev.id(seq.to_string()),
+    match id {
+        Some(id) => ev.id(id.to_string()),
         None => ev,
     }
 }
@@ -837,9 +915,7 @@ async fn run_node(app: Shared, socket: WebSocket) {
         let mut rt = lock(&app.rt);
         rt.next_conn += 1;
         let conn = rt.next_conn;
-        if rt.active.as_ref().is_some_and(|(_, n)| *n == name) {
-            rt.active = None;
-        }
+        rt.active.retain(|_, a| a.node != name);
         let link = NodeLink {
             conn,
             name: name.clone(),
@@ -908,9 +984,7 @@ async fn run_node(app: Shared, socket: WebSocket) {
         let current = rt.nodes.get(&name).is_some_and(|n| n.conn == conn);
         if current {
             rt.nodes.remove(&name);
-            if rt.active.as_ref().is_some_and(|(_, n)| *n == name) {
-                rt.active = None;
-            }
+            rt.active.retain(|_, a| a.node != name);
             // Dropping the senders ends the viewers' streams on this node.
             rt.screens.retain(|_, (node, _)| *node != name);
         }
@@ -927,7 +1001,8 @@ async fn run_node(app: Shared, socket: WebSocket) {
 }
 
 async fn on_node_message(app: &App, node: &str, msg: FromNode) {
-    let active = lock(&app.rt).active();
+    // Frames for an attempt that's no longer current (a fenced-off retry) are dropped.
+    let current = |attempt: Attempt| lock(&app.rt).current(attempt).cloned();
     match msg {
         FromNode::Heartbeat {
             load,
@@ -950,24 +1025,28 @@ async fn on_node_message(app: &App, node: &str, msg: FromNode) {
         }
         FromNode::Hello { .. } | FromNode::Enrol { .. } => {}
         FromNode::ScreenClosed { stream, error } => screens::closed(app, stream, error).await,
-        FromNode::Delta { attempt, text } if active == Some(attempt) => {
-            let event = ThreadEvent::Delta {
-                run: attempt.run,
-                text,
-            };
-            publish(app, None, event);
-        }
-        FromNode::Reply { attempt, text } if active == Some(attempt) => {
-            let event = ThreadEvent::Message {
-                role: Role::Assistant,
-                text,
-            };
-            match db::append(&app.db, &event).await {
-                Ok(seq) => publish(app, Some(seq), event),
-                Err(e) => warn!("storing reply: {e}"),
+        FromNode::Delta { attempt, text } => {
+            if let Some(a) = current(attempt) {
+                let event = ThreadEvent::Delta {
+                    run: attempt.run,
+                    text,
+                };
+                publish(app, None, Some(&a.thread.bot), event);
             }
         }
-        FromNode::TurnEnded { attempt, error } if active == Some(attempt) => {
+        FromNode::Reply { attempt, text } => {
+            if let Some(a) = current(attempt) {
+                let event = ThreadEvent::Message {
+                    role: Role::Assistant,
+                    text,
+                };
+                record(app, &a.thread, event).await;
+            }
+        }
+        FromNode::TurnEnded { attempt, error } => {
+            let Some(a) = current(attempt) else {
+                return warn!(?attempt, "turn ended for an attempt that is not current");
+            };
             let (outcome, shown) = match error {
                 Some(_) => (Outcome::Failed, RunOutcome::Failed),
                 None => (Outcome::Completed, RunOutcome::Completed),
@@ -982,50 +1061,54 @@ async fn on_node_message(app: &App, node: &str, msg: FromNode) {
             .await;
             match finished {
                 Ok(true) => {
-                    lock(&app.rt).active = None;
-                    run_ended(app, attempt.run, shown, error).await;
+                    lock(&app.rt).active.remove(&attempt.run);
+                    run_ended(app, &a.thread, attempt.run, shown, error).await;
                     dispatch(app).await;
                 }
                 Ok(false) => warn!(?attempt, "run already ended or moved on"),
                 Err(e) => warn!("finishing run: {e}"),
             }
         }
-        FromNode::Dialog { attempt, request } if active == Some(attempt) => {
-            on_dialog(app, attempt, request).await;
+        FromNode::Dialog { attempt, request } => {
+            if let Some(a) = current(attempt) {
+                on_dialog(app, a, request).await;
+            }
         }
         FromNode::ToolDone {
             attempt,
             tool_call_id,
             ok,
             result,
-        } if active == Some(attempt) => {
-            if let Err(e) = gate::tool_done(&app.db, attempt, &tool_call_id, ok, &result).await {
+        } => {
+            if current(attempt).is_some()
+                && let Err(e) = gate::tool_done(&app.db, attempt, &tool_call_id, ok, &result).await
+            {
                 warn!("recording tool result: {e}");
             }
         }
-        other => warn!(
-            ?other,
-            "ignoring a frame for an attempt that is not current"
-        ),
     }
 }
 
-async fn run_ended(app: &App, run: i64, outcome: RunOutcome, error: Option<String>) {
+async fn run_ended(
+    app: &App,
+    thread: &db::Thread,
+    run: i64,
+    outcome: RunOutcome,
+    error: Option<String>,
+) {
     expire_dialogs(app, run).await;
     let event = ThreadEvent::RunEnded {
         run,
         outcome,
         error,
     };
-    match db::append(&app.db, &event).await {
-        Ok(seq) => publish(app, Some(seq), event),
-        Err(e) => warn!("storing run end: {e}"),
-    }
+    record(app, thread, event).await;
 }
 
-fn publish(app: &App, seq: Option<i64>, event: ThreadEvent) {
+fn publish(app: &App, id: Option<i64>, bot: Option<&str>, event: ThreadEvent) {
     // No receivers is normal when no browser is open.
-    let _ = app.live.send(Live { seq, event });
+    let bot = bot.map(str::to_owned);
+    let _ = app.live.send(Live { id, bot, event });
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {

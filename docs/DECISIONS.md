@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-022: One event stream for all bots, each event tagged with its bot (2026-10-16)
+
+**Decided:** clients open one SSE stream that carries every bot's thread events and the node list, each wrapped in an `Envelope { bot, event }`. Events get a global id, which clients resume from with `Last-Event-ID`; each thread still numbers its events without gaps.
+**Why:** the sidebar needs every bot's latest message and waiting count at once, so a client would subscribe to every thread anyway. One stream means one connection, one resume point and no subscription bookkeeping.
+**Alternatives:** a stream per thread plus a global inbox stream (DESIGN §12's first plan).
+**Revisit if:** there are enough bots or traffic that clients should only receive the threads they show.
+
 ## D-021: Screens travel through the server and the node link, into the computer with `podman exec socat` (2026-10-16)
 
 **Decided:** the browser's noVNC connects to the server (`/api/screen`, same origin, same session cookie). The server relays the VNC bytes over the node's existing link as binary frames tagged with a stream number, and the node pipes them into the computer with `podman exec -i … socat STDIO TCP:127.0.0.1:5900`. The VNC server listens only inside the container. noVNC 1.7.0 (MPL-2.0) is vendored unmodified.

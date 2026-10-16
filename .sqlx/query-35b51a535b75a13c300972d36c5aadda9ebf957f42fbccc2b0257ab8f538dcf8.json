@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "update run set status = 'running', fence = fence + 1, node = $1, attempts = attempts + 1,\n                  lease_expires_at = now() + make_interval(secs => $2), updated_at = now()\n           where id = (select id from run where status = 'queued' order by created_at, id\n                       limit 1 for update skip locked)\n           returning id, fence, prompt, attempts",
+  "query": "update run set status = 'running', fence = fence + 1, node = $2, attempts = attempts + 1,\n                  lease_expires_at = now() + make_interval(secs => $3), updated_at = now()\n           where id = $1 and status = 'queued'\n           returning id, fence, prompt, attempts",
   "describe": {
     "columns": [
       {
@@ -50,6 +50,7 @@
     ],
     "parameters": {
       "Left": [
+        "Int8",
         "Text",
         "Float8"
       ]
@@ -61,5 +62,5 @@
       false
     ]
   },
-  "hash": "8a90a68273a755b600613ca667e3be0b4a2ddd0540a292f2a113a2d3d17a846e"
+  "hash": "35b51a535b75a13c300972d36c5aadda9ebf957f42fbccc2b0257ab8f538dcf8"
 }

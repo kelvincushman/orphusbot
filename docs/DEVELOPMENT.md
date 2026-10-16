@@ -151,7 +151,7 @@ These are known simplifications, each marked `ponytail:` in the code, with the m
 
 | Simplification | Replaced in |
 |---|---|
-| One thread and one bot (any number of nodes since M2.3) | M3 |
+| Bots are routed by hand: you pick the bot; System 1 routing of the inbox comes next | M3.2 |
 | Streaming text isn't stored; only finished messages are replayed after a reconnect | M2 (batched progress events) |
 | Read-only tools still round-trip to the server before running | When it measurably slows bots down |
 | Live events fan out inside one server process, not through Postgres `NOTIFY` | When there's more than one server process |

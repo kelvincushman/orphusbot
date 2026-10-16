@@ -5,8 +5,6 @@
 
 use sqlx::PgPool;
 
-use crate::db::THREAD;
-
 /// How long a lease lasts without renewal. The server renews every 30 s.
 pub const LEASE_SECS: i32 = 120;
 /// Attempts before a run that keeps losing its node is failed.
@@ -24,16 +22,16 @@ pub enum Submitted {
 }
 
 /// Queues the message as a run, or attaches it to the thread's active run.
-pub async fn submit(db: &PgPool, text: &str) -> sqlx::Result<Submitted> {
+pub async fn submit(db: &PgPool, thread: i64, text: &str) -> sqlx::Result<Submitted> {
     let mut tx = db.begin().await?;
     // Lock the thread row so two submits can't both see "no active run".
-    sqlx::query!("select id from thread where id = $1 for update", THREAD)
+    sqlx::query!("select id from thread where id = $1 for update", thread)
         .fetch_one(&mut *tx)
         .await?;
     let active = sqlx::query!(
         r#"select id, fence, status::text as "status!" from run
            where thread_id = $1 and status in ('queued', 'running')"#,
-        THREAD
+        thread
     )
     .fetch_optional(&mut *tx)
     .await?;
@@ -55,7 +53,7 @@ pub async fn submit(db: &PgPool, text: &str) -> sqlx::Result<Submitted> {
         None => {
             let id = sqlx::query_scalar!(
                 "insert into run (thread_id, prompt) values ($1, $2) returning id",
-                THREAD,
+                thread,
                 text
             )
             .fetch_one(&mut *tx)
@@ -77,24 +75,40 @@ pub struct Claimed {
     pub resumed: bool,
 }
 
-/// Leases the oldest queued run to `node`, bumping its fence.
-/// The thread's queued run, if one is waiting.
-pub async fn queued(db: &PgPool) -> sqlx::Result<Option<i64>> {
-    sqlx::query_scalar!(
-        "select id from run where thread_id = $1 and status = 'queued'",
-        THREAD
-    )
-    .fetch_optional(db)
-    .await
+/// A queued run and the bot it's for.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Queued {
+    pub run: i64,
+    pub bot: String,
 }
 
-pub async fn claim(db: &PgPool, node: &str) -> sqlx::Result<Option<Claimed>> {
+/// Every queued run, oldest first.
+pub async fn queued(db: &PgPool) -> sqlx::Result<Vec<Queued>> {
+    let rows = sqlx::query!(
+        "select r.id, b.slug from run r join thread t on t.id = r.thread_id
+         join bot b on b.id = t.bot_id
+         where r.status = 'queued' order by r.created_at, r.id"
+    )
+    .fetch_all(db)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| Queued {
+            run: r.id,
+            bot: r.slug,
+        })
+        .collect())
+}
+
+/// Leases queued run `run` to `node`, bumping its fence. `None` if it's no
+/// longer queued (another dispatch took it, or it was cancelled).
+pub async fn claim(db: &PgPool, run: i64, node: &str) -> sqlx::Result<Option<Claimed>> {
     let row = sqlx::query!(
-        r#"update run set status = 'running', fence = fence + 1, node = $1, attempts = attempts + 1,
-                  lease_expires_at = now() + make_interval(secs => $2), updated_at = now()
-           where id = (select id from run where status = 'queued' order by created_at, id
-                       limit 1 for update skip locked)
+        r#"update run set status = 'running', fence = fence + 1, node = $2, attempts = attempts + 1,
+                  lease_expires_at = now() + make_interval(secs => $3), updated_at = now()
+           where id = $1 and status = 'queued'
            returning id, fence, prompt, attempts"#,
+        run,
         node,
         f64::from(LEASE_SECS)
     )
@@ -157,12 +171,12 @@ pub async fn finish(
 
 /// Cancels the thread's active run, whatever state it is in.
 /// Returns the run and the fence it had, so a running node can be told to stop.
-pub async fn cancel_active(db: &PgPool) -> sqlx::Result<Option<(i64, i64)>> {
+pub async fn cancel_active(db: &PgPool, thread: i64) -> sqlx::Result<Option<(i64, i64)>> {
     let row = sqlx::query!(
         "update run set status = 'cancelled', node = null, lease_expires_at = null, updated_at = now()
          where thread_id = $1 and status in ('queued', 'running')
          returning id, fence",
-        THREAD
+        thread
     )
     .fetch_optional(db)
     .await?;
@@ -217,6 +231,9 @@ pub async fn release_all(db: &PgPool) -> sqlx::Result<u64> {
 mod tests {
     use super::*;
 
+    /// The inbox bot's thread, made by the migrations.
+    const INBOX: i64 = 1;
+
     async fn status(db: &PgPool, run: i64) -> String {
         sqlx::query_scalar!(r#"select status::text as "s!" from run where id = $1"#, run)
             .fetch_one(db)
@@ -226,15 +243,25 @@ mod tests {
 
     #[sqlx::test]
     async fn second_message_joins_or_steers(db: PgPool) {
-        let Submitted::Queued(run) = submit(&db, "one").await.unwrap() else {
+        let Submitted::Queued(run) = submit(&db, INBOX, "one").await.unwrap() else {
             panic!("expected a new run")
         };
-        assert_eq!(submit(&db, "two").await.unwrap(), Submitted::Joined(run));
-        let c = claim(&db, "laptop").await.unwrap().unwrap();
+        assert_eq!(
+            submit(&db, INBOX, "two").await.unwrap(),
+            Submitted::Joined(run)
+        );
+        assert_eq!(
+            queued(&db).await.unwrap(),
+            vec![Queued {
+                run,
+                bot: "inbox".into()
+            }]
+        );
+        let c = claim(&db, run, "laptop").await.unwrap().unwrap();
         assert_eq!(c.prompt, "one\n\ntwo");
         assert!(!c.resumed);
         assert_eq!(
-            submit(&db, "three").await.unwrap(),
+            submit(&db, INBOX, "three").await.unwrap(),
             Submitted::Steer {
                 run,
                 fence: c.fence
@@ -244,11 +271,13 @@ mod tests {
 
     #[sqlx::test]
     async fn stale_fence_cannot_finish_and_requeue_bumps_the_fence(db: PgPool) {
-        submit(&db, "work").await.unwrap();
-        let first = claim(&db, "laptop").await.unwrap().unwrap();
+        let Submitted::Queued(run) = submit(&db, INBOX, "work").await.unwrap() else {
+            panic!("expected a new run")
+        };
+        let first = claim(&db, run, "laptop").await.unwrap().unwrap();
         assert!(
-            claim(&db, "gpu").await.unwrap().is_none(),
-            "only one queued run"
+            claim(&db, run, "gpu").await.unwrap().is_none(),
+            "already running"
         );
 
         // The laptop drops: the run goes back to the queue and the GPU box takes it.
@@ -259,7 +288,7 @@ mod tests {
                 failed: false
             }]
         );
-        let second = claim(&db, "gpu").await.unwrap().unwrap();
+        let second = claim(&db, run, "gpu").await.unwrap().unwrap();
         assert_eq!(second.run, first.run);
         assert!(second.fence > first.fence);
         assert!(second.resumed);
@@ -281,9 +310,11 @@ mod tests {
 
     #[sqlx::test]
     async fn expired_leases_requeue_until_attempts_run_out(db: PgPool) {
-        submit(&db, "work").await.unwrap();
+        let Submitted::Queued(run) = submit(&db, INBOX, "work").await.unwrap() else {
+            panic!("expected a new run")
+        };
         for attempt in 1..=MAX_ATTEMPTS {
-            let c = claim(&db, "laptop").await.unwrap().unwrap();
+            let c = claim(&db, run, "laptop").await.unwrap().unwrap();
             sqlx::query!(
                 "update run set lease_expires_at = now() - interval '1 second' where id = $1",
                 c.run
@@ -295,13 +326,15 @@ mod tests {
             assert_eq!(released.len(), 1);
             assert_eq!(released[0].failed, attempt == MAX_ATTEMPTS);
         }
-        assert!(claim(&db, "laptop").await.unwrap().is_none());
+        assert!(claim(&db, run, "laptop").await.unwrap().is_none());
     }
 
     #[sqlx::test]
     async fn renewing_keeps_a_lease_alive(db: PgPool) {
-        submit(&db, "work").await.unwrap();
-        claim(&db, "laptop").await.unwrap().unwrap();
+        let Submitted::Queued(run) = submit(&db, INBOX, "work").await.unwrap() else {
+            panic!("expected a new run")
+        };
+        claim(&db, run, "laptop").await.unwrap().unwrap();
         assert_eq!(renew(&db, "laptop").await.unwrap(), 1);
         assert_eq!(renew(&db, "gpu").await.unwrap(), 0);
         assert!(

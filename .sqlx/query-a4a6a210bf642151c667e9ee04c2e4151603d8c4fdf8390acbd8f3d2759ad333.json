@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select id, status::text as \"status!\", attempts, node from run\n           where thread_id = $1 and status in ('queued', 'running')",
+  "query": "select r.id, r.status::text as \"status!\", r.attempts, r.node, b.slug from run r\n           join thread t on t.id = r.thread_id join bot b on b.id = t.bot_id\n           where r.status in ('queued', 'running')",
   "describe": {
     "columns": [
       {
@@ -41,19 +41,29 @@
             "name": "node"
           }
         }
+      },
+      {
+        "ordinal": 4,
+        "name": "slug",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "slug"
+          }
+        }
       }
     ],
     "parameters": {
-      "Left": [
-        "Int8"
-      ]
+      "Left": []
     },
     "nullable": [
       false,
       null,
       false,
-      true
+      true,
+      false
     ]
   },
-  "hash": "cdccc30aad010a966d77e41b1d2147e4efeae444960e5e70b001540844ba186f"
+  "hash": "a4a6a210bf642151c667e9ee04c2e4151603d8c4fdf8390acbd8f3d2759ad333"
 }

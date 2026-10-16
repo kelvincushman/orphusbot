@@ -1,5 +1,5 @@
 //! orphusbot-node, milestone M0: connects out to the server and runs one
-//! `orphus --mode rpc` engine for the one bot (DESIGN §4).
+//! `orphus --mode rpc` engine per bot, each with its own computer (DESIGN §4).
 
 mod beat;
 mod computer;
@@ -13,7 +13,7 @@ use std::time::Duration;
 use anyhow::{Context, bail};
 use futures_util::{SinkExt, Stream, StreamExt};
 use key::NodeKey;
-use orphusbot_proto::{Attempt, FromNode, ToNode, screen_frame, split_screen_frame};
+use orphusbot_proto::{Attempt, BotSpec, FromNode, ToNode, screen_frame, split_screen_frame};
 use std::collections::HashMap;
 
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
@@ -165,7 +165,8 @@ async fn session(cfg: &Config, key: &NodeKey) -> anyhow::Result<()> {
 
     // Frames from the engine reader go out through one channel.
     let (out_tx, mut out_rx) = mpsc::channel::<FromNode>(256);
-    let mut engine: Option<Engine> = None;
+    // One engine per bot, by slug.
+    let mut engines: HashMap<String, Engine> = HashMap::new();
     // Screen streams: binary frames out, and each stream's VNC pipe in.
     let (screen_tx, mut screen_rx) = mpsc::channel::<Vec<u8>>(256);
     let mut screens: HashMap<u64, (Child, ChildStdin)> = HashMap::new();
@@ -188,32 +189,32 @@ async fn session(cfg: &Config, key: &NodeKey) -> anyhow::Result<()> {
                     _ => continue,
                 };
                 match serde_json::from_str::<ToNode>(&text) {
-                    Ok(ToNode::StartTurn { attempt, text, resumed }) => {
-                        if let Err(e) = start_turn(cfg, &mut engine, &out_tx, attempt, &text, resumed).await {
+                    Ok(ToNode::StartTurn { attempt, text, resumed, bot }) => {
+                        if let Err(e) = start_turn(cfg, &mut engines, &out_tx, attempt, &text, resumed, &bot).await {
                             warn!(?attempt, "starting run: {e:#}");
-                            engine = None;
+                            engines.remove(&bot.slug);
                             let _ = out_tx.send(FromNode::TurnEnded { attempt, error: Some(format!("{e:#}")) }).await;
                         }
                     }
                     Ok(ToNode::Steer { attempt, text }) => {
-                        if let Some(e) = engine.as_mut().filter(|e| e.current == Some(attempt)) {
+                        if let Some(e) = engines.values_mut().find(|e| e.current == Some(attempt)) {
                             let cmd = serde_json::json!({ "type": "steer", "message": text });
                             e.command(&cmd.to_string()).await.ok();
                         }
                     }
                     Ok(ToNode::DialogResponse { attempt, response }) => {
                         let is_response = response["type"] == "extension_ui_response";
-                        if let Some(e) = engine.as_mut().filter(|e| e.current == Some(attempt) && is_response) {
+                        if let Some(e) = engines.values_mut().find(|e| e.current == Some(attempt) && is_response) {
                             e.command(&response.to_string()).await.ok();
                         }
                     }
                     Ok(ToNode::Abort { attempt }) => {
-                        if let Some(e) = engine.as_mut().filter(|e| e.current == Some(attempt)) {
+                        if let Some(e) = engines.values_mut().find(|e| e.current == Some(attempt)) {
                             e.command(r#"{"type":"abort"}"#).await.ok();
                         }
                     }
-                    Ok(ToNode::ScreenOpen { stream }) => {
-                        match open_screen(cfg, stream, screen_tx.clone(), out_tx.clone()).await {
+                    Ok(ToNode::ScreenOpen { stream, bot }) => {
+                        match open_screen(cfg, stream, &bot, screen_tx.clone(), out_tx.clone()).await {
                             Ok(pipe) => { screens.insert(stream, pipe); }
                             Err(e) => {
                                 let _ = out_tx.send(FromNode::ScreenClosed { stream, error: Some(format!("{e:#}")) }).await;
@@ -243,7 +244,7 @@ async fn session(cfg: &Config, key: &NodeKey) -> anyhow::Result<()> {
     }
 
     // The server re-queues the run when the link drops; stop this attempt so it can't act twice.
-    if let Some(e) = engine.as_mut() {
+    for e in engines.values_mut() {
         e.command(r#"{"type":"abort"}"#).await.ok();
     }
     Ok(())
@@ -254,6 +255,7 @@ async fn session(cfg: &Config, key: &NodeKey) -> anyhow::Result<()> {
 async fn open_screen(
     cfg: &Config,
     stream: u64,
+    bot: &str,
     frames: mpsc::Sender<Vec<u8>>,
     out: mpsc::Sender<FromNode>,
 ) -> anyhow::Result<(Child, ChildStdin)> {
@@ -265,7 +267,9 @@ async fn open_screen(
     let spec = computer::Spec {
         runtime,
         image: &cfg.image,
-        bot: "orphus",
+        bot,
+        // Unused: opening a screen never creates or changes the computer.
+        team: false,
     };
     let mut child = spec.open_screen().await?;
     let pipe = child.stdin.take().context("screen stdin")?;
@@ -301,27 +305,47 @@ struct Engine {
     _child: Child,
     stdin: ChildStdin,
     attempts: mpsc::Sender<Attempt>,
+    /// The settings it was started with; changed settings mean a new engine.
+    bot: BotSpec,
     /// The attempt the engine was last given.
     current: Option<Attempt>,
 }
 
 impl Engine {
-    async fn spawn(cfg: &Config, out: mpsc::Sender<FromNode>) -> anyhow::Result<Self> {
-        std::fs::create_dir_all(&cfg.session_dir)
-            .with_context(|| format!("creating {}", cfg.session_dir))?;
-        let bridge = format!("{}/orphusbot-bridge.ts", cfg.session_dir);
+    async fn spawn(
+        cfg: &Config,
+        out: mpsc::Sender<FromNode>,
+        bot: &BotSpec,
+    ) -> anyhow::Result<Self> {
+        // Each bot keeps its sessions (its lasting conversation) in its own folder.
+        let dir = format!("{}/{}", cfg.session_dir, bot.slug);
+        std::fs::create_dir_all(&dir).with_context(|| format!("creating {dir}"))?;
+        let bridge = format!("{dir}/orphusbot-bridge.ts");
         std::fs::write(&bridge, BRIDGE).with_context(|| format!("writing {bridge}"))?;
         let mut command = Command::new(&cfg.orphus);
+        if let Some(model) = &bot.model {
+            command.args(["--model", model]);
+        }
+        if let Some(thinking) = &bot.thinking {
+            command.args(["--thinking", thinking]);
+        }
+        if !bot.instructions.trim().is_empty() {
+            command.args(["--append-system-prompt", &bot.instructions]);
+        }
+        if !bot.exclude_tools.is_empty() {
+            command.args(["--exclude-tools", &bot.exclude_tools.join(",")]);
+        }
         if let Some(runtime) = &cfg.runtime {
             let spec = computer::Spec {
                 runtime,
                 image: &cfg.image,
-                bot: "orphus",
+                bot: &bot.slug,
+                team: bot.team,
             };
             let name = spec.ensure().await?;
             // The engine works in an empty folder here; the bridge maps it onto the
             // computer's home and runs every tool there.
-            let work = format!("{}/work", cfg.session_dir);
+            let work = format!("{dir}/work");
             std::fs::create_dir_all(&work).with_context(|| format!("creating {work}"))?;
             command
                 .current_dir(&work)
@@ -334,12 +358,12 @@ impl Engine {
                 "--mode",
                 "rpc",
                 "--name",
-                "orphusbot",
+                &bot.slug,
                 // One lasting conversation per bot, so a resumed run keeps its context.
                 "--session-id",
-                "orphusbot",
+                &bot.slug,
                 "--session-dir",
-                &cfg.session_dir,
+                &dir,
                 "--extension",
                 &bridge,
             ])
@@ -386,6 +410,7 @@ impl Engine {
             _child: child,
             stdin,
             attempts,
+            bot: bot.clone(),
             current: None,
         })
     }
@@ -399,17 +424,24 @@ impl Engine {
 
 async fn start_turn(
     cfg: &Config,
-    engine: &mut Option<Engine>,
+    engines: &mut HashMap<String, Engine>,
     out: &mpsc::Sender<FromNode>,
     attempt: Attempt,
     text: &str,
     resumed: bool,
+    bot: &BotSpec,
 ) -> anyhow::Result<()> {
-    // Start the engine on first use, or again if it has exited.
-    if engine.as_ref().is_none_or(|e| e.attempts.is_closed()) {
-        *engine = Some(Engine::spawn(cfg, out.clone()).await?);
+    // Start the bot's engine on first use, again if it exited, and afresh if its
+    // settings changed (the old one is killed when dropped).
+    let stale = engines
+        .get(&bot.slug)
+        .is_none_or(|e| e.attempts.is_closed() || e.bot != *bot);
+    if stale {
+        engines.remove(&bot.slug);
+        let engine = Engine::spawn(cfg, out.clone(), bot).await?;
+        engines.insert(bot.slug.clone(), engine);
     }
-    let Some(e) = engine.as_mut() else {
+    let Some(e) = engines.get_mut(&bot.slug) else {
         bail!("no engine")
     };
     e.attempts
@@ -432,6 +464,7 @@ async fn start_turn(
     info!(
         run = attempt.run,
         fence = attempt.fence,
+        bot = %bot.slug,
         resumed,
         "run started"
     );

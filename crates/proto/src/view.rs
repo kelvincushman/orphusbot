@@ -48,8 +48,6 @@ pub struct ThreadView {
     pub streaming: Option<String>,
     pub run: RunState,
     pub run_where: RunWhere,
-    /// The connected nodes.
-    pub nodes: Vec<NodeView>,
 }
 
 impl ThreadView {
@@ -102,7 +100,8 @@ impl ThreadView {
                     self.items.push(Item::Notice { text, error });
                 }
             }
-            ThreadEvent::Nodes { nodes } => self.nodes = nodes,
+            // The node list is for every thread; clients keep it beside their thread views.
+            ThreadEvent::Nodes { .. } => {}
             ThreadEvent::DialogOpened { dialog } => self.items.push(Item::Card {
                 dialog,
                 outcome: None,
@@ -128,12 +127,11 @@ impl ThreadView {
     }
 
     /// One line for the header, such as "laptop online · working on laptop…".
-    pub fn status(&self) -> String {
-        let nodes = if self.nodes.is_empty() {
+    pub fn status(&self, nodes: &[NodeView]) -> String {
+        let nodes = if nodes.is_empty() {
             "No node connected".to_owned()
         } else {
-            let list: Vec<String> = self
-                .nodes
+            let list: Vec<String> = nodes
                 .iter()
                 .map(|n| match (&n.note, n.ready) {
                     (Some(note), false) => format!("{} ({note})", n.name),
@@ -197,10 +195,8 @@ mod tests {
 
     #[test]
     fn streamed_text_is_replaced_by_the_final_message() {
+        let laptop = [node("laptop", true, None)];
         let view = fold(vec![
-            ThreadEvent::Nodes {
-                nodes: vec![node("laptop", true, None)],
-            },
             ThreadEvent::Message {
                 role: Role::User,
                 text: "hi".into(),
@@ -225,7 +221,7 @@ mod tests {
             },
         ]);
         assert_eq!(view.streaming.as_deref(), Some("Hello"));
-        assert_eq!(view.status(), "laptop online · working on laptop…");
+        assert_eq!(view.status(&laptop), "laptop online · working on laptop…");
 
         let mut view = view;
         view.apply(ThreadEvent::Message {
@@ -242,7 +238,7 @@ mod tests {
             view.items,
             vec![msg(Role::User, "hi"), msg(Role::Assistant, "Hello!")]
         );
-        assert_eq!(view.status(), "laptop online");
+        assert_eq!(view.status(&laptop), "laptop online");
         assert_eq!(view.last_message(), Some("Hello!"));
     }
 
@@ -310,20 +306,17 @@ mod tests {
         assert!(
             matches!(&view.items[0], Item::Card { outcome: Some(o), .. } if o == "Allowed once")
         );
-        view.apply(ThreadEvent::Nodes { nodes: vec![] });
-        assert_eq!(view.status(), "No node connected");
-        view.apply(ThreadEvent::Nodes {
-            nodes: vec![
-                node("gpu-box", true, None),
-                node("laptop", false, Some("on battery")),
-            ],
-        });
+        assert_eq!(view.status(&[]), "No node connected");
+        let nodes = [
+            node("gpu-box", true, None),
+            node("laptop", false, Some("on battery")),
+        ];
         view.apply(ThreadEvent::RunQueued {
             run: 2,
             waiting: Some("gpu-box is busy".into()),
         });
         assert_eq!(
-            view.status(),
+            view.status(&nodes),
             "gpu-box, laptop (on battery) online · waiting: gpu-box is busy"
         );
     }

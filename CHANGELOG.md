@@ -13,6 +13,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **Bots have faces (M7.4):** each bot has a small animated face in the app that shows what it is doing: resting, thinking, working, turning red when it needs you, and smiling when it is done.
 - **Better-looking replies (M7.3):** bots now write in one clear house style (answer first, short paragraphs, lists, code blocks, tables where they help). The app shows them with proper headings, highlighted code with a copy button, and tidy tables; the bar panel and notifications show clean text without Markdown symbols.
 - **Send your bots pictures and files (M7.2):** in the app, attach with 📎 or paste a picture with Ctrl+V. The bot gets the file in its computer (`inbox/`), and models that can see pictures see it too. Copy any message, save a reply as a file, and save the files bots share.
 - **The OrphusBot app (M7.1):** a real desktop app, built with Flutter, for Omarchy now and the Mac and phones next. Bots on the left; on the right the whole conversation with formatted replies, the pictures and files your bots share, approvals and questions answered in place, live status and a Stop button; type at the bottom. Open it from the launcher or the bar panel's **Open chat**.

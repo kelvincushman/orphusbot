@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 
 import 'api.dart';
+import 'avatar.dart';
 import 'thread.dart' as t;
 
 class ChatScreen extends StatefulWidget {
@@ -188,6 +189,7 @@ class _ChatScreenState extends State<ChatScreen> {
               final waiting = v?.waiting ?? 0;
               final working = v != null && v.run != t.RunState.idle;
               return ListTile(
+                leading: BotAvatar(mood: v?.mood ?? 0),
                 selected: slug == chosen,
                 selectedTileColor: scheme.primary.withValues(alpha: 0.12),
                 title: Text(b['name'] as String),
@@ -199,15 +201,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: waiting > 0 ? scheme.error : null),
                 ),
-                trailing: waiting > 0
-                    ? Badge(label: Text('$waiting'))
-                    : (working
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : null),
+                trailing: waiting > 0 ? Badge(label: Text('$waiting')) : null,
                 onTap: () {
                   setState(() => chosen = slug);
                   _toBottom();
@@ -232,6 +226,7 @@ class _ChatScreenState extends State<ChatScreen> {
       children: [
         // Header: who, and what it's doing.
         ListTile(
+          leading: BotAvatar(mood: v.mood, size: 56),
           title: Text(name, style: Theme.of(context).textTheme.titleMedium),
           subtitle: Text(switch (v.run) {
             t.RunState.idle => 'Ready',

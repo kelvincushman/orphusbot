@@ -4,7 +4,10 @@ import 'package:orphusbot_app/thread.dart';
 void main() {
   test('folds a run the way the server does', () {
     final v = ThreadView();
+    expect(v.mood, 0);
     v.apply({'type': 'message', 'role': 'user', 'text': 'write a file'});
+    v.apply({'type': 'run_queued', 'run': 1, 'waiting': null});
+    expect(v.mood, 1);
     v.apply({
       'type': 'run_started',
       'run': 1,
@@ -14,6 +17,7 @@ void main() {
     });
     expect(v.run, RunState.running);
     expect(v.where, 'on gpu-box (least busy machine)');
+    expect(v.mood, 2);
     v.apply({
       'type': 'dialog_opened',
       'dialog': {
@@ -28,6 +32,7 @@ void main() {
       },
     });
     expect(v.waiting, 1);
+    expect(v.mood, 3);
     v.apply({'type': 'dialog_closed', 'id': 'd1', 'outcome': 'Allowed once'});
     expect(v.waiting, 0);
     v.apply({'type': 'delta', 'run': 1, 'text': 'Done'});
@@ -46,6 +51,7 @@ void main() {
     expect(v.streaming, isNull);
     v.apply({'type': 'run_ended', 'run': 1, 'outcome': 'completed'});
     expect(v.run, RunState.idle);
+    expect(v.mood, 4);
     expect(v.lastReply, 'Done: I wrote it.');
     expect(v.items.whereType<Artifact>().single.isImage, isTrue);
   });
@@ -75,5 +81,6 @@ void main() {
     expect((v.items[0] as Message).text, 'Half an ans');
     expect((v.items[1] as Notice).text, 'The run failed: rate limited');
     expect((v.items[1] as Notice).error, isTrue);
+    expect(v.mood, 0);
   });
 }

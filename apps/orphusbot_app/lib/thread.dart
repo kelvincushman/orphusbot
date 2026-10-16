@@ -50,6 +50,18 @@ class ThreadView {
   String? streaming;
   RunState run = RunState.idle;
   String? where;
+  // The last run finished well and nothing has happened since.
+  bool done = false;
+
+  /// The avatar's state (design/bot-avatar): 0 idle, 1 thinking (queued),
+  /// 2 working, 3 needs you, 4 done.
+  int get mood => waiting > 0
+      ? 3
+      : switch (run) {
+          RunState.queued => 1,
+          RunState.running => 2,
+          RunState.idle => done ? 4 : 0,
+        };
 
   int get waiting =>
       items.whereType<Card>().where((c) => c.outcome == null).length;
@@ -71,10 +83,12 @@ class ThreadView {
         streaming = (streaming ?? '') + (e['text'] as String);
       case 'run_queued':
         run = RunState.queued;
+        done = false;
         where = e['waiting'] as String?;
         streaming = null;
       case 'run_started':
         run = RunState.running;
+        done = false;
         final node = e['node'] as String?;
         where = node == null
             ? null
@@ -82,6 +96,7 @@ class ThreadView {
       case 'run_ended':
         run = RunState.idle;
         where = null;
+        done = e['outcome'] == 'completed';
         if (streaming != null && streaming!.isNotEmpty) {
           items.add(Message(false, streaming!));
         }

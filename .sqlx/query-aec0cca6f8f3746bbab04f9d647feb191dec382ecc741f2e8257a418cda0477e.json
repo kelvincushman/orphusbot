@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select bot, count(*) as \"turns!\", sum(input + output)::bigint as \"tokens!\"\n           from usage where created_at >= date_trunc('day', now()) group by bot order by 3 desc",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "bot",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "usage",
+            "name": "bot"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "turns!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "tokens!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "aec0cca6f8f3746bbab04f9d647feb191dec382ecc741f2e8257a418cda0477e"
+}

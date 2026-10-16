@@ -631,6 +631,19 @@ pub async fn run_news(app: &App, run: i64, news: RunNews<'_>) {
     }
 }
 
+/// An inform for every paired wrist, such as `budget_warn`.
+pub async fn warn_all(app: &App, cue: &str, subject: &str) {
+    let devices = sqlx::query_scalar!("select id from device")
+        .fetch_all(&app.db)
+        .await
+        .unwrap_or_default();
+    for device in devices {
+        if let Err(e) = inform(app, &device, cue, subject).await {
+            warn!("signalling the wrist: {e}");
+        }
+    }
+}
+
 /// A dialog closed (answered on the phone or desktop, or expired): its ask on
 /// any wrist is no longer live, so stop it and send the next.
 pub async fn dialog_settled(app: &App, dialog: &str) {

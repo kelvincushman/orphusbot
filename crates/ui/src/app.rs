@@ -1332,6 +1332,7 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
     let passkeys = RwSignal::new(Vec::<Passkey>::new());
     let nodes = RwSignal::new(Vec::<Node>::new());
     let wearables = RwSignal::new(Value::Null);
+    let usage = RwSignal::new(Value::Null);
     let pairing = RwSignal::new(None::<String>);
     let name = RwSignal::new("This device".to_owned());
     let command = RwSignal::new(None::<String>);
@@ -1341,6 +1342,7 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
             passkeys.set(api::get("/api/passkeys").await?);
             nodes.set(api::get("/api/nodes").await?);
             wearables.set(api::get("/api/devices").await?);
+            usage.set(api::get("/api/usage").await?);
             Ok(())
         })
     };
@@ -1473,6 +1475,35 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
                         <pre>{c}</pre>
                         <button on:click=copy>"Copy"</button>
                     })}
+                </div>
+                <div>
+                    <h3>"Usage"</h3>
+                    <p class="muted">{move || usage.with(|u| {
+                        let today = u["today_tokens"].as_i64().unwrap_or(0);
+                        match u["budget"].as_i64() {
+                            Some(b) => format!("{today} tokens today of a {b} budget."),
+                            None => format!("{today} tokens today. Set ORPHUSBOT_DAILY_TOKEN_BUDGET to be warned."),
+                        }
+                    })}</p>
+                    <ul class="decisions">
+                        {move || {
+                            let rows = |key: &str, when: &str| usage.with(|u| u[key].as_array().cloned().unwrap_or_default())
+                                .into_iter()
+                                .map(|m| {
+                                    let text = format!("{} {} · {} turns · {} in / {} out · ${:.2}", m["provider"].as_str().unwrap_or_default(),
+                                        m["model"].as_str().unwrap_or_default(), m["turns"], m["input"], m["output"], m["cost"].as_f64().unwrap_or(0.0));
+                                    let when = when.to_owned();
+                                    view! { <li><span>{text}<small>{when}</small></span></li> }
+                                })
+                                .collect::<Vec<_>>();
+                            let mut all = rows("today", "today");
+                            all.extend(rows("week", "last 7 days"));
+                            all.collect_view()
+                        }}
+                        {move || usage.with(|u| u["bots_today"].as_array().cloned().unwrap_or_default()).into_iter().map(|b| view! {
+                            <li><span>{format!("{} · {} turns · {} tokens", b["bot"].as_str().unwrap_or_default(), b["turns"], b["tokens"])}<small>"today, by bot"</small></span></li>
+                        }).collect_view()}
+                    </ul>
                 </div>
                 <div>
                     <h3>"Wearable"</h3>

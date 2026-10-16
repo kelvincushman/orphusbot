@@ -20,7 +20,7 @@ use std::time::Duration;
 use anyhow::{Context, bail};
 use futures_util::StreamExt;
 use orphusbot_proto::view::{Item, RunState, ThreadView};
-use orphusbot_proto::{DialogKind, Envelope, RunOutcome, ThreadEvent};
+use orphusbot_proto::{DialogKind, Envelope, Role, RunOutcome, ThreadEvent};
 use serde_json::{Value, json};
 
 const AGENT: &str = "OrphusBot command line (Omarchy)";
@@ -364,7 +364,7 @@ fn status(bots: &[(String, String)], views: &BTreeMap<String, ThreadView>) -> Va
                 RunState::Queued => "queued",
                 RunState::Running { .. } => "running",
             };
-            json!({ "slug": slug, "name": name, "state": state, "waiting": view.waiting(), "reply": last_reply(view) })
+            json!({ "slug": slug, "name": name, "state": state, "waiting": view.waiting(), "reply": last_reply(view), "asked": last_said(view, Role::User) })
         })
         .collect();
     let running = list.iter().filter(|b| b["state"] == "running").count();
@@ -373,11 +373,13 @@ fn status(bots: &[(String, String)], views: &BTreeMap<String, ThreadView>) -> Va
 
 /// The bot's latest answer, shortened for the bar and notifications.
 fn last_reply(view: &ThreadView) -> String {
+    last_said(view, Role::Assistant)
+}
+
+/// The latest message from `role`, shortened.
+fn last_said(view: &ThreadView, role: Role) -> String {
     let text = view.items.iter().rev().find_map(|i| match i {
-        Item::Message {
-            role: orphusbot_proto::Role::Assistant,
-            text,
-        } => Some(text.as_str()),
+        Item::Message { role: r, text } if *r == role => Some(text.as_str()),
         _ => None,
     });
     let text = text.unwrap_or_default().trim();
@@ -398,7 +400,7 @@ fn desktop(title: &str, body: &str, urgency: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use orphusbot_proto::{Dialog, Role};
+    use orphusbot_proto::Dialog;
 
     #[test]
     fn status_counts_running_bots_and_waiting_cards() {
@@ -441,5 +443,6 @@ mod tests {
         assert_eq!(s["waiting"][0]["text"], "May it use bash?");
         assert_eq!(s["bots"][1]["state"], "idle");
         assert_eq!(s["bots"][0]["reply"], "Hi!");
+        assert_eq!(s["bots"][0]["asked"], "hi");
     }
 }

@@ -113,8 +113,8 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: messageField
-    contentWidth: panel.fittedContentWidth(Style.space(400))
-    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(600))
+    contentWidth: panel.fittedContentWidth(Style.space(640))
+    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(640))
 
     Flickable {
       id: flick
@@ -152,14 +152,13 @@ Panel {
           wrapMode: Text.WordWrap
         }
 
-        PanelSeparator { visible: root.status.waiting.length > 0; foreground: root.foreground }
-
+        // Approvals come first and span the panel: they're what the owner must act on.
         Column {
           visible: root.status.waiting.length > 0
           width: parent.width
           spacing: Style.space(8)
 
-          PanelSectionHeader { text: "NEEDS YOU"; foreground: root.foreground; fontFamily: root.fontFamily }
+          PanelSectionHeader { text: "NEEDS YOU"; foreground: root.urgent; fontFamily: root.fontFamily }
 
           Repeater {
             model: root.status.waiting
@@ -208,78 +207,142 @@ Panel {
 
         PanelSeparator { foreground: root.foreground }
 
-        PanelSectionHeader { text: "BOTS"; foreground: root.foreground; fontFamily: root.fontFamily }
-
-        Repeater {
-          model: root.status.bots
-          Item {
-            required property var modelData
-            width: column.width
-            implicitHeight: botName.implicitHeight + Style.space(4)
-
-            Text {
-              id: botName
-              anchors.left: parent.left
-              anchors.verticalCenter: parent.verticalCenter
-              text: modelData.name
-              textFormat: Text.PlainText
-              color: modelData.slug === root.chosenBot ? root.foreground : root.dim
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.body
-              font.bold: modelData.slug === root.chosenBot
-            }
-            Text {
-              anchors.right: parent.right
-              anchors.verticalCenter: parent.verticalCenter
-              text: modelData.waiting > 0 ? "needs you" : modelData.state
-              color: modelData.waiting > 0 ? root.urgent : root.dim
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-            }
-            MouseArea {
-              anchors.fill: parent
-              onClicked: root.chosenBot = modelData.slug
-            }
-          }
-        }
-
-        PanelSeparator { foreground: root.foreground }
-
+        // Bots on the left; the chosen bot's conversation on the right, with the
+        // message box at the bottom and the latest exchange above it.
         Row {
+          id: body
           width: parent.width
-          spacing: Style.space(6)
+          height: Math.max(bots.implicitHeight, Style.space(280))
+          spacing: Style.space(12)
 
-          TextField {
-            id: messageField
-            width: parent.width - sendButton.width - Style.space(6)
-            placeholderText: "Message " + root.chosenBot + " (pick a bot above)"
-            foreground: root.foreground
-            font.family: root.fontFamily
-            Keys.onPressed: function(event) {
-              if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { root.send(); event.accepted = true }
-              else if (event.key === Qt.Key_Escape) { root.close(); event.accepted = true }
+          Column {
+            id: bots
+            width: Style.space(150)
+            spacing: Style.space(2)
+
+            PanelSectionHeader { text: "BOTS"; foreground: root.foreground; fontFamily: root.fontFamily }
+
+            Repeater {
+              model: root.status.bots
+              Rectangle {
+                required property var modelData
+                readonly property bool picked: modelData.slug === root.chosenBot
+                width: bots.width
+                height: botName.implicitHeight + Style.space(10)
+                radius: Style.space(4)
+                color: picked ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.12) : "transparent"
+
+                Text {
+                  id: botName
+                  anchors.left: parent.left
+                  anchors.leftMargin: Style.space(6)
+                  anchors.right: botState.left
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: modelData.name
+                  textFormat: Text.PlainText
+                  elide: Text.ElideRight
+                  color: picked ? root.foreground : root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                  font.bold: picked
+                }
+                // A dot: urgent when it needs you, solid while it works.
+                Rectangle {
+                  id: botState
+                  anchors.right: parent.right
+                  anchors.rightMargin: Style.space(6)
+                  anchors.verticalCenter: parent.verticalCenter
+                  width: Style.space(7); height: width; radius: width / 2
+                  color: modelData.waiting > 0 ? root.urgent : root.foreground
+                  opacity: modelData.waiting > 0 ? 1.0 : (modelData.state === "idle" ? 0.15 : 0.9)
+                }
+                MouseArea {
+                  anchors.fill: parent
+                  onClicked: { root.chosenBot = modelData.slug; messageField.forceActiveFocus() }
+                }
+              }
             }
           }
-          Button {
-            id: sendButton
-            text: "Send"; bordered: true; foreground: root.foreground; fontFamily: root.fontFamily
-            onClicked: root.send()
-          }
-        }
 
-        // What the chosen bot is doing, and its latest answer.
-        Text {
-          visible: root.chosen !== null
-          width: parent.width
-          text: !root.chosen ? ""
-            : (root.chosen.state === "running" || root.chosen.state === "queued")
-              ? root.chosen.name + " is working…"
-              : (root.chosen.reply ? root.chosen.name + ": " + root.chosen.reply : root.chosen.name + " hasn't said anything yet.")
-          textFormat: Text.PlainText
-          color: root.chosen && root.chosen.reply && root.chosen.state === "idle" ? root.foreground : root.dim
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.body
-          wrapMode: Text.WordWrap
+          Rectangle { width: 1; height: body.height; color: root.foreground; opacity: 0.15 }
+
+          Item {
+            id: chat
+            width: body.width - bots.width - Style.space(25)
+            height: body.height
+
+            Flickable {
+              anchors.top: parent.top
+              anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.bottom: messageRow.top
+              anchors.bottomMargin: Style.space(10)
+              contentHeight: exchange.implicitHeight
+              clip: true
+              boundsBehavior: Flickable.StopAtBounds
+              // Keep the newest text in view, like a chat.
+              contentY: Math.max(0, contentHeight - height)
+
+              Column {
+                id: exchange
+                width: parent.width
+                spacing: Style.space(10)
+
+                PanelSectionHeader {
+                  text: root.chosen ? root.chosen.name.toUpperCase() : ""
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                }
+                Text {
+                  visible: root.chosen !== null && root.chosen.asked !== ""
+                  width: parent.width
+                  text: root.chosen ? "You: " + root.chosen.asked : ""
+                  textFormat: Text.PlainText
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                  wrapMode: Text.WordWrap
+                }
+                Text {
+                  width: parent.width
+                  text: !root.chosen ? ""
+                    : (root.chosen.state === "running" || root.chosen.state === "queued")
+                      ? root.chosen.name + " is working…"
+                      : (root.chosen.reply ? root.chosen.name + ": " + root.chosen.reply : "Say hello to " + root.chosen.name + ".")
+                  textFormat: Text.PlainText
+                  color: root.chosen && root.chosen.state === "idle" && root.chosen.reply ? root.foreground : root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                  wrapMode: Text.WordWrap
+                }
+              }
+            }
+
+            Row {
+              id: messageRow
+              anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.bottom: parent.bottom
+              spacing: Style.space(6)
+
+              TextField {
+                id: messageField
+                width: parent.width - sendButton.width - Style.space(6)
+                placeholderText: "Message " + (root.chosen ? root.chosen.name : root.chosenBot)
+                foreground: root.foreground
+                font.family: root.fontFamily
+                Keys.onPressed: function(event) {
+                  if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { root.send(); event.accepted = true }
+                  else if (event.key === Qt.Key_Escape) { root.close(); event.accepted = true }
+                }
+              }
+              Button {
+                id: sendButton
+                text: "Send"; bordered: true; foreground: root.foreground; fontFamily: root.fontFamily
+                onClicked: root.send()
+              }
+            }
+          }
         }
       }
     }

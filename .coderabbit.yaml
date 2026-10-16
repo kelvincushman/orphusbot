@@ -1,0 +1,80 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit configuration. The rules it enforces are written for humans in
+# CONTRIBUTING.md and for agents in AGENTS.md; keep the three in step.
+language: en-GB
+tone_instructions: "Plain English, short and specific. Lead with bugs, security and missing doc updates. When flagging over-engineering, name the smaller alternative (ponytail)."
+early_access: false
+
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  review_status: true
+  collapse_walkthrough: false
+  poem: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches: ["main"]
+  path_filters:
+    - "!**/target/**"
+    - "!**/*.lock"
+
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
+    custom_checks:
+      - name: "Documentation updated"
+        mode: "error"
+        instructions: |
+          Pass if the PR changes no code or behaviour, or if it is labelled `no-docs` with a reason in the description.
+          Otherwise fail unless the PR updates every affected document: docs/DESIGN.md for changed behaviour, interfaces,
+          config, protocols or data shapes; docs/PRD.md if a requirement changed; README.md if setup or usage changed;
+          docs/DECISIONS.md for a decision between alternatives; and CHANGELOG.md under Unreleased for anything user-visible.
+          Name each missing file and section.
+      - name: "Ponytail"
+        mode: "warning"
+        instructions: |
+          Fail if the PR adds an abstraction with a single use (a trait with one implementation that DESIGN.md does not list
+          as a test seam or second backend), scaffolding for future work, a new dependency for something std or an existing
+          dependency already does, or a helper that duplicates existing code. Name the smaller alternative.
+      - name: "Hard rules"
+        mode: "error"
+        instructions: |
+          Fail if the PR could let a model subscription token leave a node or enter a bot computer, E2B or the database;
+          lets System 1 approve an irreversible action; makes anything depend on audio output from the wearable; weakens the
+          capture consent light; or commits personal data (receipts, labels, transcripts, captures, fine-tuned weights) or secrets.
+
+  path_instructions:
+    - path: "**/*.rs"
+      instructions: |
+        Check against AGENTS.md "Rust conventions": no unwrap/expect outside tests without a proven invariant; thiserror in
+        libraries, anyhow in binaries; no blocking calls in async code; sqlx compile-checked queries; tracing with no secrets;
+        every external system behind a trait with a fake in crates/testkit. Look hard at lease/fence handling, the effect
+        ledger, the approval gate, placement and the capture gate: these are where data loss and safety bugs hide.
+    - path: "crates/device/**"
+      instructions: |
+        Wearable wire constants must match the firmware header and the Dart codec, and the contract test must be updated
+        with any change. Every outbound signal must be a tracked habitat message (DESIGN §9.3).
+    - path: "docs/**"
+      instructions: |
+        Check that the docs match the code in the same PR, that requirement IDs (B-*) and section numbers referenced
+        elsewhere still resolve, and that the writing is plain English with terms defined on first use.
+    - path: "bridge/**"
+      instructions: |
+        The Orphus bridge extension must hold no policy, must refuse all tool calls if its node socket is missing, and must
+        never forward host environment variables or files into a bot computer.
+    - path: ".github/workflows/**"
+      instructions: |
+        Actions pinned to full commit SHAs with the version in a comment; least-privilege permissions; no untrusted
+        input interpolated into run scripts.
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "AGENTS.md"
+      - "CONTRIBUTING.md"

@@ -1,0 +1,53 @@
+name: docs
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  docs-updated:
+    name: docs updated with the change
+    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'no-docs')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Check docs and changelog
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed=$(git diff --name-only "$BASE"...HEAD)
+          echo "Changed files:"; echo "$changed"
+          # Code = anything that isn't documentation, repo meta or CI.
+          code=$(echo "$changed" | grep -vE '\.md$|^\.github/|^\.coderabbit\.yaml$|^\.markdownlint|^LICENSE$' || true)
+          docs=$(echo "$changed" | grep -E '^docs/|^README\.md$' || true)
+          fail=0
+          if [ -n "$code" ] && [ -z "$docs" ]; then
+            echo "::error::This PR changes code but no documentation. Update docs/ or README.md (see CONTRIBUTING.md), or add the 'no-docs' label with a reason."
+            fail=1
+          fi
+          if ! echo "$changed" | grep -qx 'CHANGELOG.md'; then
+            echo "::error::Add a line under 'Unreleased' in CHANGELOG.md, or add the 'no-docs' label with a reason."
+            fail=1
+          fi
+          exit $fail
+
+  markdown:
+    name: markdown lint and links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff # v24.2.0
+        with:
+          globs: "**/*.md"
+      - name: Check links between docs
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          # Offline: checks relative links and anchors inside the repo only, so CI never flakes on external sites.
+          args: --offline --include-fragments --no-progress "**/*.md"
+          fail: true

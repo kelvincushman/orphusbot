@@ -1,0 +1,13 @@
+{
+  "config": {
+    "default": true,
+    "MD013": false,  // line length: prose wraps naturally, tables are wide
+    "MD024": { "siblings_only": true },
+    "MD033": false,  // inline HTML (picture tags, details) is fine
+    "MD036": false,  // bold lines used as labels
+    "MD040": false,  // fenced diagrams have no language
+    "MD060": false,  // table column alignment
+    "MD041": false   // PR template and CLAUDE.md legitimately start without an H1
+  },
+  "ignores": ["node_modules/**", "target/**"]
+}

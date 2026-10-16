@@ -1,0 +1,743 @@
+# OrphusBot: design
+
+| | |
+|---|---|
+| Status | Draft 0.1, for review |
+| Date | 2026-10-16 |
+| Owner | Kelvin Lee (@kelvincushman) |
+| Licence | MIT, everything open source (see §17 for what must still never be committed) |
+| Companion docs | [PRD.md](PRD.md) (requirements B-*, journeys, milestones) · [research/rakazo-architecture.md](research/rakazo-architecture.md) (the Rakazo study this design draws on; crate versions in its §7) · OmarchyWearable `README.md`, `docs/SERVER.md`, `docs/APP.md`, `docs/product/BUTTON_FEEDBACK_SPEC.md` · orphus-desktop `docs/DESIGN.md` §5 and §7 |
+
+Decided inputs: the wearable has **no speaker, by design** (NeoPixel + vibration out, button + mic in), and its habitat channel must be **duplex** (§9.3) · separate app (web, desktop, Android) · Rust first · Laya (Jev family) as System 1 · own machines first, E2B second · **orphusbot-server runs on the always-on GPU box** · **phone is Android** · the **OmarchyWearable** joins as a first-class input device · everything is open source.
+
+---
+
+## 1. System overview
+
+```
+                                   NetBird mesh (WireGuard + ACLs; nothing public)
+ ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+ │                                                                                                │
+ │  Wearable (XIAO nRF52840)     Android phone                                 Laptop (Omarchy)    │
+ │  button · mic · LED · haptic  ┌──────────────────────────────┐              ┌───────────────┐   │
+ │        │ BLE GATT             │ Wearable companion (Flutter) │              │ Tauri desktop │   │
+ │        └─────────────────────►│  BLE bridge, on-device STT,  │              │ (Leptos UI)   │   │
+ │                               │  speaker identity, fg service│              │ orphusbot-node│   │
+ │                               ├──────────────────────────────┤              │  engines,     │   │
+ │                               │ OrphusBot (Tauri, Leptos UI) │              │  containers   │   │
+ │                               │ ntfy / UnifiedPush           │              └──────┬────────┘   │
+ │                               └──────┬─────────────┬─────────┘                     │            │
+ │            device channel (HTTP+WS)  │             │ HTTPS + SSE                   │ node link  │
+ │                                      ▼             ▼                               ▼            │
+ │  ┌──────────────────────────────────────────────────────────────────────────────────────────┐  │
+ │  │ GPU box (always on)                                                                       │  │
+ │  │  orphusbot-server (Rust)                                                                  │  │
+ │  │   api · events/SSE · runs · scheduler · placement · approvals · decisions · device        │  │
+ │  │   channel · capture miner · connections · E2B client                                      │  │
+ │  │  Postgres · laya-serve (Python) · qwen3-asr (Python) · ntfy                               │  │
+ │  │  orphusbot-node (Rust): engines + GPU containers                                          │  │
+ │  └───────────────────────────────────────────────────┬──────────────────────────────────────┘  │
+ └──────────────────────────────────────────────────────┼─────────────────────────────────────────┘
+                                                        │ HTTPS
+                                                        ▼
+                                              E2B (overflow, untrusted)
+```
+
+Five runtimes, one source of truth (Postgres on the GPU box):
+
+| Runtime | Language | Where | Job |
+|---|---|---|---|
+| `orphusbot-server` | Rust | GPU box | Everything durable: tasks, runs, events, routines, approvals, decisions, device channel, capture, placement |
+| `orphusbot-node` | Rust | GPU box and laptop | Engines (`orphus --mode rpc`), per-bot containers, screen proxy |
+| `orphusbot-bridge` | TypeScript (tiny) | Inside each engine | Redirect tool operations; ask the server at every `tool_call` |
+| Clients | Rust (Leptos) in Tauri 2 / browser | Laptop, phone, any browser on NetBird | Views and intent; no business logic |
+| Wearable stack | C (Zephyr) + Dart (Flutter) | Wearable + phone | Button, cues, audio, on-device STT, speaker identity |
+
+The GPU box being always on settles PRD Q1 and Q2: the server lives there, the GPU box is always a node, so "both nodes offline" only happens if the GPU box itself is down, in which case nothing runs and the phone shows that.
+
+---
+
+## 2. Repository and crate layout
+
+One public monorepo, `kelvincushman/orphusbot`, MIT. The wearable is brought in with `git subtree` so its history survives and it stays buildable on its own.
+
+```
+orphusbot/
+  Cargo.toml                 workspace
+  crates/
+    proto/                   shared types: ids, commands, events, reducers, errors (server + UI + node)
+    server/                  axum binary: api, sse, runs, scheduler, placement, approvals, capture
+    node/                    node daemon binary: link, engines, computers, screens, bridge socket
+    decide/                  DecisionModel trait, HttpLaya, OrtLaya, NullModel, wrappers, question catalogue
+    computer/                ComputerProvider trait, shared types, the Podman backend
+    e2b/                     thin E2B client (REST control plane + Connect-RPC envd)
+    device/                  wearable device channel: Rust port of server-contract (commands, cues, gate)
+    capture/                 transcript store, miner pipeline, proposals
+    ui/                      Leptos CSR app (all views)
+    testkit/                 fakes for every trait, scripted fake engine, wiremock fixtures
+  apps/
+    desktop/                 Tauri 2 shell (Linux first)
+    mobile/                  Tauri 2 Android shell
+  bridge/                    orphusbot-bridge Orphus extension (TypeScript)
+  images/desktop/            bot desktop container image (Containerfile)
+  wearable/                  OmarchyWearable via git subtree: firmware/, app/, hardware/, docs/
+  deploy/                    systemd units, Postgres setup, NetBird ACL notes, ntfy config
+  docs/                      PRD.md, DESIGN.md, ADRs
+```
+
+Rules:
+
+- `proto` has no I/O and no async runtime, so it compiles to wasm for the UI.
+- Every external system is behind a trait with a fake in `testkit`.
+- The `device` crate owns the wire constants for the wearable. The firmware header and the Dart codec stay mirrored, and a contract test in CI compares all three (§9.6).
+
+---
+
+## 3. orphusbot-server
+
+### 3.1 Modules
+
+| Module | Responsibility | Key PRD IDs |
+|---|---|---|
+| `api` | Typed procedures over JSON (`POST /rpc/<name>`), auth middleware, OpenAPI via utoipa | B-CLI-* |
+| `events` | Append-only event log, per-thread `seq`, `PgListener` fan-out, SSE `GET /events?thread=…&after=…` | B-RUN-07, B-CLI-02 |
+| `runs` | Intake, leases and fences, steering queue, effect ledger, reconciler | B-RUN-01…05 |
+| `jobs` | `graphile_worker` task registry and crontab | B-RTN-* |
+| `placement` | Chooses node or E2B per run | B-CMP-07 |
+| `approvals` | Static classes, user rules, approval cards, gate replies to bridges | B-DEC-03, -06, -07 |
+| `decisions` | Calls `decide`, writes receipts, captures labels, runs calibration apply/rollback | B-DEC-* |
+| `nodes` | Node link endpoint, inventory, heartbeats, command routing | B-NOD-* |
+| `device` | Wearable device channel (§9) | B-WRB-* |
+| `capture` | Transcript store and miner (§10) | B-CAP-* |
+| `connections` | MCP server records, grants, OAuth material, per-engine MCP config | B-INT-* |
+| `notify` | Digest batching, ntfy publish, wearable cues | B-DEC-04, B-CLI-05 |
+| `auth` | Passkeys, sessions, device tokens | B-CLI-06 |
+
+### 3.2 Intake
+
+Every source turns into the same call, `runs::intake(source, thread, content)`:
+
+| Source | Origin |
+|---|---|
+| `chat` | A client message |
+| `ticket` | Ticket created or assigned |
+| `routine` | `routine.wakeup` job |
+| `webhook` | `POST /hooks/<id>` with a per-hook secret |
+| `wearable` | A filed button capture (§9.3) |
+| `proposal` | Kelvin accepts a capture proposal as a task (§10.4) |
+
+Inside one transaction:
+
+1. If the target bot has a run in `waiting_input` and nothing steerable → the content answers it.
+2. Else if a run for this thread is live → insert a `steering_message`.
+3. Else insert `task` + `run(queued)`. If the source has no explicit bot, the run is created **unassigned** and a `triage` job is enqueued instead of `run.continue`.
+4. Append the message event and `NOTIFY orphusbot_events, '<thread>:<seq>'`.
+
+Job keys collapse duplicates: `run:<id>`, `triage:<task>`, `routine:<id>:<at>`.
+
+### 3.3 Run loop (server side)
+
+The engine owns the in-turn loop. The server owns everything that must survive a crash:
+
+```
+triage(task)         → decide::triage → assign bot, provider, effort, urgency, act/ask, trust
+                       → if act/ask = ask: post a "should I start?" card, run waits in waiting_input
+                       → else enqueue run.continue
+run.continue(run)    → lease run (owner=server instance, fence+1, expiry 5 min)
+                       → placement::choose → node N or E2B
+                       → computer lease (computer, bot, fence)
+                       → nodes::send(N, StartTurn{run, fence, session, prompt, model, thinking, mcp_config})
+                       → wait for node events; heartbeat every 60 s renews both leases
+node events          → append to event log (progress deltas batched ~250 ms), update run status
+TurnEnded            → release leases, mark completed / failed, write outcome to linked receipts
+reconcile (30 s)     → advisory-lock leader: re-enqueue expired leases, arm due routines,
+                       remind waiting runs (digest), expire stale waits
+```
+
+Fences are checked on every node message: a message carrying an old fence is dropped and the node is told to abort that turn. This is what makes "kill the node mid-run and it recovers" safe (PRD M1 exit).
+
+### 3.4 Effect ledger
+
+`external_effect(run_id, tool, args_hash, state, request, result, decision_id, approved_by)`. States: intended → approved/denied → executing → completed / failed / uncertain.
+
+- The bridge asks the server **before** a consequential tool runs (§5). The server inserts `intended`, gates it, and moves it to `approved` or `denied`.
+- The node reports `executing` and then `completed` with the result.
+- After a crash, a replayed call with the same `(run, tool, args_hash)` returns the stored result if `completed`. If it was `executing`, it becomes `uncertain`, is never re-run, and a card asks Kelvin what happened.
+
+### 3.5 Jobs
+
+| Task | Concurrency | Purpose |
+|---|---|---|
+| `triage` | 8 | System 1 triage of an unassigned task |
+| `run.continue` | per-node slots | Start or resume a turn |
+| `routine.wakeup` | 4 | Claim a due routine; optional pre-flight; create task |
+| `capture.mine` | 2 | Run the miner over a closed transcript window (§10) |
+| `computer.sleep` / `computer.destroy` | 4 | Idle pause and TTL clean-up |
+| `notify.digest` | 1 | Assemble and send the digest |
+| `decisions.calibrate` | 1 | Fit thresholds from labels (manual trigger only) |
+
+---
+
+## 4. orphusbot-node
+
+### 4.1 Link
+
+- One outbound WebSocket to `wss://<gpu-box NetBird IP>:7480/node`, carrying length-prefixed JSON frames defined in `proto::node`.
+- **Auth:** the node is enrolled once with `orphusbot-node enroll <code>`, which generates an Ed25519 key and registers the public key; every connection signs a server nonce. NetBird ACLs allow only node → server:7480 and server → node:7481 (screens).
+- **Heartbeat (10 s):** load, free slots, `gpu`, `gui`, power (`ac` / `battery` from `/sys/class/power_supply`), quiet-hours flag, provider login status per provider (`ok` / `expired` / `missing`), live engines and computers.
+- The node on the GPU box connects to the server over loopback but uses the same protocol.
+
+### 4.2 Engines
+
+- One `orphus --mode rpc --name <bot role> --session <file> -e <path to orphusbot-bridge>` per active bot session. Session files live under `~/.local/share/orphusbot/sessions/<bot>/`.
+- Lifecycle follows orphus-desktop DESIGN §5.1: restart with backoff (1, 2, 4… 60 s), park after 10 idle minutes, resume on the next `StartTurn`.
+- The node translates `StartTurn` into RPC: `set_model`, `set_thinking_level`, then `prompt`. Steering becomes `steer` or `follow_up`, stop becomes `abort`.
+- RPC events go up the link unchanged, wrapped with `{run, fence}`. `extension_ui_request` (questions, OAuth prompts) is relayed as a card and the answer comes back as `extension_ui_response`.
+- MCP config is written per session to a file the engine reads at start. It contains only the servers granted to that bot.
+
+### 4.3 Bridge socket
+
+The node listens on `$XDG_RUNTIME_DIR/orphusbot/bridge-<session>.sock` (mode 0600). The bridge extension sends:
+
+| Request | Node does |
+|---|---|
+| `Gate{tool, args, call_id}` | Forwards to the server, which runs approvals (§7.4); the reply is `allow` / `deny{reason}` / `ask` (blocks until answered or timed out) |
+| `Op{kind: bash\|read\|write\|edit\|find\|ls, …}` | Runs it inside the bot's computer through `ComputerProvider` and streams the result back |
+| `Effect{call_id, state, result}` | Updates the ledger |
+
+### 4.4 Computers on a node
+
+- `computer` crate's `PodmanProvider`, via `bollard` on the rootless Podman socket (Docker socket also works).
+- **Image** `images/desktop`: Debian slim, TigerVNC Xvnc, openbox, Chromium, `xdotool`, a tiny helper for screenshots. A `code` variant has no X.
+- **Isolation:**
+  - rootless, default seccomp, `--cap-drop=ALL`, read-only root with a writable home volume;
+  - `pids`, CPU and memory limits from the bot spec;
+  - a dedicated Podman network whose nftables rules drop RFC 1918, CGNAT (NetBird `100.64.0.0/10`) and link-local destinations.
+- **Team vs Private:** one container per bot. Team bots also mount `orphusbot-team-<team>` at `/shared`. Private bots get nothing extra.
+- **GPU:** CDI `nvidia.com/gpu=all` only on the GPU box and only when the bot is marked `trusted` and the task needs it.
+- **Screens:** Xvnc listens on a unix socket inside the container. The node proxies `wss://<node NetBird IP>:7481/screen/<token>`. Tokens are AES-GCM sealed by the server, carry `{computer, generation, mode: view|control, exp}`, and live for 1 hour (view) or the control lease (control, 15 min, renewable).
+
+---
+
+## 5. orphusbot-bridge (TypeScript extension)
+
+Target: under 300 lines, no policy.
+
+1. On load, it connects to the bridge socket path passed in an env var. If the socket is missing it refuses every tool call, so the bot can't run tools on the host by accident.
+2. It replaces the built-in tool operations (bash, read, write, edit, find, ls) with implementations that send `Op` over the socket. This needs harness change **H-B1** (PRD §12); the `ssh.ts` example shows it's close already.
+3. It handles `tool_call`: it sends `Gate` and blocks on the reply. `deny` returns the reason to the model; `ask` waits.
+4. It handles `tool_result`: it sends `Effect` with a hash and size summary of the result, plus a diff for edits.
+
+Model credentials stay in the engine process on the host. Nothing in the bridge forwards env vars or files from the host into the computer.
+
+---
+
+## 6. Computers and placement
+
+### 6.1 Trait
+
+As sketched in research/rakazo-architecture.md §8.1: `describe`, `availability`, `provision`, `status`, `pause`, `destroy`, `exec`, file ops, `export_home` / `import_home`, and the optional `screen` / `observe` / `act`. Two implementations in v1: `PodmanProvider` (runs on nodes, driven over the link) and `E2bProvider` (runs in the server).
+
+### 6.2 E2B client (`e2b` crate)
+
+- **Control plane:** `reqwest` to the E2B REST API (create from template, set timeout, pause, resume, kill, list), with the API key from the server's secret store.
+- **Inside the sandbox:** `connectrpc` client for `envd` (process start/stream/signal, filesystem read/write/list/watch).
+- **Pin the versions.** Generate the Connect-RPC stubs from E2B's published `.proto` files at a pinned E2B SDK tag. Wiremock fixtures in `testkit` reproduce the control plane; one opt-in live test per release, capped at a few cents.
+- **Path for an E2B run:** the engine still runs on a node (normally the GPU box). That node's bridge `Op`s go up the link to the server, which runs them against the E2B sandbox. Tokens never reach E2B.
+
+### 6.3 Placement
+
+```
+fn choose(task, decision, nodes, bot) -> Placement
+  1. decision.untrusted ≥ θ                          → E2B (throwaway, destroyed at run end)
+  2. task.needs_gpu                                  → GPU box (queue if busy; never E2B)
+  3. bot.private_home lives on node N, N online      → N
+  4. nodes online with free slots, filtered:
+       laptop only if power = ac and not quiet_hours
+     → least loaded, preferring bot.preferred_node
+  5. bot allows remote                               → E2B overflow
+  6. otherwise                                       → queue (run stays queued; card says why)
+```
+
+Placement is deterministic code. Laya only supplies the `untrusted` answer and confidence. The chosen placement and the rule that fired are recorded on the run and shown in the UI.
+
+---
+
+## 7. Decision layer (System 1)
+
+### 7.1 Interface
+
+`decide` crate: the `DecisionModel` trait and `Question` / `Answer` types as in research/rakazo-architecture.md §9.2. Composition at server start:
+
+```
+Receipts( Fallback( OrtLaya?, HttpLaya(gpu-box), NullModel ), sink = Postgres + JSONL )
+```
+
+- **v1** runs `HttpLaya` → laya-serve on the GPU box (`LAYA_PRELOAD=1`, bound to 127.0.0.1 because the server is on the same box). Timeouts: 1.5 s for triage, 1 s for the gate.
+- **M5** adds `OrtLaya` in-process. It is enabled only when `decide`'s parity test passes against Laya's committed golden fixtures for the exact `laya.onnx` + `tokenizer.json` + `rl_agent_config.json` hash being loaded.
+- `NullModel` always abstains. If everything fails, every decision takes its safe default.
+
+### 7.2 Question catalogue
+
+Questions are data, not code: `decide/questions/*.toml`, versioned, with the version hash stored on every receipt. Changing a question's wording invalidates its fitted thresholds, which fall back to strict defaults until re-fitted.
+
+| Catalogue | Questions (type) | Default on abstain |
+|---|---|---|
+| `triage` | `bot` (choice over the roster), `shape` (choice: single / fleet / goal), `provider` (choice: claude / openai / local), `effort` (score: low / medium / high), `urgency` (score: whenever / today / within the hour / now), `act_now` (noul), `untrusted` (noul) | inbox bot, single, bot default, bot default, today, **ask**, **true** |
+| `gate` | `verdict` (choice: pass / ask) | ask |
+| `preflight` | `worth_running` (noul) | fire |
+| `notify` | `interrupt` (noul) | digest |
+| `capture` | `kind` (choice: commitment / task / appointment / follow-up / idea / remember / none), `owner_commitment` (noul), `urgency` (score), `needs_kelvin` (noul) | none (nothing filed) |
+
+The roster choice uses each bot's name plus its one-line remit. If there are more than 16 bots, a first pass picks a shortlist of 8 by remit category.
+
+### 7.3 State building
+
+The state is JSON, built per catalogue:
+
+- **`triage`:** `{source, text, ticket?, recent_context (last 6 events, truncated), time_of_day, node_status_summary}`.
+- **`gate`:** `{task_summary, bot_remit, tool, args_redacted, matching_rules}`, with secrets redacted.
+- **`capture`:** `{window_text with speaker tags, owner_marked, time, place_hint?}`.
+
+States are hashed (SHA-256 over canonical JSON) for receipts. The full state is kept for 30 days for labelling, then only the hash is kept.
+
+### 7.4 Gate algorithm (per consequential tool call)
+
+```
+class = static_class(tool)            // exempt | always_ask | reversible | irreversible | unknown
+rule  = most_specific(user_rules, tool)  // allow | ask | deny, ties → ask
+if class == exempt                                     → allow
+if rule == deny                                        → deny
+if rule == allow and class != always_ask               → allow
+if class in {always_ask, irreversible}                 → ask        // System 1 never approves these
+ans = decide(gate)                                     // receipted
+if ans.abstained or ans.verdict == ask                 → ask
+if class == reversible and ans.verdict == pass         → allow
+→ ask
+```
+
+- **`reversible`** is a short whitelist: read-only MCP tools, file ops inside the bot's computer, creating drafts (mail, PR, calendar *tentative*), and notes in the bot's own workspace.
+- **`irreversible`** covers send, pay, delete outside the computer, merge, publish, and anything on a connector whose name matches mutating verbs, unless whitelisted.
+
+### 7.5 Thresholds and calibration
+
+- `decision_model` rows hold `{checkpoint, question_catalogue_version, thresholds per (question, bucket), fitted_at, applied_at}`. Exactly one row is `active`.
+- **Defaults until fitted:**
+  - `act_now` ≥ 0.95 on calibrated `answer_confidence`;
+  - `gate.verdict = pass` ≥ 0.95;
+  - every other question ≥ 0.85.
+- **Labels** come from Kelvin's actions:
+  - approving or denying a card;
+  - reassigning a task;
+  - changing urgency;
+  - accepting or dismissing a capture proposal;
+  - marking a run's result good or bad.
+- **Calibration** (`decisions.calibrate`, manual) exports labels to JSONL, then runs Laya's `laya.calibrate` (Python, on the GPU box) through a small CLI wrapper. It reads back proposed temperatures and thresholds and shows before/after metrics on a held-out time slice. **Apply** makes it active; **rollback** re-activates the previous row.
+- **Fine-tuning** (M5+) is the same flow with `laya-train` and an ONNX export. The resulting checkpoint is trained on Kelvin's private conversations, so it is **never published** (§17).
+
+### 7.6 Receipts
+
+- Postgres `decision`: id, catalogue, question version, state hash, answers JSON (probabilities, `answer_confidence`, `jev_confidence`, abstained), thresholds, model id, latency, run / task / effect / capture links.
+- Mirrored as JSONL in Orphus systemone's receipt shape to `~/.local/share/orphusbot/receipts/`, so orphus-desktop can read them.
+
+---
+
+## 8. Models and subscriptions
+
+- **Login relay.** Logins run on each node through the engine's `login_provider`.
+  - The OAuth prompt arrives as `extension_ui_request`. The server shows it as a card on every client, and the answer (a pasted code or a selection) goes back the same way.
+  - Device-code flows (ChatGPT) show the code and link; Kelvin completes them on any device.
+  - Claude uses claude-bridge with the Claude Code login on that node. If the node's Claude Code isn't logged in, the card says so and links to the terminal command.
+- **What the server knows:** login status only, from heartbeats. No token ever crosses the link (enforced by a `proto` type with no token field, and a test).
+- **Quota tracker.** The node maps rate-limit and usage-limit errors (H-B4) to `QuotaEvent{provider, kind, resets_at?}`. The server keeps a per-provider `limited_until`. Triage's provider answer is overridden while a provider is limited, and the override is receipted.
+- **Subscription policy (PRD Q3) stays open.** Until Kelvin decides, routines use API-key providers if configured and otherwise run on subscriptions with a daily cap (`routine_subscription_turns_per_day`, default 20).
+
+---
+
+## 9. Wearable integration
+
+The wearable already has a complete, documented device channel (`server-contract/`), a button grammar and a cue vocabulary. OrphusBot **implements that same contract in Rust** so the existing firmware and Flutter app work against it unchanged apart from the server URL.
+
+### 9.1 Where things run
+
+| Piece | Runs on | Change |
+|---|---|---|
+| Firmware (button, Opus, cues, MicroSD) | Wearable | None |
+| BLE bridge, foreground service, on-device STT, speaker identity | Flutter companion on the Android phone | Pairing points at `https://<gpu-box NetBird name>`. mDNS still works on the LAN. |
+| Device channel (`/api/device/*`) | `orphusbot-server` `device` module | Rust port of `server-contract` |
+| Server-side accurate STT | `qwen3-asr` service on the GPU box | Reuse as-is (Python); the server calls `/transcribe` |
+| Agent work triggered by the wearable | OrphusBot runs | New: intake source `wearable` |
+
+The phone therefore has two apps in v1: the **wearable companion** (Flutter; BLE, audio, STT) and **OrphusBot** (Tauri; bots, tickets, approvals). Merging them is deferred (§19 D1). The companion is the right home for BLE and on-device STT today: it already has a working foreground service, sherpa-onnx and Opus decoding, and none of that has a mature Tauri-on-Android equivalent.
+
+### 9.2 Device channel in Rust (`device` crate + `server::device`)
+
+Endpoints and auth are as in the wearable's `docs/SERVER.md`:
+
+- `X-Device-Id` + `X-Device-Token` on HTTP;
+- the token in `Sec-WebSocket-Protocol` on the audio WebSocket;
+- `?token=` rejected.
+
+| Endpoint | OrphusBot behaviour |
+|---|---|
+| `POST /api/device/register` | Requires a signed-in OrphusBot session (passkey) instead of a pasted dashboard bearer. Returns device id and pairing token (stored hashed). |
+| `WS /api/device/ws/audio` | Opus or PCM16 in. Frames pass the **capture gate** (§9.4) before decoding. Admitted audio is buffered per utterance and sent to qwen3-asr on close. Transcripts are echoed on the WS. |
+| `POST /api/device/event` | Button codes (§9.3) |
+| `POST /api/device/text` | Transcript from on-device STT (with speaker labels and `isOwner`), the default path. The `overheard` flag routes it to capture (§10) rather than intake. |
+| `GET /api/device/command/poll` | Drains queued cue commands (4-byte packets) |
+| Voice profile and hands-free endpoints | Same semantics; `hands_free` is stored per device |
+
+Wire constants (`OP`, `PATTERN`, `HABITAT_CUE` ids, button codes 1–11) live in `device::wire`, generated from one table. A CI contract test checks them against `wearable/firmware/.../agent_commands.h` and `wearable/app/.../command_codec.dart` (§9.6).
+
+### 9.3 Duplex habitat (the wearable conversation)
+
+The wearable has **no speaker, by design**, and no screen. Its only outputs are the NeoPixel and the vibration motor; its inputs are the button and the mic. "Duplex habitat" means that channel works **both ways as a closed loop**:
+
+- every signal OrphusBot sends to the wrist has a defined meaning;
+- every signal that wants an answer has a defined button reply;
+- the server always knows whether a signal was **delivered**, **acknowledged**, **answered** or **timed out**, and what happens next in each case.
+
+Nothing in OrphusBot may ever depend on audio output. Anything that needs words goes to the phone or desktop; the wrist only carries *that* something happened, *what kind* and *how urgent*.
+
+#### 9.3.1 Habitat messages
+
+Every outbound signal is a `habitat_message` row, not a bare packet:
+
+| Field | Meaning |
+|---|---|
+| `kind` | `inform` (no reply expected), `ask` (needs the wearer), `ambient` (capture state; no reply) |
+| `cue` | One cue from the existing vocabulary (`task_queued`, `task_running`, `awaiting_input`, `task_done`, `error`, `budget_warn`, notification tiers, capture cues) |
+| `subject` | What it's about: run, effect, proposal, reminder |
+| `reply_grammar` | For `ask`: what tap and double tap mean for this subject (§9.3.3) |
+| `state` | queued → delivered → acknowledged / answered / dismissed / expired / superseded |
+| `escalate_after` | When an unanswered `ask` escalates to the phone (§9.3.4) |
+
+The server picks the cue; the app resolves gestures against its own state (the button spec's `IDLE` / `CAPTURING` / `ALERT_PENDING` resolver stays the authority) and reports the outcome **with the message id**, so the server never has to guess which signal a tap answered.
+
+#### 9.3.2 Outbound: one thing at a time
+
+- **One `ask` on the wrist at a time.** Further asks queue on the server, ordered by urgency. When the current one is answered, dismissed or escalated, the next is delivered. This is what makes a blind tap safe: there is only ever one thing it can mean.
+- **Capture always wins** (button spec rule): asks arriving while the wearer is capturing are held and replayed after filing.
+- **`inform` signals** (queued, done, error, reminders) play once and don't block. They are rate-limited to one per 5 s per device and coalesced: three tasks finishing within a minute give one `task_done`, not three.
+- **Persistent states** (`task_running` breathing, `awaiting_input` amber pulse) are superseded by the next state for the same subject, never stacked.
+- **Quiet hours and Focus profile** decide which informs are sent at all (§10.5). Asks above the profile's interrupt threshold are always sent.
+
+#### 9.3.3 Inbound: what a gesture answers
+
+The button grammar is unchanged: *tap = yes, tap twice = no, hold is power*. For each `ask` subject, OrphusBot defines what yes and no mean, and **only reversible outcomes can be triggered without words**, because the wearer can't see or hear the details on the wrist:
+
+| Ask subject | Tap (yes) | Double tap (no) | Reply carries |
+|---|---|---|---|
+| Bot asked a question (`waiting_input`) | Acknowledge and open the mic; the wearer answers aloud; the transcript is the answer | Dismiss; the run keeps waiting and the question goes to the phone | Transcript or nothing |
+| "Should I start?" card for the wearer's own button task | Start it | Don't start; the task stays as a ticket | — |
+| Approval of a **reversible** effect the wearer started from the button in the last 10 min | Approve | Deny | — |
+| Approval of anything else (other sources, or **irreversible**) | **Acknowledge only**: "I've seen it, I'll look on the phone"; stops the amber pulse and sends the card to the phone immediately | Dismiss from the wrist; the card stays on the phone | — |
+| Urgent capture proposal | Acknowledge; proposal pinned at the top of the phone inbox | Dismiss to the next digest | — |
+| Time-blindness reminder | Acknowledge ("on it") | Snooze 10 min (once) | — |
+
+So the wrist can confirm things the wearer *already knows about* (their own task, a reminder they accepted), and can always say "seen". It never approves something whose content it couldn't show. This replaces the earlier idea of tap-approving any reversible effect.
+
+Answering aloud has a guard: the transcript is attached to the **message id** that opened the mic. If that ask was superseded before the answer arrived, the answer is posted to the thread as a normal message instead of being used as the answer.
+
+#### 9.3.4 Closing the loop
+
+| Event | Server action |
+|---|---|
+| Command drained by the app and written to GATT `0xCAB1AB97` without error | `delivered` (the app reports the write result on its next poll) |
+| Not delivered within 30 s (phone away, BLE down) | Mark `undeliverable`; send the same content to the phone via ntfy; keep the ask queued for the wrist when it reconnects only if still relevant |
+| Tap / double tap resolved by the app against this message | `acknowledged` / `answered` / `dismissed`, with outcome; a label for System 1 where relevant (e.g. "should I start?" → act-now label) |
+| `ask` unanswered after `escalate_after` (default: urgency *now* 2 min, *within the hour* 10 min, otherwise next digest) | `expired`; the ask moves to a phone notification and the inbox; the wrist pulse stops so it never nags indefinitely |
+| A newer state for the same subject | `superseded` |
+
+Every transition is an event on the wearable thread, so the Wearable view in the UI shows the full conversation: what was signalled, when it was felt, and how it was answered.
+
+#### 9.3.5 Button → agent (the uplink task path)
+
+1. **Tap in IDLE** → capture opens (white, steady, non-suppressible) → the wearer speaks → **tap** → the app files it. The transcript arrives at `/api/device/text` with `overheard = false` and a capture id.
+2. The server runs `intake(source = wearable, …)`. There is no gesture for "which bot": intent comes from the words.
+3. Triage decides. If it says act now (and the work is reversible, §19 D6), the run starts and the wrist gets `task_queued`. If not, the wrist gets a "should I start?" ask (§9.3.3).
+4. While running: `task_running` (breathing blue). The run then ends with `task_done` (green, double buzz) or `error` (red, triple buzz), or moves to `awaiting_input` (amber pulse, long buzz) as an ask.
+
+#### 9.3.6 Vibration and eyes-down use
+
+The motor is the only channel that works in a pocket or with eyes elsewhere, so:
+
+- Every **ask** and every **error** must be identifiable by haptic alone (long buzz = needs you; triple = error). Informs may be LED-only.
+- The server keeps a per-device **capability** record: `{led, haptic, haptic_patterns}`. The phone app fills it from the firmware's status reply (`STATUS_QUERY` → `0x23BA7924`), extended with a capability byte (firmware change W-2 below). While a device reports no working haptic, asks escalate to the phone after **30 s** instead of the normal delay, because the wearer may not see the LED.
+- The firmware already plays named haptic patterns through `haptic_play()` (single / double / triple / long). The "every haptic is one buzz" blocker in `HABITAT_ALERTS.md` looks fixed in `agent_commands.c` and the doc needs updating. The bench test of `ramp` vs `ramp↓` distinguishability still stands.
+
+#### 9.3.7 Firmware and app changes this needs
+
+Small, and all within the existing protocol style:
+
+| ID | Where | Change |
+|---|---|---|
+| W-1 | firmware + app + `device::wire` | Mint `HABITAT` cue ids for `task_queued` and `task_done` (the doc already calls for this) and move the six task signals onto op `0x06`, so every cue is one write |
+| W-2 | firmware | Add a capability byte to the status reply: LED present, haptic present, haptic driver ok |
+| W-3 | app | Carry the server's `message_id` with each queued command; report delivery (GATT write ok / failed) and gesture outcomes against that id |
+| W-4 | app | Hold only one `ask` as `ALERT_PENDING`; ignore new asks until the server sends the next one (the server already serialises, this is the app-side guard) |
+| W-5 | docs | Remove the stale `speaker.c` reference from `HABITAT_ALERTS.md` and state "no speaker, by design" as a product rule |
+
+None of these change the button grammar or the meaning of any existing cue.
+
+### 9.4 Capture gate
+
+A port of `capture-gate.ts`, kept pure and unit-tested. A frame is admitted only if:
+
+- a button capture window is open (`WEARABLE_CAPTURE_WINDOW_MS`, default 60 s, extended by presses); **or**
+- hands-free is on for the device **and** allowed server-wide (`hands_free_allowed`, an operator kill switch).
+
+In hands-free mode, utterances that aren't from the owner are kept only as **context for capture mining** (§10.3). They are never dispatched as tasks, and the WS echoes them as "(overheard)" so the wearer can see exactly what was heard. Every window open/close and every dropped batch is audited.
+
+### 9.5 STT paths
+
+| Mode | Where | When |
+|---|---|---|
+| **On-device (default for OrphusBot)** | Phone: streaming zipformer preview, offline zipformer final, VAD, punctuation, diarization, speaker identity | Default. Only text and speaker labels reach the server. Raw audio never leaves the phone. |
+| **Server** | GPU box: Opus decode in Rust (`audiopus`), utterance buffer, qwen3-asr batch final (6.24 % WER vs 11.2 % on the phone) | Opt-in per device, for accuracy. Owner identification needs diarization on the server: v1 uses the phone's live owner flag when present, otherwise treats the speaker as unknown (context only). Server-side diarization (WeSpeaker on the GPU box) is deferred. |
+
+The existing defaults are flipped: the wearable app currently defaults to `cloud`, but OrphusBot pairing sets `onDevice` unless Kelvin chooses server mode. That matches "the phone is the filtering boundary".
+
+### 9.6 Contract tests
+
+`testkit` includes:
+
+- a **simulated wearable** (button codes, Opus frames from fixtures, command polling);
+- a **golden table test** that parses the C header and Dart codec and compares them to `device::wire`.
+
+These run in CI on every change to `crates/device` or `wearable/`.
+
+### 9.7 Laptop
+
+Kelvin's `omarchy-assistant` daemon (hotkeys SUPER+ALT+O ask and SUPER+ALT+N note) can post to `/api/device/text` as a second device, so the laptop becomes another capture source with no new protocol. Optional; the daemon stays its own project.
+
+---
+
+## 10. Capture and mining (ambient listening → things to do)
+
+Purpose: catch what you said you'd do, what someone asked of you, appointments, follow-ups and things worth remembering, without you having to stop and write them down. This is designed first for neurodivergent people (ADHD: time blindness, dropped commitments, working-memory load) and works for anyone.
+
+### 10.1 Rules carried over from the earlier assistant work
+
+1. **Ambient text produces artifacts, never replies.** Nothing heard in hands-free mode makes a bot speak, act or contact anyone.
+2. **The miner has no tools.** It reads text and outputs structured proposals. It cannot send, browse or run anything.
+3. **Proposals need a click.** Nothing mined becomes a task, an event or a message until the wearer accepts it. The exception is low-risk *notes*, which can be auto-filed if the profile allows it (§10.5).
+4. **Nudges are gentle.** Digest by default; interrupt only on high, confident urgency.
+
+### 10.2 Pipeline
+
+```
+transcript segments (device text, owner-tagged)
+   → window: rolling 2-min windows, closed by 20 s silence or 10 min cap   (capture_window)
+   → System 1: capture catalogue (§7.2) over the window                    (one batched Laya call)
+        kind = none, or abstain  → nothing filed; window kept for retention period only
+        otherwise                → extraction
+   → Extraction (System 2, tool-less): one LLM call with a strict JSON schema:
+        {kind, title, detail, who, due?, place?, quote, confidence_note}
+        model: the cheapest configured provider (local model on the GPU box when available)
+   → Proposal row (state = proposed), linked to window + decision receipt
+   → Delivery per profile: digest | phone card | wearable ask (§9.3) for urgent
+   → Kelvin: accept → ticket / calendar draft / note | edit | dismiss  (each is a label)
+```
+
+- **Explicit captures** (button) go to intake as tasks (§9.3), not to the miner.
+- **Hands-free / overheard** text goes to the miner only.
+- **Commitments other people make to you** are proposed as `follow-up` ("Sam said they'd send the quote by Friday"), so you can check later.
+
+### 10.3 Other people's speech
+
+- Non-owner utterances are used only as **context inside a window**. They are needed to understand "yes, I'll do that", but are never filed as their own items unless they concern the owner (`needs_kelvin` or a follow-up owed to the owner).
+- Proposals store a short **quote** (≤ 200 characters) as evidence. Raw window text is deleted after the retention period (default **7 days**). Accepted items keep only their structured fields and the quote.
+- **Raw audio is never stored** by the server. In server-STT mode, audio is held in memory per utterance and dropped after transcription.
+- The white capture LED stays non-suppressible (firmware rule). The OrphusBot UI shows hands-free state on every screen while it's on.
+- **Pause:** a double tap in IDLE is currently a no-op. We **don't** overload it. Pausing hands-free is a phone toggle and a server endpoint, plus an optional schedule (e.g. off at the doctor's, off at home after 21:00).
+- **Open-source users in other places:** recording laws differ (e.g. all-party consent rules in some places). Hands-free ships **off by default**; the server has the `hands_free_allowed` kill switch; the docs explain the consent LED and point people to check local law. (This is a design note, not legal advice.)
+
+### 10.4 What proposals become
+
+| Kind | On accept |
+|---|---|
+| commitment / task | Ticket (assigned via triage, or to the inbox bot), due date if any |
+| appointment | Tentative calendar event via the PA MCP server (a draft, so reversible) |
+| follow-up | Ticket in `waiting` with a reminder routine |
+| idea / remember | Note in the Obsidian vault (`<vault>/OrphusBot/Captures/YYYY-MM-DD.md`, Tasks plugin format; vault path is a setting), written by the laptop node |
+
+### 10.5 Profiles (neurodivergent-first, configurable for anyone)
+
+Profiles are presets over the same settings:
+
+| Setting | **Focus support** (default for Kelvin) | **Standard** |
+|---|---|---|
+| Kinds mined | all | commitment, appointment |
+| Digest times | 3 a day (e.g. 10:00, 14:00, 18:00) + end-of-day review | 1 a day |
+| Interrupt threshold | urgency ≥ "within the hour" and confident | urgency = "now" |
+| Time-blindness nudges | "starts in 30 min / 10 min / now" as wearable informs (blue flash, double buzz; the phone notification carries the words) for accepted appointments; the "now" one is an ask (tap = on it, double tap = snooze 10 min); gentle "you said you'd… today" check-ins in the digest | off |
+| Auto-file notes | idea / remember auto-filed, undo for 24 h | off |
+| Re-surface | dismissed-but-not-done commitments come back once after 3 days | off |
+| Wording | short, concrete, one action per card; never guilt language ("overdue" → "still open") | plain |
+
+Cards and cues follow the wearable's existing tiers. Nothing escalates to red for a missed personal task; red is reserved for system errors.
+
+---
+
+## 11. Integrations and secrets
+
+- **Integrations are MCP.** `connections` stores MCP server records (URL or allowlisted stdio command), OAuth material (envelope-encrypted) and per-bot grants. For each engine session, the server issues an MCP config file containing only the granted servers, with short-lived tokens where the server supports them.
+- **First integration:** Kelvin's PA MCP server (mail drafts, calendar, todos).
+- **Lazy catalogue:** a server with more than 20 tools is exposed through `search_tools` / `load_tool` / `call_tool` wrappers served by the server's own rmcp endpoint. The `mcp_` prefix is avoided.
+- **Secrets:** AES-256-GCM envelope encryption. The data key is wrapped by a master key in `systemd-creds` on the GPU box. Values are redacted from events (plain, base64 and URL-encoded) before they're appended.
+
+---
+
+## 12. Clients
+
+- **Leptos CSR (`crates/ui`)** shares `proto` with the server: typed requests, the event types and the **reducer** that folds events into view state. One reducer, so web, desktop and Android can't disagree.
+- **Views:**
+  - Inbox (needs-you first: approvals, questions, proposals);
+  - Bots;
+  - Thread;
+  - Tickets;
+  - Routines;
+  - Captures (proposals, windows, hands-free state);
+  - Computer (noVNC island);
+  - Decisions (receipts, calibration health, apply/rollback);
+  - Nodes;
+  - Wearable (devices, battery, hands-free, profile);
+  - Settings.
+- **Tauri 2 desktop:** Linux/Wayland first. It loads the UI bundled, talks to the server over NetBird, and uses the deep-link and notification plugins.
+- **Tauri 2 Android:**
+  - **Push:** ntfy on the GPU box over NetBird, received through the ntfy Android app or UnifiedPush. No Google account is needed, which matches the wearable's "no third-party account" stance.
+  - Device token in the Android keystore.
+  - Offline outbox in SQLite for messages and card answers.
+- **Sync:** `GET /events?after=<seq>` SSE per subscribed thread, plus a global inbox stream. On reconnect the client replays from its last `seq`. A 20 s heartbeat; the session is re-validated every 60 s.
+- **Auth:** `webauthn-rs` passkeys for the browser and desktop. On Android, a passkey at first sign-in issues a long-lived device token, revocable from Settings.
+
+---
+
+## 13. Data model (Postgres, sqlx migrations)
+
+Core tables follow research/rakazo-architecture.md §10 (device, passkey, session, node, bot, engine_session, thread, message, event, task, run, attempt, steering_message, computer, computer_lease, routine, ticket, ticket_comment, connection, mcp_server, bot_mcp_grant, secret, approval_rule, external_effect, decision, decision_label, decision_model, artifact). Additions for this design:
+
+| Table | Columns (key) |
+|---|---|
+| `wearable_device` | id, name, token_hash, hands_free, stt_mode (on_device / server), profile, last_seen, battery, firmware_version |
+| `voice_profile` | device_id, label, is_owner, enrolled_at (embeddings stay on the phone in on-device mode) |
+| `habitat_message` | id, device_id, kind (inform / ask / ambient), cue, subject_type, subject_id, reply_grammar, urgency, state, escalate_after, created_at, delivered_at, resolved_at, outcome |
+| `cue_command` | device_id, message_id, packet (4 bytes), created_at, delivered_at, write_ok |
+| `wearable_capability` | device_id, led, haptic, haptic_patterns, reported_at |
+| `capture_window` | id, device_id, started_at, ended_at, text (nullable after retention), owner_present, decision_id |
+| `proposal` | id, window_id, kind, title, detail, who, due, quote, state (proposed / accepted / edited / dismissed / auto_filed), result_ref (ticket / event / note), decision_id |
+| `capture_profile` | name, settings JSON |
+| `quota_state` | provider, node_id, limited_until, last_event |
+
+All status columns are Postgres enums. Every row that a decision shaped carries `decision_id`.
+
+---
+
+## 14. Security model
+
+| Asset | Protection |
+|---|---|
+| Model subscription tokens | Only on nodes, in Orphus / Claude Code stores. No proto type can carry them. Never in computers or E2B. |
+| Server | Reachable only on NetBird. NetBird ACLs: clients → server:443; nodes → server:7480; server → nodes:7481. Postgres, laya-serve, qwen3-asr and ntfy are bound to localhost or the NetBird interface. |
+| Bot computers | Rootless, no caps, LAN and NetBird ranges blocked, resource limits, short-lived sealed screen tokens, gVisor optional |
+| Irreversible actions | Never approved by System 1 or the wearable; need a rule or a tap on phone or desktop |
+| Ambient audio | Gate before decode; on-device STT by default; no audio stored; 7-day text retention; consent LED |
+| Secrets | Envelope encryption, master key in systemd-creds, redaction on every output path |
+| Wearable link | Pairing requires a signed-in session; device tokens hashed; per-device revoke |
+| Supply chain | `cargo deny` (licences and advisories), pinned E2B protos, pinned Laya artifact hashes |
+
+**Threat notes:**
+
+- **Prompt injection from web pages or mail:** the gate and the effect classes are the defence; untrusted work goes to E2B.
+- **A stolen phone:** revoke the device token from desktop; NetBird device approval also cuts it off.
+- **A compromised container:** it can't reach the LAN or other nodes, and holds no tokens.
+
+---
+
+## 15. Testing
+
+| Layer | How |
+|---|---|
+| Unit | Pure modules: capture gate, gate algorithm, placement, wire encoding, reducers, threshold logic |
+| Integration | Testcontainers Postgres; `testkit` fakes for every trait; a **scripted fake engine** speaking the Orphus RPC protocol; wiremock for E2B and laya-serve |
+| Decision parity | OrtLaya vs Laya golden fixtures (M5 gate) |
+| Wearable | Simulated wearable in `testkit` (LED/haptic sink, scripted gestures, BLE drop); golden wire-table test (§9.6); **duplex loop tests**: one-ask-at-a-time, supersede, escalate on timeout, no-haptic fast escalation, answer-after-supersede goes to thread; the wearable repo's ADB e2e scenarios pointed at a staging server |
+| UI | Playwright screenshot gallery on every UI PR, nightly full run |
+| Live (opt-in) | One real engine turn per provider, one E2B sandbox, one laya-serve call; spend-capped |
+| Recovery | Kill node / server / engine mid-run in CI and assert ledger states |
+
+---
+
+## 16. Deployment (GPU box)
+
+- **systemd system units:**
+  - `postgresql`;
+  - `orphusbot-server`;
+  - `laya-serve` (venv, `LAYA_PRELOAD=1`, localhost);
+  - `qwen3-asr` (localhost);
+  - `ntfy` (NetBird interface).
+- **systemd user units on each node:** `orphusbot-node`.
+- **Releases:**
+  - server and node as static musl binaries on GitHub Releases;
+  - desktop as AppImage plus an AUR package;
+  - Android as a signed APK on Releases (F-Droid later).
+- **Backups:** nightly `pg_dump` to the GPU box's backup disk; the receipts JSONL is included.
+- **Upgrades:** migrations run at server start under an advisory lock. Nodes announce their version, and the server refuses incompatible nodes with a clear message.
+
+---
+
+## 17. Open source plan
+
+Everything is MIT and public: server, node, UI, bridge, decide, device, capture, the wearable subtree, the question catalogue and the deploy files.
+
+**Never committed, even though the project is open:**
+
+- Kelvin's **receipts, labels, transcripts and proposals** (personal data).
+- **Fine-tuned Laya checkpoints and fitted thresholds trained on his conversations.** Weights can leak training text. The *code* to fine-tune and calibrate is public; the artifacts stay on the GPU box.
+- `.env`, NetBird setup keys, E2B keys, signing keys, the master key.
+
+**Before the wearable repo goes public**, clean up:
+
+- personal hostnames and LAN IPs in `docs/SERVER.md` (e.g. the STT domain and the AI server's LAN address);
+- the Nova-PAI references;
+- the dormant Firebase config;
+- the MCUboot sample keys (regenerate before any signed OTA);
+- the "KelvinLee residue" listed in its pivot plan.
+
+Run a secret scan (`gitleaks`) over the full history before flipping visibility.
+
+**Attribution:** keep `LICENSE-UPSTREAM` (Based Hardware) in `wearable/`, Laya's NOTICE when shipping the ported decode logic or ONNX export, and the model licences table from the wearable README. Gemma's terms apply to anyone downloading that model; it isn't vendored.
+
+---
+
+## 18. Build order
+
+Mapped to the PRD milestones. The wearable lands at M3, alongside System 1, because a button press is just another intake source.
+
+| Milestone | Design sections | Adds |
+|---|---|---|
+| M0 | §2, §3.1 (api, events), §4.1–4.2, §12 (web) | One engine on the laptop streams to a browser |
+| M1 | §3.2–3.4, §5 (gate only), §7.4 (static part), §12 (desktop) | Durable runs, ledger, approvals |
+| M2 | §4.4, §5 (ops), §6.1, §6.3 (no Laya) | Containers, takeover, GPU-box node |
+| M3 | §7.1–7.4, §7.6, §9 (channel, duplex habitat, button → task), §3.5; firmware/app W-1…W-5 | Laya triage and gate, wearable tasks with the full duplex loop, tickets, routines |
+| M4 | §6.2, §8 (quota), §10 (capture, profiles), §12 (Android, ntfy) | E2B, ambient capture, phone |
+| M5 | §7.5, OrtLaya | Calibration, apply/rollback, in-process Laya |
+| M6 | §11 | MCP breadth, lazy catalogue, secrets UI |
+
+Capture (§10) waits for M4 on purpose: it needs receipts, proposals and the Android app to be useful, and it's the most privacy-sensitive part, so it should land on a stable base.
+
+---
+
+## 19. Open design questions
+
+| # | Question | Default |
+|---|---|---|
+| D1 | Merge the Flutter wearable companion into the Tauri Android app later (Rust BLE + sherpa-onnx via `sherpa-rs`), or keep two apps? | Two apps in v1; revisit after M4 with a spike on Tauri + BLE foreground service |
+| D2 | Phone RAM: on-device STT needs about 8 GB for the Gemma tidy. Does Kelvin's Android phone have it? If not, run zipformer only on the phone and the tidy on the GPU box | Zipformer on the phone; tidy optional |
+| D3 | Server-side diarization (WeSpeaker on the GPU box) for server-STT mode | Defer; on-device mode covers owner identity |
+| D4 | Capture retention: 7 days of raw window text, or shorter? | 7 days |
+| D5 | Hands-free pause schedule and places | Phone toggle + a time schedule; no location in v1 |
+| D6 | Should explicit wearable captures skip the "should I start?" card when System 1 says act-now with high confidence? | Yes, for reversible work only |
+| D7 | Obsidian as the note store for captures, or OrphusBot's own notes with an export? | Obsidian via the laptop node; if the laptop is offline, queue and write later |
+| PRD Q3 | Subscription use for unattended routines | Daily cap of 20 subscription turns for routines until decided |

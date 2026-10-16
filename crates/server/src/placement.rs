@@ -22,7 +22,7 @@ impl Candidate {
     /// Why it may not take work, if it may not.
     pub fn held_back(&self) -> Option<&'static str> {
         if self.on_battery {
-            Some("on battery")
+            Some("low on battery")
         } else if self.quiet {
             Some("in its quiet hours")
         } else {
@@ -160,7 +160,7 @@ mod tests {
         assert_eq!(
             choose(&nodes, Some("laptop")),
             Placement::Wait {
-                why: "laptop is on battery; gpu-box is in its quiet hours".into()
+                why: "laptop is low on battery; gpu-box is in its quiet hours".into()
             }
         );
     }

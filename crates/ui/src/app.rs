@@ -543,8 +543,9 @@ fn BotSheet(bot: Option<Bot>, editing: RwSignal<Option<Option<Bot>>>) -> impl In
             Ok(())
         });
     };
-    // The models the connected nodes can use, offered as suggestions.
+    // The models the connected nodes can use, offered in a drop-down.
     let models = RwSignal::new(Vec::<Value>::new());
+    let custom = RwSignal::new(false);
     ctx.run(async move {
         models.set(api::get("/api/models").await?);
         Ok(())
@@ -565,14 +566,35 @@ fn BotSheet(bot: Option<Bot>, editing: RwSignal<Option<Option<Bot>>>) -> impl In
                 <label>"Instructions"<textarea rows=5 maxlength="8000" bind:value=instructions
                     placeholder="How it should work, what to avoid, who it works for"></textarea></label>
                 <div class="row two">
-                    <label>"Model"<input maxlength="100" bind:value=model placeholder="Orphus default" list="node-models" /></label>
-                    <datalist id="node-models">
-                        {move || models.get().into_iter().map(|m| {
-                            let id = m["id"].as_str().unwrap_or_default().to_owned();
-                            let on: Vec<String> = m["nodes"].as_array().into_iter().flatten().filter_map(|n| n.as_str().map(str::to_owned)).collect();
-                            view! { <option value=id.clone()>{format!("on {}", on.join(", "))}</option> }
-                        }).collect_view()}
-                    </datalist>
+                    <label>"Model"
+                        // A real drop-down (WebKitGTK, in the desktop app, barely shows datalists):
+                        // Orphus's default, every model a node reported, or one typed by hand.
+                        <select aria-label="Model" on:change=move |ev| {
+                            let v = event_target_value(&ev);
+                            if v == "__other" { custom.set(true) } else { custom.set(false); model.set(v) }
+                        }>
+                            <option value="" selected=move || model.get().is_empty() && !custom.get()>"Orphus default"</option>
+                            {move || {
+                                let listed = models.get();
+                                let current = model.get();
+                                let known = current.is_empty() || listed.iter().any(|m| m["id"] == current.as_str());
+                                let mut options: Vec<(String, String)> = listed.iter().map(|m| {
+                                    let id = m["id"].as_str().unwrap_or_default().to_owned();
+                                    let on: Vec<&str> = m["nodes"].as_array().into_iter().flatten().filter_map(|n| n.as_str()).collect();
+                                    (id.clone(), format!("{id}  ·  {}", on.join(", ")))
+                                }).collect();
+                                if !known { options.insert(0, (current.clone(), current.clone())); }
+                                options.into_iter().map(|(id, label)| {
+                                    let pick = id.clone();
+                                    view! { <option value=id selected=move || model.get() == pick && !custom.get()>{label}</option> }
+                                }).collect_view()
+                            }}
+                            <option value="__other" selected=move || custom.get()>"Other…"</option>
+                        </select>
+                        {move || custom.get().then(|| view! {
+                            <input maxlength="100" bind:value=model placeholder="provider/model" aria-label="Model name" />
+                        })}
+                    </label>
                     <label>"Thinking"
                         // The chosen option is marked on the option itself: a select's value set
                         // before its options exist falls back to the first one.

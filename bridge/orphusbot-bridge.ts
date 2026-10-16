@@ -39,6 +39,8 @@ import {
 export const GATE_TITLE = "orphusbot-gate";
 /** Title of the dialog that asks the owner to take over the screen (DESIGN §4.4). */
 export const TAKEOVER_TITLE = "orphusbot-takeover";
+/** Title of the dialog that hands a teammate a task (DESIGN §5.3). */
+export const ASK_TITLE = "orphusbot-ask";
 
 const computer = process.env.ORPHUSBOT_COMPUTER;
 const runtime = process.env.ORPHUSBOT_RUNTIME ?? "podman";
@@ -56,7 +58,7 @@ const HELPER_TOOLS = ["subagent", "fleet", "roundtable"];
 // Plus `mcp`, Orphus's MCP gateway, when the owner granted the bot a connection:
 // it only talks to those servers, so it is safe to run outside the computer.
 const COMPUTER_TOOLS = [
-  "read", "write", "edit", "bash", "request_takeover", "share_file",
+  "read", "write", "edit", "bash", "request_takeover", "share_file", "ask_bot",
   ...(process.env.ORPHUSBOT_MCP ? ["mcp"] : []),
   // Fleets: helpers whose calls come back through this gate and into the computer.
   ...(process.env.ORPHUSBOT_HELPERS_GATED === "1" ? HELPER_TOOLS : []),
@@ -243,6 +245,25 @@ export default function (pi: ExtensionAPI) {
         content: [{ type: "text", text: `Shared ${name} with the owner.` }],
         details: { artifact: { name, data: data.toString("base64") } },
       };
+    },
+  });
+
+  // Teamwork: the server makes the task a ticket for that bot and sends its answer back here later.
+  pi.registerTool({
+    name: "ask_bot",
+    label: "Ask a teammate",
+    description:
+      "Hand a task to another bot on your team (your instructions list them). It runs as a ticket for that bot; their answer comes back to you as a new message when they finish, so don't wait for it.",
+    promptSnippet: "Hand a task to a teammate bot",
+    parameters: Type.Object({
+      bot: Type.String({ description: "The teammate's short name, such as coder" }),
+      task: Type.String({ description: "What they should do, with everything they need to know" }),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const ui = dialogs(ctx as unknown as { mode: string; ui: Dialogs }) ?? ctx.ui;
+      const answer = String((await ui.input(ASK_TITLE, JSON.stringify({ bot: params.bot, task: params.task }))) ?? "error:no answer");
+      if (answer.startsWith("error:")) throw new Error(answer.slice("error:".length));
+      return { content: [{ type: "text", text: answer.replace(/^ok:/, "") }], details: {} };
     },
   });
 

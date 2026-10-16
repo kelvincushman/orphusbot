@@ -227,6 +227,10 @@ Model credentials stay in the engine process on the host. Nothing in the bridge 
 
 ---
 
+### 5.3 Bots as a team
+
+- **Built (M8.2):** the bridge's `ask_bot {bot, task}` tool opens an `orphusbot-ask` dialog; the server (`server::team`) makes the task a ticket for that bot (`asked_by`, `ask_depth`) and starts it, or leaves it on the board if the bot is busy, and answers at once so the asker carries on. When that ticket's run ends, the teammate's last reply goes back to the asker as a labelled message and queues the asker's next run. A bot can't ask itself; hand-offs stop three deep (a check constraint backs it). `ask_bot` runs without asking (it only makes a ticket); everything the teammate does is gated as usual. When a run starts, the bot's instructions get its teammates (slug, name, remit) and a pointer to `/shared`, which team-scope bots' computers share.
+
 ## 6. Computers and placement
 
 ### 6.1 Trait
@@ -258,7 +262,7 @@ fn choose(task, decision, nodes, bot) -> Placement
 
 Placement is deterministic code. Laya only supplies the `untrusted` answer and confidence. The chosen placement and the rule that fired are recorded on the run and shown in the UI.
 
-**Built (M2.3):** `server::placement::choose` implements rules 3, 4 and 6: the node holding the bot's computer (`bot_computer` table) if it may work, else the least loaded node that may work (ties by name), else wait with a reason ("laptop is on battery; gpu-box is in its quiet hours"). A node may work unless it's on battery or in its quiet hours. If the home node can't work, the run goes elsewhere and the home moves with it; the old home's files stay behind until export/import (B-CMP-08). Rules 1, 2 and 5 arrive with System 1 (M3), GPU tasks (M3) and E2B (M4). **Built (M4.5):** a bot whose computer is in E2B may run its engine on any connected node, even one on battery or in quiet hours, since the heavy work happens in the sandbox ("its computer is in E2B; least busy machine"). Placement runs whenever a run is queued, a node connects or leaves, a run ends, and on every heartbeat.
+**Built (M2.3):** `server::placement::choose` implements rules 3, 4 and 6: the node holding the bot's computer (`bot_computer` table) if it may work, else the least loaded node that may work (ties by name), else wait with a reason ("laptop is on battery; gpu-box is in its quiet hours"). A node may work unless it's low on battery (unplugged below `ORPHUSBOT_MIN_BATTERY`, default 30%) or in its quiet hours. If the home node can't work, the run goes elsewhere and the home moves with it; the old home's files stay behind until export/import (B-CMP-08). Rules 1, 2 and 5 arrive with System 1 (M3), GPU tasks (M3) and E2B (M4). **Built (M4.5):** a bot whose computer is in E2B may run its engine on any connected node, even one on battery or in quiet hours, since the heavy work happens in the sandbox ("its computer is in E2B; least busy machine"). Placement runs whenever a run is queued, a node connects or leaves, a run ends, and on every heartbeat.
 
 ---
 

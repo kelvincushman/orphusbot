@@ -129,6 +129,7 @@ All settings are environment variables.
 | `ORPHUSBOT_NTFY_URL` | none | An ntfy topic to push to, such as `https://ntfy.example.com/orphusbot-<random>`; nothing is pushed without it |
 | `ORPHUSBOT_NTFY_TOKEN` | none | ntfy access token, if the topic needs one |
 | `ORPHUSBOT_DAILY_TOKEN_BUDGET` | none | Input + output tokens a day; crossing it warns on the wrist and by push, once a day |
+| `ORPHUSBOT_MIN_BATTERY` (node) | `30` | An unplugged laptop node takes work only with at least this much charge (percent); `101` never works unplugged |
 | `ORPHUSBOT_MCP_COMMANDS` (node) | none | Programs this node may run as MCP servers, comma-separated, such as `npx,uvx`. A connection whose command isn't listed is left out on this node |
 | `ORPHUSBOT_E2B_API_KEY` | none | Lets bots keep their computer in E2B (the bot's **Computer** setting). Optional: `ORPHUSBOT_E2B_TEMPLATE` (default `base`), `ORPHUSBOT_E2B_TIMEOUT_SECS` (default 3600: a sandbox pauses itself this long after a run starts), `ORPHUSBOT_E2B_API_URL`, `ORPHUSBOT_E2B_SANDBOX_URL` (tests). Check a key with `cargo test -p orphusbot-server live_e2b -- --ignored` (makes and deletes one sandbox). For a screen, build the desktop image as a template (below) and set `ORPHUSBOT_E2B_TEMPLATE=orphusbot-desktop` |
 | `ORPHUSBOT_SECRET_KEY_FILE` | none | A file of exactly 32 random bytes (`head -c 32 /dev/urandom > key`) that encrypts stored tokens; without it, connections can't keep a token. Losing it loses every stored token |

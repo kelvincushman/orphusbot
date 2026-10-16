@@ -105,6 +105,8 @@ flutter test                       # the reducer tests
 flutter build linux --release      # build/linux/x64/release/bundle/orphusbot-app
 ```
 
+The bot face comes from `design/bot-avatar`: after changing it, run `python3 gen.py 0 > scene.rml && ~/.rive/bin/rive . --verify && ~/.rive/bin/rive . --once` there (the [Rive CLI](https://rive.app/docs/cli/overview), no account needed) and copy `build/bot-avatar.riv` to `apps/orphusbot_app/assets/`.
+
 On Omarchy, copy the bundle to `~/.local/share/orphusbot-app`, link `orphusbot-app` into `~/.local/bin`, and the bar panel's **Open chat** starts it.
 
 **macOS app.** It has to be built on a Mac. With Xcode's command line tools, Rust and Node.js installed, and the Mac's SSH key on the GPU box, run `sh scripts/macos-setup.sh <user>@<gpu-box>` from a clone: it builds the app, installs `/Applications/OrphusBot.app`, and adds a launchd agent that keeps the tunnel to the server open at `http://localhost:7480` (see DEPLOY.md, "Before the domain").

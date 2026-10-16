@@ -1,0 +1,5 @@
+name: bot-avatar
+logs:
+  file: build/rive.log
+  problems: build/problems.log
+main: Avatar

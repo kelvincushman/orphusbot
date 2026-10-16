@@ -2,11 +2,16 @@
 // (DESIGN §12.1, D-033). It signs in by device linking and talks to the
 // server's own API; the server holds everything, so the app holds no data.
 import 'package:flutter/material.dart';
+import 'package:rive/rive.dart' show RiveNative;
 
 import 'api.dart';
 import 'chat.dart';
 
-void main() => runApp(const OrphusBotApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await RiveNative.init();
+  runApp(const OrphusBotApp());
+}
 
 class OrphusBotApp extends StatefulWidget {
   const OrphusBotApp({super.key});

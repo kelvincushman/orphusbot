@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- M0 placeholder UI: plain HTML and EventSource. The Leptos UI replaces it in M1 (DECISIONS D-013). -->
+<!-- Placeholder UI: plain HTML and EventSource. The Leptos UI replaces it in M1.4 (DECISIONS D-013). -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -43,6 +43,7 @@
     <form id="send">
       <textarea id="text" rows="2" aria-label="Message" placeholder="Message the bot (Enter to send, Shift+Enter for a new line)" required></textarea>
       <button id="go">Send</button>
+      <button id="stop" type="button" hidden>Stop</button>
     </form>
     <p id="err" class="error" role="alert"></p>
   </div>
@@ -61,10 +62,14 @@ function bubble(role, text) {
   return div;
 }
 
-function setStatus(online, node, busy) {
-  $("status").textContent = (online ? "Node " + node + " online" : "No node connected") + (busy ? " · working…" : "");
+// run: null when idle, otherwise "queued" or "running"
+let node = { online: false, name: null }, run = null, resumed = false;
+function setStatus() {
+  const where = node.online ? "Node " + node.name + " online" : "No node connected";
+  const what = run === "queued" ? " · waiting for a node" : run === "running" ? (resumed ? " · resuming after an interruption…" : " · working…") : "";
+  $("status").textContent = where + what;
+  $("stop").hidden = run === null;
 }
-let node = { online: false, name: null }, busy = false;
 
 function handle(ev) {
   switch (ev.type) {
@@ -77,14 +82,16 @@ function handle(ev) {
       pending.textContent += ev.text;
       pending.scrollIntoView({ block: "end" });
       break;
-    case "turn_started": busy = true; break;
-    case "turn_ended":
-      busy = false; pending = null;
-      if (ev.error) bubble("error", "Turn failed: " + ev.error);
+    case "run_queued": run = "queued"; pending = null; break;
+    case "run_started": run = "running"; resumed = ev.resumed; break;
+    case "run_ended":
+      run = null; pending = null;
+      if (ev.outcome === "failed") bubble("error", "The run failed: " + (ev.error || "unknown error"));
+      if (ev.outcome === "cancelled") bubble("error", "Stopped.");
       break;
     case "node_status": node = { online: ev.online, name: ev.node }; break;
   }
-  setStatus(node.online, node.name, busy);
+  setStatus();
 }
 
 function connect() {
@@ -110,6 +117,10 @@ $("send").addEventListener("submit", async (e) => {
   $("go").disabled = false;
   if (r && r.ok) $("text").value = "";
   else $("err").textContent = r ? await r.text() : "Could not reach the server";
+});
+$("stop").addEventListener("click", async () => {
+  const r = await fetch("/api/runs/cancel", { method: "POST" }).catch(() => null);
+  if (!r || !r.ok) $("err").textContent = r ? await r.text() : "Could not reach the server";
 });
 $("text").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("send").requestSubmit(); }

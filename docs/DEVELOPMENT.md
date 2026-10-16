@@ -1,6 +1,6 @@
 # Developing OrphusBot
 
-How to build, run and test OrphusBot on your own machine. This covers milestone **M0**: one server, one node, one bot, one browser page.
+How to build, run and test OrphusBot on your own machine. This covers what is built so far (milestones M0 and M1.1): one server, one node, one bot, one browser page, with durable runs.
 
 ## What you need
 
@@ -108,8 +108,8 @@ These are known simplifications, each marked `ponytail:` in the code, with the m
 |---|---|
 | One thread, one bot, one node | M1–M3 |
 | Shared-token sign-in, with the token kept in an HttpOnly cookie | M1 (passkeys and sessions) |
-| Shared node token | M1 (per-node keys) |
-| If the node drops mid-turn, the turn fails | M1 (leases, fences, recovery) |
-| Streaming text isn't stored; only finished messages are replayed after a reconnect | M1 (batched progress events) |
+| Shared node token | M1.3 (per-node keys) |
+| Streaming text isn't stored; only finished messages are replayed after a reconnect | M2 (batched progress events) |
+| A resumed run may repeat tool calls the interrupted attempt already made | M1.2 (effect ledger) |
 | Live events fan out inside one server process, not through Postgres `NOTIFY` | When there's more than one server process |
 | Plain HTML page instead of the Leptos UI | M1 |

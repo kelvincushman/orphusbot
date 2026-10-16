@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update run set status = $3::text::run_status, error = $4, node = null,\n                lease_expires_at = null, updated_at = now()\n         where id = $1 and fence = $2 and status = 'running'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a497b73cfeb65c7605e1e760ab555545ffe072165786f248f97cdb75ff09447e"
+}

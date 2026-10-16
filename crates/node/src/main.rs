@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use anyhow::{Context, bail};
 use futures_util::{SinkExt, StreamExt};
-use orphusbot_proto::{FromNode, ToNode};
+use orphusbot_proto::{Attempt, FromNode, ToNode};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::mpsc;
@@ -94,15 +94,23 @@ async fn session(cfg: &Config) -> anyhow::Result<()> {
                 let Some(frame) = frame else { break };
                 let Message::Text(text) = frame? else { continue };
                 match serde_json::from_str::<ToNode>(&text) {
-                    Ok(ToNode::StartTurn { turn, text }) => {
-                        if let Err(e) = start_turn(cfg, &mut engine, &out_tx, turn, &text).await {
-                            warn!("starting turn {turn}: {e:#}");
+                    Ok(ToNode::StartTurn { attempt, text, resumed }) => {
+                        if let Err(e) = start_turn(cfg, &mut engine, &out_tx, attempt, &text, resumed).await {
+                            warn!(?attempt, "starting run: {e:#}");
                             engine = None;
-                            let _ = out_tx.send(FromNode::TurnEnded { turn, error: Some(format!("{e:#}")) }).await;
+                            let _ = out_tx.send(FromNode::TurnEnded { attempt, error: Some(format!("{e:#}")) }).await;
                         }
                     }
-                    Ok(ToNode::Abort { .. }) => {
-                        if let Some(e) = engine.as_mut() { e.command(r#"{"type":"abort"}"#).await.ok(); }
+                    Ok(ToNode::Steer { attempt, text }) => {
+                        if let Some(e) = engine.as_mut().filter(|e| e.current == Some(attempt)) {
+                            let cmd = serde_json::json!({ "type": "steer", "message": text });
+                            e.command(&cmd.to_string()).await.ok();
+                        }
+                    }
+                    Ok(ToNode::Abort { attempt }) => {
+                        if let Some(e) = engine.as_mut().filter(|e| e.current == Some(attempt)) {
+                            e.command(r#"{"type":"abort"}"#).await.ok();
+                        }
                     }
                     Err(e) => warn!("unreadable frame from server: {e}"),
                 }
@@ -113,7 +121,7 @@ async fn session(cfg: &Config) -> anyhow::Result<()> {
         }
     }
 
-    // The server fails the turn when the link drops; stop the engine's work too.
+    // The server re-queues the run when the link drops; stop this attempt so it can't act twice.
     if let Some(e) = engine.as_mut() {
         e.command(r#"{"type":"abort"}"#).await.ok();
     }
@@ -124,7 +132,9 @@ async fn session(cfg: &Config) -> anyhow::Result<()> {
 struct Engine {
     _child: Child,
     stdin: ChildStdin,
-    turns: mpsc::Sender<i64>,
+    attempts: mpsc::Sender<Attempt>,
+    /// The attempt the engine was last given.
+    current: Option<Attempt>,
 }
 
 impl Engine {
@@ -136,6 +146,9 @@ impl Engine {
                 "--mode",
                 "rpc",
                 "--name",
+                "orphusbot",
+                // One lasting conversation per bot, so a resumed run keeps its context.
+                "--session-id",
                 "orphusbot",
                 "--session-dir",
                 &cfg.session_dir,
@@ -149,29 +162,29 @@ impl Engine {
         let stdin = child.stdin.take().context("engine stdin")?;
         let stdout = child.stdout.take().context("engine stdout")?;
 
-        // The reader learns the current turn id over a channel and maps every line for it.
-        let (turns, mut turn_rx) = mpsc::channel::<i64>(4);
+        // The reader learns the current attempt over a channel and maps every line for it.
+        let (attempts, mut attempt_rx) = mpsc::channel::<Attempt>(4);
         tokio::spawn(async move {
             // tokio's `lines` splits on LF only, as the RPC framing requires.
             let mut lines = BufReader::new(stdout).lines();
-            let mut turn = None;
+            let mut current = None;
             let mut state = engine::TurnState::default();
             loop {
                 tokio::select! {
-                    // Biased: a new turn id must be seen before that turn's first output line.
+                    // Biased: a new attempt must be seen before its first output line.
                     biased;
-                    Some(t) = turn_rx.recv() => { turn = Some(t); state = engine::TurnState::default(); }
+                    Some(a) = attempt_rx.recv() => { current = Some(a); state = engine::TurnState::default(); }
                     line = lines.next_line() => match line {
                         Ok(Some(line)) => {
-                            let Some(t) = turn else { continue };
-                            for frame in engine::map_line(&line, t, &mut state) {
-                                if matches!(frame, FromNode::TurnEnded { .. }) { turn = None; }
+                            let Some(a) = current else { continue };
+                            for frame in engine::map_line(&line, a, &mut state) {
+                                if matches!(frame, FromNode::TurnEnded { .. }) { current = None; }
                                 if out.send(frame).await.is_err() { return; }
                             }
                         }
                         _ => {
-                            if let Some(t) = turn {
-                                let _ = out.send(FromNode::TurnEnded { turn: t, error: Some("The Orphus engine exited".into()) }).await;
+                            if let Some(attempt) = current {
+                                let _ = out.send(FromNode::TurnEnded { attempt, error: Some("The Orphus engine exited".into()) }).await;
                             }
                             return;
                         }
@@ -182,7 +195,8 @@ impl Engine {
         Ok(Self {
             _child: child,
             stdin,
-            turns,
+            attempts,
+            current: None,
         })
     }
 
@@ -197,22 +211,39 @@ async fn start_turn(
     cfg: &Config,
     engine: &mut Option<Engine>,
     out: &mpsc::Sender<FromNode>,
-    turn: i64,
+    attempt: Attempt,
     text: &str,
+    resumed: bool,
 ) -> anyhow::Result<()> {
     // Start the engine on first use, or again if it has exited.
-    if engine.as_ref().is_none_or(|e| e.turns.is_closed()) {
+    if engine.as_ref().is_none_or(|e| e.attempts.is_closed()) {
         *engine = Some(Engine::spawn(cfg, out.clone())?);
     }
     let Some(e) = engine.as_mut() else {
         bail!("no engine")
     };
-    e.turns.send(turn).await.context("engine reader stopped")?;
-    let cmd =
-        serde_json::json!({ "id": format!("turn-{turn}"), "type": "prompt", "message": text });
+    e.attempts
+        .send(attempt)
+        .await
+        .context("engine reader stopped")?;
+    e.current = Some(attempt);
+    let message = if resumed {
+        format!(
+            "(An earlier attempt at this was interrupted. Check what was already done before repeating any step.)\n\n{text}"
+        )
+    } else {
+        text.to_owned()
+    };
+    let id = format!("run-{}-{}", attempt.run, attempt.fence);
+    let cmd = serde_json::json!({ "id": id, "type": "prompt", "message": message });
     e.command(&cmd.to_string())
         .await
         .context("writing to the engine")?;
-    info!(turn, "turn started");
+    info!(
+        run = attempt.run,
+        fence = attempt.fence,
+        resumed,
+        "run started"
+    );
     Ok(())
 }

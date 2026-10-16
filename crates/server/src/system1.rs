@@ -262,6 +262,110 @@ impl System1 {
     }
 }
 
+/// What System 1 suggests for a new ticket; each part only when it's sure enough.
+#[derive(Debug, Default, PartialEq)]
+pub struct TicketTriage {
+    pub bot: Option<Bot>,
+    /// One of `whenever`, `today`, `hour`, `now`.
+    pub urgency: Option<&'static str>,
+    /// Start without asking: only at the act-now threshold (DESIGN §7.5).
+    pub act_now: bool,
+}
+
+const URGENCY: [&str; 4] = ["whenever", "today", "hour", "now"];
+/// DESIGN §7.5: acting without asking needs this much, whatever else is tuned.
+const ACT_NOW_THRESHOLD: f64 = 0.95;
+
+impl System1 {
+    /// Triage for a new ticket (DESIGN §7.2 `triage`: bot, urgency, act now). `None` when off.
+    pub async fn triage_ticket(
+        &self,
+        db: &PgPool,
+        text: &str,
+        roster: &[Bot],
+    ) -> Option<TicketTriage> {
+        let enabled: Vec<&Bot> = roster.iter().filter(|b| !b.disabled).collect();
+        if !self.enabled() || enabled.is_empty() {
+            return None;
+        }
+        let criteria: serde_json::Map<String, Value> = enabled
+            .iter()
+            .map(|b| {
+                let remit = if b.remit.is_empty() {
+                    b.name.clone()
+                } else {
+                    b.remit.clone()
+                };
+                (b.slug.clone(), json!(remit))
+            })
+            .collect();
+        let state: String = text.chars().take(MAX_STATE_CHARS).collect();
+        let questions = json!({
+            "bot": { "type": "choice", "instructions": "Which bot should handle this ticket?", "criteria": criteria },
+            "urgency": { "type": "score", "instructions": "How urgent is this ticket?",
+                         "criteria": ["whenever", "today", "within the hour", "now"] },
+            "act_now": { "type": "noul",
+                         "instructions": "Can a bot start on this straight away without checking with the owner? Yes only for work that is easy to undo, like research or drafting." },
+        });
+        let asked = self.ask(&state, questions).await;
+        let a = asked.answers.clone().unwrap_or_default();
+        let bot_conf = confidence(&a["bot"]);
+        let bot = a["bot"]["choice"]
+            .as_str()
+            .filter(|_| bot_conf.is_some_and(|c| c >= self.route_threshold))
+            .and_then(|c| enabled.iter().find(|b| b.slug == c))
+            .map(|b| (*b).clone());
+        let urgency = most_likely(&a["urgency"])
+            .filter(|(_, p)| *p >= self.route_threshold)
+            .and_then(|(level, _)| URGENCY.get(level).copied());
+        let act_now = a["act_now"]["noul"]
+            .as_f64()
+            .is_some_and(|p| p >= ACT_NOW_THRESHOLD);
+        let triage = TicketTriage {
+            bot,
+            urgency,
+            act_now,
+        };
+        let outcome = match (&asked.answers, &triage.bot) {
+            (None, _) => "Abstained; left for the owner".to_owned(),
+            (Some(_), None) => "Not sure which bot; left for the owner".to_owned(),
+            (Some(_), Some(bot)) => format!(
+                "Assigned to {}{}{}",
+                bot.name,
+                triage
+                    .urgency
+                    .map(|u| format!(" · urgency {u}"))
+                    .unwrap_or_default(),
+                if triage.act_now {
+                    " · started"
+                } else {
+                    " · waiting for the owner to start"
+                }
+            ),
+        };
+        let receipt = Receipt {
+            catalogue: "triage",
+            state: &state,
+            threshold: self.route_threshold,
+            confidence: bot_conf,
+            outcome,
+            run: None,
+            tool_call_id: None,
+        };
+        record(db, &receipt, &asked).await;
+        Some(triage)
+    }
+}
+
+/// A score answer's most likely level and its probability.
+fn most_likely(answer: &Value) -> Option<(usize, f64)> {
+    answer["probabilities"]
+        .as_object()?
+        .iter()
+        .filter_map(|(k, v)| Some((k.parse::<usize>().ok()?, v.as_f64()?)))
+        .max_by(|a, b| a.1.total_cmp(&b.1))
+}
+
 /// Laya's calibrated confidence in the chosen answer.
 fn confidence(answer: &Value) -> Option<f64> {
     answer["answer_confidence"].as_f64()
@@ -421,6 +525,29 @@ pub(crate) mod tests {
                 "Kept in the inbox (System 1 chose it)",
                 "Not sure enough; kept in the inbox",
             ]
+        );
+    }
+
+    #[sqlx::test]
+    async fn ticket_triage_assigns_but_starts_only_when_told_its_safe(db: PgPool) {
+        let roster = [bot("inbox", false), bot("researcher", false)];
+        let laya = fake_laya("bot", "researcher", 0.9).await;
+        let t = laya
+            .triage_ticket(&db, "compare e-bike batteries", &roster)
+            .await
+            .unwrap();
+        assert_eq!(t.bot.map(|b| b.slug), Some("researcher".to_owned()));
+        // This fake gives no urgency or act-now answer: those stay unset, and nothing starts.
+        assert_eq!((t.urgency, t.act_now), (None, false));
+        assert!(
+            System1::off()
+                .triage_ticket(&db, "x", &roster)
+                .await
+                .is_none()
+        );
+        assert_eq!(
+            most_likely(&json!({ "probabilities": { "0": 0.1, "1": 0.7, "2": 0.2 } })),
+            Some((1, 0.7))
         );
     }
 

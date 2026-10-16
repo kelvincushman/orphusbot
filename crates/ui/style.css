@@ -53,6 +53,15 @@ input, textarea { background: var(--bg); border: 1px solid var(--line); border-r
 .routine-form label.inline { flex-direction: row; align-items: center; gap: .5rem; }
 .routine-form label.inline input { width: auto; }
 .routine-form fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding: .5rem .8rem; display: flex; flex-direction: column; gap: .3rem; }
+.sheet.board-sheet { width: min(80rem, 100%); }
+.new-ticket input { width: auto; }
+.board { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem; align-items: start; }
+.board .column { background: var(--panel); border-radius: var(--radius); padding: .6rem; display: flex; flex-direction: column; gap: .5rem; min-height: 6rem; }
+.board h3 { margin: 0; font-size: .9rem; }
+.ticket { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: .55rem; display: flex; flex-direction: column; gap: .35rem; font-size: .9rem; }
+.ticket p { margin: 0; font-size: .85rem; overflow-wrap: anywhere; }
+.ticket.urgent { border-color: var(--bad); }
+.ticket select { padding: .3rem; font-size: .85rem; }
 .new-bot { margin-top: .4rem; border-style: dashed; }
 .sheet label { display: flex; flex-direction: column; gap: .3rem; font-size: .9rem; }
 .sheet label.inline { flex-direction: row; align-items: center; gap: .5rem; }

@@ -431,15 +431,11 @@ pub async fn fire(
         text: text.clone(),
     };
     record(app, &thread, message).await;
-    submit(app, &thread, text).await?;
-    // The run submit just queued belongs to this routine, for the daily cap.
-    sqlx::query!(
-        "update run set routine_id = $2 where thread_id = $1 and status = 'queued' and routine_id is null",
-        thread.id,
-        id
-    )
-    .execute(&app.db)
-    .await?;
+    let source = crate::runs::Source {
+        routine: Some(id),
+        ticket: None,
+    };
+    submit(app, &thread, text, source).await?;
     info!(routine = id, trigger, bot = %r.slug, "routine fired");
     Ok(())
 }

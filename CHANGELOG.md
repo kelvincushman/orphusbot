@@ -13,6 +13,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **Bot computers (M2.1):** a bot's tools (read, write, edit, bash) now run in its own rootless Podman container, not on your machine. The container has no capabilities, a read-only system, its own home folder, resource limits, and internet access but no access to your LAN or NetBird addresses. Your model logins stay on the host. Set `ORPHUSBOT_RUNTIME=none` to keep the old behaviour.
 - **Desktop app (M1.5):** `orphusbot-desktop`, a Tauri window onto your server's web UI. It stays on your server and opens other links in your browser; the first run asks for the server's address.
 - **Sign in with another device (M1.5):** for the desktop app and any browser without passkeys. The device shows a code such as `ABCD-EFGH`; approve it from a signed-in browser (Settings → Link a device, or the link it shows) and the device gets its own sign-in, which ends if you remove the approving passkey.
 - **New web UI (M1.4):** a Leptos app replaces the placeholder page. Bots are on the left (with a badge when one is waiting for you), the chat is on the right with approval and question cards and a Stop button, and Settings lists your passkeys and nodes so you can add or remove them and sign out. It works at phone width and in dark mode. Build it with `trunk build --release` in `crates/ui`; the server serves it from `ORPHUSBOT_UI_DIR`.

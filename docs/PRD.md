@@ -280,7 +280,7 @@ A Rust **orphusbot-server** (axum, sqlx, Postgres, `graphile_worker` jobs, crone
 
 | ID | Change | Needed by |
 |---|---|---|
-| H-B1 | A supported way for an extension to **replace tool operations** (bash, read, write, edit, find, ls) with a remote implementation, generalising the `ssh.ts` example | B-CMP-04 |
+| H-B1 | ~~A supported way for an extension to **replace tool operations** (bash, read, write, edit, find, ls) with a remote implementation~~ Not needed: Orphus 2.3 exports tool factories that take custom operations; find, grep and ls run through bash in the computer (DECISIONS D-020) | B-CMP-04 |
 | H-B2 | OAuth login prompts (`oauth_prompt` / `oauth_select` / `oauth_manual_code`) usable by an RPC host that is not on the same machine as the user (relay-safe: no localhost callback assumptions) | B-MOD-01 |
 | H-B3 | A login-status query over RPC per provider (logged in / expired / missing), without exposing tokens | B-MOD-02, B-NOD-03 |
 | H-B4 | Rate-limit and usage-limit signals surfaced as structured RPC events | B-MOD-03 |

@@ -103,12 +103,26 @@ pub fn map_line(line: &str, attempt: Attempt, state: &mut TurnState) -> Vec<From
                 .chars()
                 .take(MAX_RESULT_CHARS)
                 .collect();
-            vec![FromNode::ToolDone {
+            let mut out = Vec::new();
+            let shared = &v["result"]["details"]["artifact"];
+            if let (Some("share_file"), Some(name), Some(data)) = (
+                v["toolName"].as_str(),
+                shared["name"].as_str(),
+                shared["data"].as_str(),
+            ) {
+                out.push(FromNode::Artifact {
+                    attempt,
+                    name: name.to_owned(),
+                    data: data.to_owned(),
+                });
+            }
+            out.push(FromNode::ToolDone {
                 attempt,
                 tool_call_id: id.to_owned(),
                 ok: v["isError"] != true,
                 result,
-            }]
+            });
+            out
         }
         Some("agent_end") => vec![FromNode::TurnEnded {
             attempt,
@@ -187,6 +201,24 @@ mod tests {
                 attempt: A,
                 error: Some("rate limited".into())
             }]
+        );
+    }
+
+    #[test]
+    fn a_shared_file_is_relayed_beside_its_result() {
+        let out = run(&[
+            r#"{"type":"tool_execution_end","toolCallId":"c1","toolName":"share_file","result":{"content":[{"type":"text","text":"Shared a.txt with the owner."}],"details":{"artifact":{"name":"a.txt","data":"aGk="}}},"isError":false}"#,
+        ]);
+        assert_eq!(
+            out[0],
+            FromNode::Artifact {
+                attempt: A,
+                name: "a.txt".into(),
+                data: "aGk=".into()
+            }
+        );
+        assert!(
+            matches!(&out[1], FromNode::ToolDone { result, .. } if result == "Shared a.txt with the owner.")
         );
     }
 

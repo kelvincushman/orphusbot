@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-030: Fleets and workflows are not run targets until Orphus can keep them gated (2026-10-16)
+
+- **Context:** PRD B-RUN-06 and M6 ask that a run can launch an Orphus fleet or a Goal workflow. Both work by spawning subagents or in-process stage sessions. OrphusBot's guarantees come from the bridge: every tool call is gated, and in a bot computer every tool runs inside the container. Child sessions don't load the bridge, and Orphus has no structured RPC for fleet or workflow state (H-B6, orphus-desktop H-03).
+- **Decision:** don't offer them yet; the bridge keeps the `subagent`, `workflow` and `fleet` tools switched off in a computer.
+- **Alternatives:** launch them by slash command in the prompt (child tool calls would skip the gate and run on the node: breaks AGENTS.md rule 5 in spirit and DESIGN §4.4); loading the bridge into children ourselves (depends on Orphus internals that change).
+- **Consequences:** a bot does one engine turn per run. Revisit when Orphus passes extensions (or a gate hook) to child sessions and exposes fleet and workflow state over RPC.
+
 ## D-029: Connections ride Orphus's MCP adapter, tokens go in by environment, MCP calls are gated per tool (2026-10-16)
 
 - **Context:** DESIGN §11 planned MCP config per engine session, `search_tools` / `load_tool` / `call_tool` wrappers served by the server for big servers, and envelope-encrypted secrets.

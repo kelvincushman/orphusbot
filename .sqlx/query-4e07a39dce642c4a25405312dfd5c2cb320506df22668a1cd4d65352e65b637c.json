@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select name, content from artifact where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "artifact",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "content",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "artifact",
+            "name": "content"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "4e07a39dce642c4a25405312dfd5c2cb320506df22668a1cd4d65352e65b637c"
+}

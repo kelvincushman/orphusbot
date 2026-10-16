@@ -616,6 +616,20 @@ fn item(item: Item) -> AnyView {
             view! { <p class="notice" class:error=error>{text}</p> }.into_any()
         }
         Item::Card { dialog, outcome } => view! { <Card dialog outcome /> }.into_any(),
+        Item::Artifact {
+            id,
+            name,
+            version,
+            size,
+        } => {
+            let kb = size.div_ceil(1024);
+            let label = if version > 1 {
+                format!("{name} (version {version}, {kb} KB)")
+            } else {
+                format!("{name} ({kb} KB)")
+            };
+            view! { <p class="artifact">"Shared a file: " <a href=format!("/api/artifacts/{id}") download=name>{label}</a></p> }.into_any()
+        }
     }
 }
 

@@ -175,6 +175,12 @@ pub enum FromNode {
     /// The engine opened a dialog (`extension_ui_request` with method
     /// `select`, `confirm`, `input` or `editor`) and is waiting for an answer.
     Dialog { attempt: Attempt, request: Value },
+    /// The bot shared a file with `share_file`; `data` is its bytes in base64.
+    Artifact {
+        attempt: Attempt,
+        name: String,
+        data: String,
+    },
     /// A tool call finished. `result` is its text, truncated.
     ToolDone {
         attempt: Attempt,
@@ -280,6 +286,13 @@ pub enum ThreadEvent {
     DialogClosed {
         id: String,
         outcome: String,
+    },
+    /// The bot shared a file; it downloads from `/api/artifacts/<id>`.
+    Artifact {
+        id: i64,
+        name: String,
+        version: i32,
+        size: u64,
     },
 }
 

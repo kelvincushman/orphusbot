@@ -599,13 +599,13 @@ Cards and cues follow the wearable's existing tiers. Nothing escalates to red fo
   - Nodes;
   - Wearable (devices, battery, hands-free, profile);
   - Settings.
-- **Tauri 2 desktop:** Linux/Wayland first. It loads the UI bundled, talks to the server over NetBird, and uses the deep-link and notification plugins.
+- **Tauri 2 desktop (`crates/desktop`):** Linux/Wayland first. The window loads the server's own web UI (no bundled copy, so it always matches the server), stays on the server's origin, and opens other links in the system browser. A bundled first-run page asks for the server address. Sign-in is device linking (D-019). Notifications come with the inbox (M2).
 - **Tauri 2 Android:**
   - **Push:** ntfy on the GPU box over NetBird, received through the ntfy Android app or UnifiedPush. No Google account is needed, which matches the wearable's "no third-party account" stance.
   - Device token in the Android keystore.
   - Offline outbox in SQLite for messages and card answers.
 - **Sync:** `GET /events?after=<seq>` SSE per subscribed thread, plus a global inbox stream. On reconnect the client replays from its last `seq`. A 20 s heartbeat; the session is re-validated every 60 s.
-- **Auth:** `webauthn-rs` passkeys for the browser and desktop, on a host name with a real certificate (D-016). On Android, a passkey at first sign-in issues a long-lived device token, revocable from Settings. The Tauri desktop app on Linux runs in WebKitGTK, which has no WebAuthn; see open question D8.
+- **Auth:** `webauthn-rs` passkeys for the browser and desktop, on a host name with a real certificate (D-016). On Android, a passkey at first sign-in issues a long-lived device token, revocable from Settings. Devices that can't use passkeys, such as the Tauri desktop app on Linux (WebKitGTK has no WebAuthn), are **linked**: the device shows a short code, the owner approves it from a passkey session, and the device gets its own session tied to that passkey (D-019). Android will use the same flow.
 
 ---
 
@@ -738,6 +738,8 @@ M0 implemented the smallest slice of §3 and §4 that carries a message from a b
 | Node link | WebSocket `/node`; the server sends a `challenge` nonce and the node answers with a signed `hello` within 10 s, or an `enrol` frame with a one-time code (§4.1, D-017); the newest connection wins and anything leased under its name is re-queued; the server pings every 30 s and drops a node silent for 75 s | Heartbeats with load (§4.1) |
 | Engine | One `orphus --mode rpc --session-dir …` per link, started on the first turn; text deltas, final assistant messages, rejected prompts and model errors are mapped to frames | §4.2 |
 | Sign-in (M1.3) | `webauthn-rs` passkeys for one owner. While no passkey exists, `ORPHUSBOT_SETUP_TOKEN` gives a one-hour setup session that can only be used to add one; adding it upgrades that session and ends any other setup session. Sessions are 32 random bytes in an HttpOnly `SameSite=Strict` cookie (`Secure` on HTTPS), stored as SHA-256 hashes, 30 days fixed. Removing a passkey ends its sessions; removing all of them reopens setup (the recovery path). The relying-party ID is the host of `ORPHUSBOT_ORIGIN`; deployment behind Caddy with a DNS-01 certificate (D-016, [DEPLOY.md](DEPLOY.md)) | Device tokens for Android (§12) |
+| Device linking (M1.5) | `POST /auth/link/start` gives the device a secret device code (stored hashed) and an 8-character user code (`ABCD-EFGH`, no 0/O/1/I), valid 10 minutes, labelled with the device's User-Agent. The owner checks it (`GET /api/links/{code}`) and approves it (`POST /api/links/approve`) from a passkey session (not a setup session). The device polls `POST /auth/link/poll` (202 while waiting); the first poll after approval gets a 30-day session cookie tied to the approving passkey, and the link is used up. `/?link=CODE` opens the approve screen directly (D-019) | — |
+| Desktop (M1.5) | `crates/desktop`, Tauri 2: one window on the saved server URL (`ORPHUSBOT_URL` overrides; `--reset` forgets it), locked to its origin; User-Agent `OrphusBot desktop app (<os>)` | Notifications, tray, deep links (M2) |
 | UI (M1.4) | `crates/ui`: Leptos CSR built with Trunk, served by the server from `ORPHUSBOT_UI_DIR` with `tower-http` `ServeDir`. Layout from the Rakazo study: bot sidebar (one bot, last-message preview, waiting-card badge), chat pane with header status, message list, approval and question cards, composer with Stop; a settings sheet for passkeys (add, list, remove), nodes (enrolment command, list, remove) and sign-out. Events fold through `proto::view::ThreadView` (one reducer for every client). Passkey prompts go through a 15-line inline JS shim around the browser's WebAuthn JSON helpers (D-018) | Tauri shells (M1.5, M4), more bots and views (§12) |
 
 Capture (§10) waits for M4 on purpose: it needs receipts, proposals and the Android app to be useful, and it's the most privacy-sensitive part, so it should land on a stable base.
@@ -755,5 +757,4 @@ Capture (§10) waits for M4 on purpose: it needs receipts, proposals and the And
 | D5 | Hands-free pause schedule and places | Phone toggle + a time schedule; no location in v1 |
 | D6 | Should explicit wearable captures skip the "should I start?" card when System 1 says act-now with high confidence? | Yes, for reversible work only |
 | D7 | Obsidian as the note store for captures, or OrphusBot's own notes with an export? | Obsidian via the laptop node; if the laptop is offline, queue and write later |
-| D8 | Desktop sign-in on Linux: WebKitGTK (Tauri's Linux webview) has no WebAuthn | The desktop app opens the system browser for the passkey prompt once, then holds a device session, like Android |
 | PRD Q3 | Subscription use for unattended routines | Daily cap of 20 subscription turns for routines until decided |

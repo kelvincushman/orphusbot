@@ -8,6 +8,8 @@ ignore = [
   # `paste` is finished and unmaintained, not vulnerable; it comes in through Leptos
   # (either_of). Drop this when Leptos moves off it.
   { id = "RUSTSEC-2024-0436", reason = "unmaintained proc-macro pulled in by leptos; no vulnerability" },
+  # `proc-macro-error` is unmaintained, not vulnerable; it comes in through the GTK bindings Tauri uses on Linux.
+  { id = "RUSTSEC-2024-0370", reason = "unmaintained proc-macro pulled in by gtk-rs via tauri; no vulnerability" },
 ]
 
 [licenses]
@@ -36,6 +38,12 @@ exceptions = [
   { allow = ["MPL-2.0"], crate = "webauthn-attestation-ca" },
   { allow = ["MPL-2.0"], crate = "base64urlsafedata" },
   { allow = ["MPL-2.0"], crate = "webauthn-authenticator-rs" },
+  # Tauri (desktop app): Servo's CSS parsing crates and `dirs`'s option-ext, also unmodified MPL-2.0.
+  { allow = ["MPL-2.0"], crate = "cssparser" },
+  { allow = ["MPL-2.0"], crate = "cssparser-macros" },
+  { allow = ["MPL-2.0"], crate = "dtoa-short" },
+  { allow = ["MPL-2.0"], crate = "selectors" },
+  { allow = ["MPL-2.0"], crate = "option-ext" },
 ]
 
 [bans]

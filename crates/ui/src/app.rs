@@ -121,6 +121,37 @@ fn SignIn(setup_open: bool) -> impl IntoView {
             Ok(())
         })
     };
+    // Linking: this device shows a code; a signed-in device approves it.
+    let linking = RwSignal::new(None::<api::Link>);
+    let link = move |_| {
+        ctx.run(async move {
+            let started = api::link_start().await?;
+            let device_code = started.device_code.clone();
+            linking.set(Some(started));
+            loop {
+                api::sleep(2000).await;
+                // Stop if cancelled, or if this screen has gone.
+                if linking.try_get_untracked().flatten().is_none() {
+                    return Ok(());
+                }
+                match api::link_poll(&device_code).await {
+                    Ok(true) => {
+                        ctx.reload();
+                        return Ok(());
+                    }
+                    Ok(false) => {}
+                    Err(e) => {
+                        linking.set(None);
+                        return Err(e);
+                    }
+                }
+            }
+        })
+    };
+    let origin = web_sys::window()
+        .and_then(|w| w.location().origin().ok())
+        .unwrap_or_default();
+    let passkeys = api::passkeys_work();
     let body = if setup_open {
         view! {
             <p class="muted">"First run: enter the setup token from the server's settings, then add a passkey."</p>
@@ -133,8 +164,28 @@ fn SignIn(setup_open: bool) -> impl IntoView {
         .into_any()
     } else {
         view! {
-            <p class="muted">"Sign in with a passkey on this device."</p>
-            <button class="primary" on:click=passkey>"Sign in with a passkey"</button>
+            {move || match linking.get() {
+                Some(l) => view! {
+                    <p>"On a device where you're signed in, open"</p>
+                    <pre class="link">{format!("{origin}/?link={}", l.user_code)}</pre>
+                    <p>"or go to Settings → Link a device and enter"</p>
+                    <p class="code" aria-label="Link code">{l.user_code}</p>
+                    <p class="muted" role="status">"Waiting for approval…"</p>
+                    <button on:click=move |_| linking.set(None)>"Cancel"</button>
+                }
+                .into_any(),
+                None => view! {
+                    {passkeys.then(|| view! {
+                        <p class="muted">"Sign in with a passkey on this device."</p>
+                        <button class="primary" on:click=passkey>"Sign in with a passkey"</button>
+                    })}
+                    {(!passkeys).then(|| view! {
+                        <p class="muted">"This app can't use passkeys, so approve it from a device that can."</p>
+                    })}
+                    <button class:primary=!passkeys on:click=link>"Sign in with another device"</button>
+                }
+                .into_any(),
+            }}
         }
         .into_any()
     };
@@ -187,6 +238,11 @@ fn Shell() -> impl IntoView {
     let thread = RwSignal::new(ThreadView::default());
     let settings = RwSignal::new(false);
     let menu = RwSignal::new(false);
+    // Opened from a device's link (`/?link=CODE`): go straight to approving it.
+    let link_code = RwSignal::new(take_link_param().unwrap_or_default());
+    if !link_code.get_untracked().is_empty() {
+        settings.set(true);
+    }
     connect(thread, ctx);
     let status = Memo::new(move |_| thread.with(|v| v.status()));
     let waiting = Memo::new(move |_| thread.with(|v| v.waiting()));
@@ -234,7 +290,7 @@ fn Shell() -> impl IntoView {
                 <Composer thread />
             </main>
             <Show when=move || settings.get()>
-                <Settings open=settings />
+                <Settings open=settings link_code />
             </Show>
         </div>
     }
@@ -434,6 +490,19 @@ struct Node {
     last_seen_at: Option<String>,
 }
 
+/// Reads `?link=CODE` and removes it from the address bar.
+fn take_link_param() -> Option<String> {
+    let w = web_sys::window()?;
+    let search = w.location().search().ok()?;
+    let code = web_sys::UrlSearchParams::new_with_str(&search)
+        .ok()?
+        .get("link")?;
+    if let Ok(history) = w.history() {
+        let _ = history.replace_state_with_url(&JsValue::NULL, "", Some("/"));
+    }
+    Some(code)
+}
+
 /// "2026-10-16 03:35:05+00" → "2026-10-16".
 fn day(timestamp: &str) -> &str {
     timestamp.get(..10).unwrap_or(timestamp)
@@ -444,7 +513,7 @@ fn confirmed(question: &str) -> bool {
 }
 
 #[component]
-fn Settings(open: RwSignal<bool>) -> impl IntoView {
+fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView {
     let ctx = expect_context::<Ctx>();
     let passkeys = RwSignal::new(Vec::<Passkey>::new());
     let nodes = RwSignal::new(Vec::<Node>::new());
@@ -497,6 +566,35 @@ fn Settings(open: RwSignal<bool>) -> impl IntoView {
             let _ = w.navigator().clipboard().write_text(&c);
             ctx.toast.set("Copied.".into());
         }
+    };
+    // Linking a device: look the code up first, so the owner sees what they approve.
+    let waiting_device = RwSignal::new(None::<(String, String)>);
+    let check_link = move || {
+        let code = link_code.get_untracked();
+        if code.trim().is_empty() {
+            return;
+        }
+        ctx.run(async move {
+            let path = format!("/api/links/{}", js_sys::encode_uri_component(code.trim()));
+            let found: Value = api::get(&path).await?;
+            let code = found["user_code"].as_str().unwrap_or_default().to_owned();
+            let label = found["label"].as_str().unwrap_or_default().to_owned();
+            waiting_device.set(Some((code, label)));
+            Ok(())
+        })
+    };
+    check_link();
+    let approve_link = move |_| {
+        let Some((code, _)) = waiting_device.get_untracked() else {
+            return;
+        };
+        ctx.run(async move {
+            api::post("/api/links/approve", &json!({ "user_code": code })).await?;
+            waiting_device.set(None);
+            link_code.set(String::new());
+            ctx.toast.set("Device linked.".into());
+            Ok(())
+        })
     };
     let sign_out = move |_| {
         ctx.run(async move {
@@ -557,6 +655,18 @@ fn Settings(open: RwSignal<bool>) -> impl IntoView {
                         <p class="muted">"On the machine, run this within 10 minutes. The code works once."</p>
                         <pre>{c}</pre>
                         <button on:click=copy>"Copy"</button>
+                    })}
+                </div>
+                <div>
+                    <h3>"Link a device"</h3>
+                    <p class="muted">"For a device that can't use passkeys, such as the desktop app on Linux. Enter the code it shows."</p>
+                    <div class="row">
+                        <input aria-label="Device code" placeholder="ABCD-EFGH" bind:value=link_code style="flex: 1" />
+                        <button on:click=move |_| check_link()>"Check"</button>
+                    </div>
+                    {move || waiting_device.get().map(|(code, label)| view! {
+                        <p>"Approve " <strong>{code}</strong> " from " <strong>{label}</strong> "? It gets its own sign-in, ended when you remove this passkey."</p>
+                        <button class="primary" on:click=approve_link>"Approve"</button>
                     })}
                 </div>
                 <div>

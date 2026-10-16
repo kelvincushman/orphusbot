@@ -53,6 +53,16 @@ How to build, run and test OrphusBot on your own machine. This covers what is bu
    cargo run -p orphusbot-node
    ```
 
+## Desktop app
+
+Needs WebKitGTK 4.1 and its development files (Arch: `webkit2gtk-4.1`; Debian and Ubuntu: `libwebkit2gtk-4.1-dev librsvg2-dev libayatana-appindicator3-dev`).
+
+```sh
+ORPHUSBOT_URL=http://localhost:7480 cargo run -p orphusbot-desktop
+```
+
+Without `ORPHUSBOT_URL`, the first run asks for the server address and saves it; `--reset` forgets it. Sign in with **Sign in with another device**: approve the code it shows from a browser where you have a passkey (Settings → Link a device, or open the link it shows). To build installable packages (`.deb`, `.rpm`, AppImage): `cd crates/desktop && npx @tauri-apps/cli@2 build`.
+
 ## Settings
 
 All settings are environment variables.
@@ -115,6 +125,7 @@ Queries are checked at compile time. CI builds with `SQLX_OFFLINE=true` against 
 | `crates/server/migrations` | SQL migrations, applied on start |
 | `crates/proto/src/view.rs` | The thread reducer every client uses to turn events into what it shows |
 | `crates/ui` | The Leptos web UI (browser only; built with Trunk) |
+| `crates/desktop` | The Tauri 2 desktop app: a window onto the server |
 | `crates/node` | The node daemon: server link and the Orphus engine |
 
 ## What M0 deliberately leaves out

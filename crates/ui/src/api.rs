@@ -26,7 +26,7 @@ export async function getPasskey(options) {
 "#)]
 extern "C" {
     #[wasm_bindgen(js_name = passkeysWork)]
-    fn passkeys_work() -> bool;
+    pub fn passkeys_work() -> bool;
     #[wasm_bindgen(catch, js_name = createPasskey)]
     async fn create_passkey(options: &str) -> Result<JsValue, JsValue>;
     #[wasm_bindgen(catch, js_name = getPasskey)]
@@ -118,6 +118,34 @@ async fn ceremony(start: &str, finish: &str, extra: Value, create: bool) -> Resu
         body.extend(extra.clone());
     }
     post(finish, &body).await.map(drop)
+}
+
+/// Waits `ms` milliseconds.
+pub async fn sleep(ms: i32) {
+    let promise = js_sys::Promise::new(&mut |resolve, _| {
+        if let Some(w) = web_sys::window() {
+            let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, ms);
+        }
+    });
+    let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+}
+
+/// A link waiting for the owner's approval (DESIGN §12, D-019).
+#[derive(Clone, Deserialize, PartialEq, Eq)]
+pub struct Link {
+    pub device_code: String,
+    pub user_code: String,
+}
+
+pub async fn link_start() -> Result<Link, String> {
+    let res = post("/auth/link/start", &json!({})).await?;
+    res.json().await.map_err(|e| e.to_string())
+}
+
+/// `true` once approved; the response also set this device's session cookie.
+pub async fn link_poll(device_code: &str) -> Result<bool, String> {
+    let res = post("/auth/link/poll", &json!({ "device_code": device_code })).await?;
+    Ok(res.status() == 200)
 }
 
 pub async fn passkey_sign_in() -> Result<(), String> {

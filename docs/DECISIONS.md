@@ -11,6 +11,14 @@ Format:
 
 ---
 
+## D-019: The desktop app is a window onto the server's UI, signed in by device linking (2026-10-16)
+
+**Decided:** the Tauri desktop app loads the server's web UI from the server, locked to its origin, instead of bundling the UI. Because WebKitGTK (Tauri's Linux webview) has no WebAuthn, devices without passkeys sign in by **linking**: the device shows a short code, the owner approves it from a device that has a passkey, and the device's poll receives its own session tied to that passkey. The same flow will sign in the Android app.
+**Why:** loading from the server keeps the session cookie same-origin (no CORS, no bearer tokens in JavaScript, the same `SameSite=Strict` cookie as the browser) and the app can't drift from the server's version. Device linking is the standard pattern for devices that can't run the real sign-in (like a TV's "enter this code"), needs no deep-link plumbing, and each linked device stays revocable through its passkey.
+**Alternatives:** bundle the UI in the app and call the server cross-origin with a bearer token; open the system browser for a passkey prompt and hand the session back through a deep link; wait for WebAuthn in WebKitGTK.
+Tauri brings five more unmodified MPL-2.0 crates (Servo's CSS parsing crates and `option-ext`); `deny.toml` names each one, as in D-016.
+**Revisit if:** the app needs to work offline, or WebKitGTK gains WebAuthn.
+
 ## D-018: The web UI is Leptos CSR built with Trunk and served as static files (2026-10-16)
 
 **Decided:** `crates/ui` is a client-side Leptos app built to WebAssembly with Trunk. The server serves the built folder; the Tauri apps will load the same bundle. View state comes from one reducer in `proto` (`view::ThreadView`). The crate's dependencies are declared for `wasm32` only, so native workspace builds skip Leptos. Passkey prompts use a small inline JavaScript shim around `PublicKeyCredential.parse*OptionsFromJSON` and `toJSON()`.

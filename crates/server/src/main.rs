@@ -9,6 +9,7 @@
 mod auth;
 mod db;
 mod gate;
+mod links;
 mod nodes;
 mod runs;
 
@@ -169,6 +170,8 @@ fn router(app: Shared) -> Router {
         .route("/api/passkeys/finish", post(auth::register_finish))
         .route("/api/passkeys/remove", post(auth::remove_passkey))
         .route("/api/logout", post(auth::logout))
+        .route("/api/links/{code}", get(links::lookup))
+        .route("/api/links/approve", post(links::approve))
         .route("/api/nodes", get(nodes::list))
         .route("/api/nodes/code", post(nodes::create_code))
         .route("/api/nodes/remove", post(nodes::remove))
@@ -178,6 +181,8 @@ fn router(app: Shared) -> Router {
         .route("/auth/setup", post(auth::setup))
         .route("/auth/login/start", post(auth::login_start))
         .route("/auth/login/finish", post(auth::login_finish))
+        .route("/auth/link/start", post(links::start))
+        .route("/auth/link/poll", post(links::poll))
         .route("/node", get(node_link))
         .merge(api)
         .fallback_service(ServeDir::new(&app.ui_dir))

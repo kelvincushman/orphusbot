@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update device_link set passkey_id = $2\n         where user_code = $1 and expires_at > now() and passkey_id is null",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5b1c3e98c9be7e842736c1046c7475af0e6059ab7e3f4a5423d782b942072a27"
+}

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into decision (catalogue, state_hash, answers, abstained, threshold, latency_ms, outcome, ticket_id)\n             values ('triage', $1, $2, false, 0.85, 5, 'x', $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Jsonb",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "74fbbf916c19c936d5ffc84f1c9e68bd4b9fcceff525d5ca771b00c7600f1969"
+}

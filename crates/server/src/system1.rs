@@ -508,6 +508,54 @@ pub async fn label_ticket_bot(db: &PgPool, ticket: i64, bot: Option<&str>) {
     }
 }
 
+/// The owner kept the bot System 1 picked for a ticket (started or finished it
+/// with that bot): that's a label saying it was right. Only the first such action counts.
+pub async fn label_ticket_kept(db: &PgPool, ticket: i64, source: &str) {
+    let asked = sqlx::query!(
+        r#"select d.id, d.answers -> 'bot' ->> 'choice' as choice, b.slug as "slug?"
+           from decision d join ticket t on t.id = d.ticket_id left join bot b on b.id = t.bot_id
+           where d.catalogue = 'triage' and d.ticket_id = $1
+             and not exists (select 1 from decision_label l where l.decision_id = d.id and l.label ? 'bot')
+           order by d.id desc limit 1"#,
+        ticket
+    )
+    .fetch_optional(db)
+    .await;
+    if let Ok(Some(d)) = asked
+        && d.slug.is_some()
+        && d.choice == d.slug
+    {
+        label(db, d.id, json!({ "bot": d.slug }), true, source).await;
+    }
+}
+
+/// The owner changed a triaged ticket's urgency: that's the level it should have picked.
+pub async fn label_ticket_urgency(db: &PgPool, ticket: i64, urgency: &str) {
+    let asked = sqlx::query!(
+        r#"select id, answers -> 'urgency' as urgency from decision
+           where catalogue = 'triage' and ticket_id = $1 order by id desc limit 1"#,
+        ticket
+    )
+    .fetch_optional(db)
+    .await;
+    if let Ok(Some(d)) = asked {
+        let picked = d
+            .urgency
+            .as_ref()
+            .and_then(most_likely)
+            .and_then(|(level, _)| URGENCY.get(level).copied());
+        let agrees = picked == Some(urgency);
+        label(
+            db,
+            d.id,
+            json!({ "urgency": urgency }),
+            agrees,
+            "changed the ticket's urgency",
+        )
+        .await;
+    }
+}
+
 /// Per catalogue: how often System 1 was asked, abstained, was labelled and agreed.
 pub async fn health(State(app): State<Shared>) -> Result<Json<Value>, ApiError> {
     let rows = sqlx::query!(
@@ -751,6 +799,53 @@ pub(crate) mod tests {
                     true,
                     "changed the ticket's bot".to_owned()
                 ),
+            ]
+        );
+    }
+
+    #[sqlx::test]
+    async fn keeping_the_bot_and_changing_urgency_label_triage(db: PgPool) {
+        let ticket: i64 = sqlx::query_scalar!(
+            "insert into ticket (title, bot_id) values ('t', (select id from bot where slug = 'inbox')) returning id"
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        let answers = json!({
+            "bot": { "choice": "inbox" },
+            "urgency": { "probabilities": { "0": 0.1, "1": 0.8, "2": 0.1 } },
+        });
+        sqlx::query!(
+            "insert into decision (catalogue, state_hash, answers, abstained, threshold, latency_ms, outcome, ticket_id)
+             values ('triage', $1, $2, false, 0.85, 5, 'x', $3)",
+            vec![0u8; 32],
+            answers,
+            ticket
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+
+        label_ticket_kept(&db, ticket, "started the ticket with its bot").await;
+        // Only the first keep counts.
+        label_ticket_kept(&db, ticket, "finished the ticket with its bot").await;
+        label_ticket_urgency(&db, ticket, "now").await;
+        label_ticket_urgency(&db, ticket, "today").await;
+
+        let labels: Vec<(Value, bool)> =
+            sqlx::query!("select label, agrees from decision_label order by id")
+                .fetch_all(&db)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|r| (r.label, r.agrees))
+                .collect();
+        assert_eq!(
+            labels,
+            [
+                (json!({ "bot": "inbox" }), true),
+                (json!({ "urgency": "now" }), false),
+                (json!({ "urgency": "today" }), true),
             ]
         );
     }

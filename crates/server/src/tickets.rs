@@ -186,6 +186,11 @@ pub async fn update(
     .map_err(|e| internal("saving a ticket", e))?;
     if t.bot != before.bot {
         crate::system1::label_ticket_bot(&app.db, t.id, t.bot.as_deref()).await;
+    } else if t.status == "done" && before.status != "done" {
+        crate::system1::label_ticket_kept(&app.db, t.id, "finished the ticket with its bot").await;
+    }
+    if t.urgency != before.urgency {
+        crate::system1::label_ticket_urgency(&app.db, t.id, &t.urgency).await;
     }
     let newly_assigned = t.bot.is_some() && t.bot != before.bot && t.status == "todo";
     if newly_assigned {
@@ -204,6 +209,7 @@ pub async fn start_now(
     Json(by): Json<ById>,
 ) -> Result<StatusCode, ApiError> {
     start(&app, by.id).await?;
+    crate::system1::label_ticket_kept(&app.db, by.id, "started the ticket with its bot").await;
     Ok(StatusCode::ACCEPTED)
 }
 

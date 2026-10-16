@@ -13,6 +13,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **System 1 learns from more of what you do (M5.1):** changing a ticket's urgency, and starting or finishing a ticket with the bot System 1 picked, are now kept as labels next to approving cards and changing bots. The Decisions view counts them.
 - **Android app (M4.4):** the desktop app now also builds for Android. It's the same window onto your server: enter the server's address once, then sign in with **Sign in with another device** and approve the code from a browser where you have a passkey. Approvals, chat and everything else work as on the web. Build steps are in docs/DEVELOPMENT.md.
 - **Ambient capture (M4.3):** turn on hands-free for a wearable (Captures, or the phone app) and what's said around you becomes suggestions: things you said you'd do, things asked of you, and what others owe you, each with the words it came from. Nothing becomes a task until you accept it, and nothing heard ever makes a bot reply or act. Every screen shows when listening is on, with a Pause button; the server can switch it off for everyone (`ORPHUSBOT_HANDS_FREE_ALLOWED=false`). No audio is kept, and the words are deleted after 7 days. Extraction is one call with no tools at all.
 - **Usage (M4.2):** Settings → Usage shows what your bots' model calls used today and this week, by provider and model, and today by bot: turns, tokens and what it would have cost. Set `ORPHUSBOT_DAILY_TOKEN_BUDGET` and you get one warning on your wrist and phone when a day's use crosses it.

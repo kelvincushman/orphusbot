@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into enrolment_code (code_hash, expires_at) values ($1, now() + make_interval(secs => $2))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "66f70b647adc6d10e52e872f46d0e2ce24aca53a54f543ca84241442b177f3c8"
+}

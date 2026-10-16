@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-017: Nodes prove who they are by signing a server challenge inside the link, with OpenSSL's Ed25519 (2026-10-16)
+
+**Decided:** the shared node token is gone. Each node has its own Ed25519 key, registered once with a one-time code the owner creates while signed in. Enrolment and the signed hello both happen over the existing `/node` WebSocket: the server's first frame is a random nonce; the node answers with a signature over its name and the nonce, or with an enrolment request. Signing and verifying use the `openssl` crate.
+**Why:** a stolen node token let anyone act as any node and couldn't be revoked per machine. A fresh nonce per connection means a captured hello can't be replayed. Doing enrolment inside the link means the node needs no HTTP client. OpenSSL is already compiled into both binaries (passkeys, `wss://`), so Ed25519 costs no new dependency or build time.
+**Alternatives:** `ed25519-dalek` (pure Rust, but a new dependency); a signed timestamp in the upgrade request (replayable within its time window); mutual TLS with client certificates (a CA to run).
+**Revisit if:** the OpenSSL dependency is dropped from the server, in which case move to `ed25519-dalek`.
+
 ## D-016: Passkeys on a real domain name pointing at a NetBird address, with a DNS-01 certificate (2026-10-16)
 
 **Decided:** the server is reached at a subdomain of the owner's domain (for Kelvin, under `kelvinlee.io`) whose `A` record is the GPU box's private NetBird address. Caddy in front of the server gets a Let's Encrypt certificate through the DNS-01 challenge (Cloudflare API token) and listens only on the NetBird interface. Passkeys come from `webauthn-rs`. Until the first passkey exists, a setup token from the environment signs you in to add one. `webauthn-rs` is MPL-2.0, so `deny.toml` allows MPL-2.0 for its crates by name only; we use it unmodified, so OrphusBot stays MIT.

@@ -9,6 +9,7 @@
 mod auth;
 mod db;
 mod gate;
+mod nodes;
 mod runs;
 
 use std::collections::HashMap;
@@ -19,10 +20,10 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, bail};
 use axum::extract::ws::{Message as WsMessage, WebSocket, WebSocketUpgrade};
 use axum::extract::{Query, State};
-use axum::http::{HeaderMap, StatusCode, header};
+use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::from_fn_with_state;
 use axum::response::sse::{Event, KeepAlive, Sse};
-use axum::response::{Html, IntoResponse, Response};
+use axum::response::{Html, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use futures_util::{SinkExt, Stream, StreamExt};
@@ -34,7 +35,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use subtle::ConstantTimeEq;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{Notify, broadcast, mpsc};
 use tracing::{info, warn};
 
 const UI_HTML: &str = include_str!("ui.html");
@@ -58,6 +59,8 @@ struct NodeLink {
     conn: u64,
     name: String,
     tx: mpsc::Sender<ToNode>,
+    /// Drops the link, when the node is removed.
+    kick: Arc<Notify>,
 }
 
 /// A dialog the engine is blocked on.
@@ -88,7 +91,6 @@ struct App {
     // ponytail: one std Mutex for all link state; per-node state when there is more than one node.
     rt: Mutex<Runtime>,
     auth: auth::Auth,
-    node_token: String,
 }
 
 type Shared = Arc<App>;
@@ -105,7 +107,6 @@ async fn main() -> anyhow::Result<()> {
     let origin =
         std::env::var("ORPHUSBOT_ORIGIN").unwrap_or_else(|_| "http://localhost:7480".into());
     let auth = auth::Auth::new(&origin, setup_token)?;
-    let node_token = token_from_env("ORPHUSBOT_NODE_TOKEN")?;
 
     let db = PgPool::connect(&db_url)
         .await
@@ -135,7 +136,6 @@ async fn main() -> anyhow::Result<()> {
         live,
         rt: Mutex::default(),
         auth,
-        node_token,
     });
     tokio::spawn(reconcile_forever(app.clone()));
 
@@ -160,6 +160,9 @@ fn router(app: Shared) -> Router {
         .route("/api/passkeys/finish", post(auth::register_finish))
         .route("/api/passkeys/remove", post(auth::remove_passkey))
         .route("/api/logout", post(auth::logout))
+        .route("/api/nodes", get(nodes::list))
+        .route("/api/nodes/code", post(nodes::create_code))
+        .route("/api/nodes/remove", post(nodes::remove))
         .route_layer(from_fn_with_state(app.clone(), auth::require_session));
     Router::new()
         .route("/", get(|| async { Html(UI_HTML) }))
@@ -637,38 +640,66 @@ fn sse(seq: Option<i64>, event: &ThreadEvent) -> Event {
     }
 }
 
-/// The node's WebSocket. Authenticated by bearer token before the upgrade.
-async fn node_link(
-    State(app): State<Shared>,
-    headers: HeaderMap,
-    ws: WebSocketUpgrade,
-) -> Response {
-    let token = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "));
-    if !token.is_some_and(|t| tokens_match(t, &app.node_token)) {
-        return StatusCode::UNAUTHORIZED.into_response();
-    }
+/// The node's WebSocket. The node proves who it is inside the link, by
+/// signing the server's challenge (DESIGN §4.1).
+async fn node_link(State(app): State<Shared>, ws: WebSocketUpgrade) -> Response {
     ws.on_upgrade(move |socket| run_node(app, socket))
 }
 
 async fn run_node(app: Shared, socket: WebSocket) {
     let (mut sink, mut stream) = socket.split();
 
-    // The first frame must say who the node is.
-    let name = match stream.next().await {
-        Some(Ok(WsMessage::Text(t))) => match serde_json::from_str(&t) {
-            Ok(FromNode::Hello { node, version }) => {
+    // Challenge first: the node signs the nonce, or enrols with a one-time code.
+    let Ok(nonce) = auth::random_token() else {
+        return warn!("no randomness for a node challenge");
+    };
+    let challenge = ToNode::Challenge {
+        nonce: nonce.clone(),
+    };
+    let Ok(json) = serde_json::to_string(&challenge) else {
+        return;
+    };
+    if sink.send(WsMessage::Text(json.into())).await.is_err() {
+        return;
+    }
+    let answer = match tokio::time::timeout(Duration::from_secs(10), stream.next()).await {
+        Ok(Some(Ok(WsMessage::Text(t)))) => serde_json::from_str::<FromNode>(&t).ok(),
+        _ => None,
+    };
+    let name = match answer {
+        Some(FromNode::Hello {
+            node,
+            version,
+            signature,
+        }) => match nodes::verify(&app.db, &node, &nonce, &signature).await {
+            Ok(true) => {
                 info!(%node, %version, "node connected");
                 node
             }
-            _ => return warn!("node sent something other than hello first"),
+            Ok(false) => return warn!(%node, "node failed the challenge; is it enrolled?"),
+            Err(e) => return warn!("checking a node's key: {e}"),
         },
-        _ => return,
+        Some(FromNode::Enrol {
+            code,
+            node,
+            public_key,
+        }) => {
+            let error = nodes::enrol(&app.db, &code, &node, &public_key).await.err();
+            match &error {
+                None => info!(%node, "node enrolled"),
+                Some(e) => warn!(%node, "enrolment refused: {e}"),
+            }
+            if let Ok(json) = serde_json::to_string(&ToNode::Enrolled { error }) {
+                let _ = sink.send(WsMessage::Text(json.into())).await;
+            }
+            let _ = sink.close().await;
+            return;
+        }
+        _ => return warn!("node didn't answer the challenge"),
     };
 
     let (tx, mut rx) = mpsc::channel::<ToNode>(16);
+    let kick = Arc::new(Notify::new());
     let (conn, replaced) = {
         let mut rt = lock(&app.rt);
         rt.next_conn += 1;
@@ -678,6 +709,7 @@ async fn run_node(app: Shared, socket: WebSocket) {
             conn,
             name: name.clone(),
             tx,
+            kick: kick.clone(),
         };
         (conn, rt.node.replace(link))
     };
@@ -717,6 +749,10 @@ async fn run_node(app: Shared, socket: WebSocket) {
                         Err(e) => warn!("unreadable frame from node: {e}"),
                     }
                 }
+            }
+            _ = kick.notified() => {
+                warn!(node = %name, "node removed; dropping its link");
+                break;
             }
             _ = ping.tick() => {
                 if last_heard.elapsed() > NODE_SILENCE_LIMIT {
@@ -758,7 +794,7 @@ async fn run_node(app: Shared, socket: WebSocket) {
 async fn on_node_message(app: &App, msg: FromNode) {
     let active = lock(&app.rt).active;
     match msg {
-        FromNode::Hello { .. } => {}
+        FromNode::Hello { .. } | FromNode::Enrol { .. } => {}
         FromNode::Delta { attempt, text } if active == Some(attempt) => {
             let event = ThreadEvent::Delta {
                 run: attempt.run,

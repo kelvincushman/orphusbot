@@ -46,6 +46,7 @@
     <h1>OrphusBot</h1>
     <span id="status" role="status">Connecting…</span>
     <span id="account" hidden>
+      <button id="node-show" type="button">Add a node</button>
       <button id="pk-show" type="button">Add a passkey</button>
       <button id="logout" type="button">Sign out</button>
     </span>
@@ -58,6 +59,13 @@
       <button>Continue</button>
     </form>
     <p id="setup-help" hidden>First run: enter the setup token from the server's environment, then add a passkey.</p>
+  </section>
+
+  <section id="node-card" class="card" hidden aria-label="Add a node">
+    <h2>Add a node</h2>
+    <p>On the machine, run this within 10 minutes. The code works once.</p>
+    <pre id="node-cmd"></pre>
+    <div class="row"><button id="node-copy" type="button">Copy</button></div>
   </section>
 
   <section id="pk-card" class="card" hidden aria-label="Add a passkey">
@@ -255,6 +263,18 @@ $("pk-add").addEventListener("click", async () => {
   if (!f || !f.ok) return failed(f);
   $("pk-card").hidden = true;
   say("Passkey added.");
+});
+
+$("node-show").addEventListener("click", async () => {
+  say("");
+  const r = await postJSON("/api/nodes/code", {});
+  if (!r || !r.ok) return failed(r);
+  const { code } = await r.json();
+  $("node-cmd").textContent = "orphusbot-node enrol " + code;
+  $("node-card").hidden = false;
+});
+$("node-copy").addEventListener("click", () => {
+  navigator.clipboard?.writeText($("node-cmd").textContent).then(() => say("Copied."), () => say("Copy it by hand."));
 });
 
 $("logout").addEventListener("click", async () => {

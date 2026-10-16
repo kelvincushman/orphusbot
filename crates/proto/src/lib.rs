@@ -15,10 +15,20 @@ pub struct Attempt {
     pub fence: i64,
 }
 
+/// What a node signs with its Ed25519 key to prove who it is: its name and
+/// the server's one-time nonce (DESIGN §4.1).
+pub fn link_proof(node: &str, nonce: &str) -> String {
+    format!("orphusbot-node-link-v1\n{node}\n{nonce}")
+}
+
 /// Server → node, over the node link (DESIGN §4.1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ToNode {
+    /// First frame on every connection: sign this to say hello.
+    Challenge { nonce: String },
+    /// Answer to [`FromNode::Enrol`]; the server closes the link after it.
+    Enrolled { error: Option<String> },
     /// Work on this run. `resumed` means an earlier attempt was interrupted.
     StartTurn {
         attempt: Attempt,
@@ -38,8 +48,20 @@ pub enum ToNode {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum FromNode {
-    /// First frame after connecting.
-    Hello { node: String, version: String },
+    /// Reply to the challenge on a normal connection. `signature` is the
+    /// hex Ed25519 signature of [`link_proof`] with the node's enrolled key.
+    Hello {
+        node: String,
+        version: String,
+        signature: String,
+    },
+    /// Reply to the challenge from `orphusbot-node enrol`: registers
+    /// `public_key` (hex, 32 bytes) under `node` using a one-time code.
+    Enrol {
+        code: String,
+        node: String,
+        public_key: String,
+    },
     /// A chunk of assistant text while it streams.
     Delta { attempt: Attempt, text: String },
     /// One complete assistant message. A run that uses tools can produce several.

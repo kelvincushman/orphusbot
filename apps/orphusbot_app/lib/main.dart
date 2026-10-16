@@ -21,10 +21,12 @@ class _OrphusBotAppState extends State<OrphusBotApp> {
   @override
   void initState() {
     super.initState();
-    Api.load().then((a) => setState(() {
-          api = a;
-          loading = false;
-        }));
+    Api.load().then(
+      (a) => setState(() {
+        api = a;
+        loading = false;
+      }),
+    );
   }
 
   Future<void> signedOut() async {
@@ -35,9 +37,12 @@ class _OrphusBotAppState extends State<OrphusBotApp> {
   @override
   Widget build(BuildContext context) {
     ThemeData theme(Brightness b) => ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2F6BFF), brightness: b),
-          useMaterial3: true,
-        );
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF2F6BFF),
+        brightness: b,
+      ),
+      useMaterial3: true,
+    );
     return MaterialApp(
       title: 'OrphusBot',
       theme: theme(Brightness.light),
@@ -45,8 +50,8 @@ class _OrphusBotAppState extends State<OrphusBotApp> {
       home: loading
           ? const Scaffold(body: Center(child: CircularProgressIndicator()))
           : api == null
-              ? SignIn(onSignedIn: (a) => setState(() => api = a))
-              : ChatScreen(api: api!, onSignedOut: signedOut),
+          ? SignIn(onSignedIn: (a) => setState(() => api = a))
+          : ChatScreen(api: api!, onSignedOut: signedOut),
     );
   }
 }
@@ -87,27 +92,53 @@ class _SignInState extends State<SignIn> {
           constraints: const BoxConstraints(maxWidth: 440),
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Text('OrphusBot', style: Theme.of(context).textTheme.headlineMedium),
-              const SizedBox(height: 16),
-              if (code == null) ...[
-                TextField(controller: server, decoration: const InputDecoration(labelText: "Your server's address")),
-                const SizedBox(height: 12),
-                FilledButton(onPressed: start, child: const Text('Sign in with another device')),
-              ] else ...[
-                const Text("On a device where you're signed in, open"),
-                SelectableText('$base/?link=$code', style: const TextStyle(fontFamily: 'monospace')),
-                const SizedBox(height: 8),
-                const Text('or go to Settings → Link a device and enter'),
-                SelectableText(code!, style: Theme.of(context).textTheme.headlineSmall),
-                const SizedBox(height: 12),
-                const LinearProgressIndicator(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'OrphusBot',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
+                const SizedBox(height: 16),
+                if (code == null) ...[
+                  TextField(
+                    controller: server,
+                    decoration: const InputDecoration(
+                      labelText: "Your server's address",
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: start,
+                    child: const Text('Sign in with another device'),
+                  ),
+                ] else ...[
+                  const Text("On a device where you're signed in, open"),
+                  SelectableText(
+                    '$base/?link=$code',
+                    style: const TextStyle(fontFamily: 'monospace'),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('or go to Settings → Link a device and enter'),
+                  SelectableText(
+                    code!,
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 12),
+                  const LinearProgressIndicator(),
+                ],
+                if (error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ],
               ],
-              if (error != null) ...[
-                const SizedBox(height: 12),
-                Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-              ],
-            ]),
+            ),
           ),
         ),
       ),

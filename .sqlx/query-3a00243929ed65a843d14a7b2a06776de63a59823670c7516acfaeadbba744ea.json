@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "insert into run (thread_id, prompt, routine_id, ticket_id, device_id)\n                 values ($1, $2, $3, $4, $5) returning id",
+  "query": "insert into run (thread_id, prompt, routine_id, ticket_id, device_id, attachments)\n                 values ($1, $2, $3, $4, $5, $6) returning id",
   "describe": {
     "columns": [
       {
@@ -21,12 +21,13 @@
         "Text",
         "Int8",
         "Int8",
-        "Text"
+        "Text",
+        "Int8Array"
       ]
     },
     "nullable": [
       false
     ]
   },
-  "hash": "d458f1cbd97f64f14da90d507819ec9b73d2e1be9ba91ad9bbc3d231bd449b71"
+  "hash": "3a00243929ed65a843d14a7b2a06776de63a59823670c7516acfaeadbba744ea"
 }

@@ -666,6 +666,21 @@ fn item(item: Item) -> AnyView {
             view! { <p class="notice" class:error=error>{text}</p> }.into_any()
         }
         Item::Card { dialog, outcome } => view! { <Card dialog outcome /> }.into_any(),
+        // A file the owner sent: a picture shows; anything else is a link.
+        Item::Attached {
+            id,
+            name,
+            size,
+            image,
+        } => {
+            let url = format!("/api/attachments/{id}");
+            let label = format!("{name} ({} KB)", size.div_ceil(1024));
+            if image {
+                view! { <div class="msg user"><img src=url.clone() alt=name.clone() style="max-width: 100%; border-radius: 8px" /><br/><a href=url download=name>{label}</a></div> }.into_any()
+            } else {
+                view! { <div class="msg user">"Sent a file: " <a href=url download=name>{label}</a></div> }.into_any()
+            }
+        }
         Item::Artifact {
             id,
             name,

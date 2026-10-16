@@ -21,7 +21,17 @@ class Artifact extends Item {
   final String name;
   final int version;
   final int size;
-  bool get isImage => RegExp(r'\.(png|jpe?g|gif|webp)$', caseSensitive: false).hasMatch(name);
+  bool get isImage =>
+      RegExp(r'\.(png|jpe?g|gif|webp)$', caseSensitive: false).hasMatch(name);
+}
+
+/// A file the owner sent.
+class Attached extends Item {
+  Attached(this.id, this.name, this.size, this.image);
+  final int id;
+  final String name;
+  final int size;
+  final bool image;
 }
 
 /// An approval, a question or a takeover the bot is waiting on.
@@ -41,7 +51,8 @@ class ThreadView {
   RunState run = RunState.idle;
   String? where;
 
-  int get waiting => items.whereType<Card>().where((c) => c.outcome == null).length;
+  int get waiting =>
+      items.whereType<Card>().where((c) => c.outcome == null).length;
 
   String get lastReply {
     for (final i in items.reversed) {
@@ -65,22 +76,49 @@ class ThreadView {
       case 'run_started':
         run = RunState.running;
         final node = e['node'] as String?;
-        where = node == null ? null : 'on $node${e['why'] == null ? '' : ' (${e['why']})'}';
+        where = node == null
+            ? null
+            : 'on $node${e['why'] == null ? '' : ' (${e['why']})'}';
       case 'run_ended':
         run = RunState.idle;
         where = null;
-        if (streaming != null && streaming!.isNotEmpty) items.add(Message(false, streaming!));
+        if (streaming != null && streaming!.isNotEmpty) {
+          items.add(Message(false, streaming!));
+        }
         streaming = null;
         if (e['outcome'] == 'cancelled') items.add(Notice('Stopped.'));
         if (e['outcome'] == 'failed') {
-          items.add(Notice('The run failed: ${e['error'] ?? 'unknown error'}', error: true));
+          items.add(
+            Notice(
+              'The run failed: ${e['error'] ?? 'unknown error'}',
+              error: true,
+            ),
+          );
         }
       case 'notice':
         items.add(Notice(e['text'] as String));
       case 'routed':
-        items.add(Notice('Sent to ${e['name']} (System 1 was ${e['sure']}% sure)'));
+        items.add(
+          Notice('Sent to ${e['name']} (System 1 was ${e['sure']}% sure)'),
+        );
+      case 'attached':
+        items.add(
+          Attached(
+            e['id'] as int,
+            e['name'] as String,
+            e['size'] as int,
+            e['image'] as bool,
+          ),
+        );
       case 'artifact':
-        items.add(Artifact(e['id'] as int, e['name'] as String, e['version'] as int, e['size'] as int));
+        items.add(
+          Artifact(
+            e['id'] as int,
+            e['name'] as String,
+            e['version'] as int,
+            e['size'] as int,
+          ),
+        );
       case 'dialog_opened':
         final d = e['dialog'] as Map<String, dynamic>;
         items.add(Card(d['id'] as String, d['kind'] as Map<String, dynamic>));

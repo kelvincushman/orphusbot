@@ -19,7 +19,10 @@ class Api {
   final String cookie;
   final _http = http.Client();
 
-  Map<String, String> get headers => {'cookie': cookie, 'user-agent': userAgent};
+  Map<String, String> get headers => {
+    'cookie': cookie,
+    'user-agent': userAgent,
+  };
 
   static Future<File> _file() async {
     final dir = await getApplicationSupportDirectory();
@@ -51,17 +54,27 @@ class Api {
   static Future<(String, Future<Api>)> link(String server) async {
     server = server.trim().replaceAll(RegExp(r'/+$'), '');
     final c = http.Client();
-    final res = await c.post(Uri.parse('$server/auth/link/start'),
-        headers: {'content-type': 'application/json', 'user-agent': userAgent}, body: '{}');
-    if (res.statusCode != 200) throw Exception('The server said ${res.statusCode}: ${res.body}');
+    final res = await c.post(
+      Uri.parse('$server/auth/link/start'),
+      headers: {'content-type': 'application/json', 'user-agent': userAgent},
+      body: '{}',
+    );
+    if (res.statusCode != 200) {
+      throw Exception('The server said ${res.statusCode}: ${res.body}');
+    }
     final v = jsonDecode(res.body) as Map<String, dynamic>;
     final device = v['device_code'] as String;
     Future<Api> wait() async {
       while (true) {
         await Future<void>.delayed(const Duration(seconds: 2));
-        final r = await c.post(Uri.parse('$server/auth/link/poll'),
-            headers: {'content-type': 'application/json', 'user-agent': userAgent},
-            body: jsonEncode({'device_code': device}));
+        final r = await c.post(
+          Uri.parse('$server/auth/link/poll'),
+          headers: {
+            'content-type': 'application/json',
+            'user-agent': userAgent,
+          },
+          body: jsonEncode({'device_code': device}),
+        );
         if (r.statusCode == 202) continue;
         if (r.statusCode == 200) {
           final cookie = (r.headers['set-cookie'] ?? '').split(';').first;
@@ -79,19 +92,58 @@ class Api {
   Future<http.Response> _check(Future<http.Response> call) async {
     final r = await call;
     if (r.statusCode == 401) throw SignedOut();
-    if (r.statusCode >= 400) throw Exception(r.body.isEmpty ? 'The server said ${r.statusCode}' : r.body);
+    if (r.statusCode >= 400) {
+      throw Exception(
+        r.body.isEmpty ? 'The server said ${r.statusCode}' : r.body,
+      );
+    }
     return r;
   }
 
-  Future<dynamic> get(String path) async =>
-      jsonDecode((await _check(_http.get(Uri.parse('$server$path'), headers: headers))).body);
+  Future<dynamic> get(String path) async => jsonDecode(
+    (await _check(_http.get(Uri.parse('$server$path'), headers: headers))).body,
+  );
 
-  Future<void> post(String path, Object body) => _check(_http.post(Uri.parse('$server$path'),
-      headers: {...headers, 'content-type': 'application/json'}, body: jsonEncode(body)));
+  Future<void> post(String path, Object body) => _check(
+    _http.post(
+      Uri.parse('$server$path'),
+      headers: {...headers, 'content-type': 'application/json'},
+      body: jsonEncode(body),
+    ),
+  );
 
-  Future<void> send(String bot, String text) => post('/api/messages', {'bot': bot, 'text': text});
+  Future<void> send(
+    String bot,
+    String text, {
+    List<int> attachments = const [],
+  }) => post('/api/messages', {
+    'bot': bot,
+    'text': text,
+    'attachments': attachments,
+  });
+
+  /// Uploads a file for `bot`; returns its id, to send with the message.
+  Future<int> upload(String bot, String name, List<int> bytes) async {
+    final uri = Uri.parse('$server/api/attachments')
+        .replace(queryParameters: {'bot': bot, 'name': name});
+    final r = await _check(
+      _http.post(
+        uri,
+        headers: {...headers, 'content-type': 'application/octet-stream'},
+        body: bytes,
+      ),
+    );
+    return (jsonDecode(r.body) as Map<String, dynamic>)['id'] as int;
+  }
+
+  /// A file's bytes (an artifact or an attachment), with the session.
+  Future<List<int>> download(String url) async =>
+      (await _check(_http.get(Uri.parse(url), headers: headers))).bodyBytes;
+
+  String attachmentUrl(int id) => '$server/api/attachments/$id';
   Future<void> stop(String bot) => post('/api/runs/cancel', {'bot': bot});
-  Future<void> answer(String id, Map<String, Object> how) => post('/api/dialogs/answer', {'id': id, ...how});
+  Future<void> answer(String id, Map<String, Object> how) =>
+      post('/api/dialogs/answer', {'id': id, ...how});
 
   String artifactUrl(int id) => '$server/api/artifacts/$id';
 
@@ -100,7 +152,10 @@ class Api {
     var after = 0;
     while (true) {
       try {
-        final req = http.Request('GET', Uri.parse('$server/api/events?after=$after'))..headers.addAll(headers);
+        final req = http.Request(
+          'GET',
+          Uri.parse('$server/api/events?after=$after'),
+        )..headers.addAll(headers);
         final res = await _http.send(req);
         if (res.statusCode == 401) throw SignedOut();
         var pending = '';
@@ -114,7 +169,9 @@ class Api {
             final data = StringBuffer();
             for (final line in block.split('\n')) {
               if (line.startsWith('id:')) id = line.substring(3).trim();
-              if (line.startsWith('data:')) data.write(line.substring(5).trimLeft());
+              if (line.startsWith('data:')) {
+                data.write(line.substring(5).trimLeft());
+              }
             }
             if (id != null) after = int.tryParse(id) ?? after;
             if (data.isEmpty) continue;

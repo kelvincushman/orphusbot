@@ -13,7 +13,9 @@ use std::time::Duration;
 use anyhow::{Context, bail};
 use futures_util::{SinkExt, Stream, StreamExt};
 use key::NodeKey;
-use orphusbot_proto::{Attempt, BotSpec, FromNode, ToNode, screen_frame, split_screen_frame};
+use orphusbot_proto::{
+    Attempt, BotSpec, FromNode, SentFile, ToNode, screen_frame, split_screen_frame,
+};
 use std::collections::HashMap;
 
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
@@ -209,16 +211,22 @@ async fn session(cfg: &Config, key: &NodeKey) -> anyhow::Result<()> {
                     _ => continue,
                 };
                 match serde_json::from_str::<ToNode>(&text) {
-                    Ok(ToNode::StartTurn { attempt, text, resumed, bot }) => {
-                        if let Err(e) = start_turn(cfg, &mut engines, &out_tx, attempt, &text, resumed, &bot).await {
+                    Ok(ToNode::StartTurn { attempt, text, resumed, bot, files }) => {
+                        if let Err(e) = deliver(cfg, &bot, &files).await {
+                            warn!("saving the owner's files in the computer: {e:#}");
+                        }
+                        if let Err(e) = start_turn(cfg, &mut engines, &out_tx, attempt, &turn_message(&text, resumed), &bot, &files).await {
                             warn!(?attempt, "starting run: {e:#}");
                             engines.remove(&bot.slug);
                             let _ = out_tx.send(FromNode::TurnEnded { attempt, error: Some(format!("{e:#}")) }).await;
                         }
                     }
-                    Ok(ToNode::Steer { attempt, text }) => {
+                    Ok(ToNode::Steer { attempt, text, files }) => {
                         if let Some(e) = engines.values_mut().find(|e| e.current == Some(attempt)) {
-                            let cmd = serde_json::json!({ "type": "steer", "message": text });
+                            if let Err(err) = deliver(cfg, &e.bot, &files).await {
+                                warn!("saving the owner's files in the computer: {err:#}");
+                            }
+                            let cmd = serde_json::json!({ "type": "steer", "message": text, "images": images(&files) });
                             e.command(&cmd.to_string()).await.ok();
                         }
                     }
@@ -358,6 +366,79 @@ async fn extract(orphus: &str, system: &str, text: &str) -> anyhow::Result<Strin
         bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// What the engine is told: on a resumed attempt, a note first not to repeat work.
+fn turn_message(text: &str, resumed: bool) -> String {
+    if resumed {
+        format!(
+            "(An earlier attempt at this was interrupted. Check what was already done before repeating any step.)\n\n{text}"
+        )
+    } else {
+        text.to_owned()
+    }
+}
+
+/// Pictures among the owner's files, as Orphus's `ImageContent` for the model.
+fn images(files: &[SentFile]) -> Vec<serde_json::Value> {
+    files
+        .iter()
+        .filter(|f| f.is_image())
+        .map(|f| serde_json::json!({ "type": "image", "data": f.data, "mimeType": f.mime }))
+        .collect()
+}
+
+/// Saves the owner's files in the bot's computer under `inbox/`: through envd
+/// for an E2B sandbox, `podman exec` for a container, or the engine's work
+/// folder when there is no computer.
+async fn deliver(cfg: &Config, bot: &BotSpec, files: &[SentFile]) -> anyhow::Result<()> {
+    for f in files {
+        let bytes = openssl::base64::decode_block(&f.data).context("a file wasn't base64")?;
+        // The server already made it a plain name; never let it leave inbox/.
+        let name = f.name.replace(['/', '\\'], "_");
+        if let Some(sandbox) = &bot.e2b {
+            let path: String = format!("/home/user/inbox/{name}")
+                .bytes()
+                .map(|b| match b {
+                    b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' => {
+                        (b as char).to_string()
+                    }
+                    _ => format!("%{b:02X}"),
+                })
+                .collect();
+            let mut req = reqwest::Client::new()
+                .post(format!("{}/files?path={path}&username=user", sandbox.url))
+                .header("authorization", "Basic dXNlcjo=")
+                .header("content-type", "application/octet-stream")
+                .body(bytes);
+            if let Some(token) = &sandbox.token {
+                req = req.header("x-access-token", token);
+            }
+            req.send().await?.error_for_status()?;
+        } else if let Some(runtime) = &cfg.runtime {
+            let mut child = Command::new(runtime)
+                .args(["exec", "-i", &format!("orphusbot-{}", bot.slug), "sh", "-c"])
+                .arg(r#"mkdir -p "$HOME/inbox" && cat > "$HOME/inbox/$1""#)
+                .args(["sh", &name])
+                .stdin(Stdio::piped())
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped())
+                .spawn()
+                .context("starting podman exec")?;
+            let mut stdin = child.stdin.take().context("podman stdin")?;
+            stdin.write_all(&bytes).await?;
+            drop(stdin);
+            let out = child.wait_with_output().await?;
+            if !out.status.success() {
+                bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
+            }
+        } else {
+            let dir = format!("{}/{}/work/inbox", cfg.session_dir, bot.slug);
+            std::fs::create_dir_all(&dir).with_context(|| format!("creating {dir}"))?;
+            std::fs::write(format!("{dir}/{name}"), bytes)?;
+        }
+    }
+    Ok(())
 }
 
 /// `orphus --list-models` as `provider/model` names.
@@ -573,9 +654,9 @@ async fn start_turn(
     engines: &mut HashMap<String, Engine>,
     out: &mpsc::Sender<FromNode>,
     attempt: Attempt,
-    text: &str,
-    resumed: bool,
+    message: &str,
     bot: &BotSpec,
+    files: &[SentFile],
 ) -> anyhow::Result<()> {
     // Start the bot's engine on first use, again if it exited, and afresh if its
     // settings changed (the old one is killed when dropped).
@@ -595,15 +676,8 @@ async fn start_turn(
         .await
         .context("engine reader stopped")?;
     e.current = Some(attempt);
-    let message = if resumed {
-        format!(
-            "(An earlier attempt at this was interrupted. Check what was already done before repeating any step.)\n\n{text}"
-        )
-    } else {
-        text.to_owned()
-    };
     let id = format!("run-{}-{}", attempt.run, attempt.fence);
-    let cmd = serde_json::json!({ "id": id, "type": "prompt", "message": message });
+    let cmd = serde_json::json!({ "id": id, "type": "prompt", "message": message, "images": images(files) });
     e.command(&cmd.to_string())
         .await
         .context("writing to the engine")?;
@@ -611,7 +685,6 @@ async fn start_turn(
         run = attempt.run,
         fence = attempt.fence,
         bot = %bot.slug,
-        resumed,
         "run started"
     );
     Ok(())

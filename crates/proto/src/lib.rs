@@ -62,6 +62,35 @@ pub struct BotSpec {
     pub e2b: Option<E2bComputer>,
 }
 
+/// A file the owner sent a bot. `data` is base64.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SentFile {
+    pub name: String,
+    pub mime: String,
+    pub data: String,
+}
+
+/// Keeps file contents out of logs.
+impl std::fmt::Debug for SentFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SentFile")
+            .field("name", &self.name)
+            .field("mime", &self.mime)
+            .field("bytes", &(self.data.len() / 4 * 3))
+            .finish()
+    }
+}
+
+impl SentFile {
+    /// Pictures a model can look at.
+    pub fn is_image(&self) -> bool {
+        matches!(
+            self.mime.as_str(),
+            "image/png" | "image/jpeg" | "image/gif" | "image/webp"
+        )
+    }
+}
+
 /// One E2B sandbox's envd: where it answers and its access token. Scoped to
 /// that sandbox; never the E2B API key, never a model token.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -141,9 +170,17 @@ pub enum ToNode {
         text: String,
         resumed: bool,
         bot: Box<BotSpec>,
+        /// Files the owner sent with it: into the computer's `inbox/`, pictures to the model too.
+        #[serde(default)]
+        files: Vec<SentFile>,
     },
     /// Extra instructions for the run in progress.
-    Steer { attempt: Attempt, text: String },
+    Steer {
+        attempt: Attempt,
+        text: String,
+        #[serde(default)]
+        files: Vec<SentFile>,
+    },
     /// Stop the run if it is still going.
     Abort { attempt: Attempt },
     /// Answer to a dialog the engine opened: a complete Orphus
@@ -323,6 +360,13 @@ pub enum ThreadEvent {
     DialogClosed {
         id: String,
         outcome: String,
+    },
+    /// The owner sent the bot a file; it downloads from `/api/attachments/<id>`.
+    Attached {
+        id: i64,
+        name: String,
+        size: u64,
+        image: bool,
     },
     /// The bot shared a file; it downloads from `/api/artifacts/<id>`.
     Artifact {

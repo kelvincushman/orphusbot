@@ -20,20 +20,7 @@ pub async fn shared(app: &App, thread: &db::Thread, run: i64, name: &str, data: 
         Ok(_) => return warn!(run, "a shared file was over 10 MB"),
         Err(e) => return warn!(run, "a shared file wasn't base64: {e}"),
     };
-    // A plain file name: no folders, no control characters.
-    let name: String = name
-        .rsplit(['/', '\\'])
-        .next()
-        .unwrap_or_default()
-        .chars()
-        .filter(|c| !c.is_control())
-        .take(200)
-        .collect();
-    let name = if name.trim().is_empty() {
-        "file".to_owned()
-    } else {
-        name
-    };
+    let name = plain_name(name);
     let saved = sqlx::query!(
         r#"insert into artifact (bot_id, run_id, name, version, content)
            select t.bot_id, $2, $3,
@@ -61,6 +48,23 @@ pub async fn shared(app: &App, thread: &db::Thread, run: i64, name: &str, data: 
     }
 }
 
+/// A plain file name: no folders, no control characters, at most 200 characters.
+pub fn plain_name(name: &str) -> String {
+    let name: String = name
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or_default()
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(200)
+        .collect();
+    if name.trim().is_empty() || name.starts_with('.') {
+        "file".to_owned()
+    } else {
+        name
+    }
+}
+
 /// Downloads an artifact. Always as an attachment, never shown inline, so a
 /// shared HTML file can't run in OrphusBot's origin.
 pub async fn download(
@@ -72,8 +76,12 @@ pub async fn download(
         .await
         .map_err(|e| internal("reading an artifact", e))?
         .ok_or((StatusCode::NOT_FOUND, "No such file"))?;
-    let ascii: String = a
-        .name
+    Ok(as_download(&a.name, a.content))
+}
+
+/// A file as a download: an attachment with `nosniff`, never shown inline.
+pub fn as_download(name: &str, content: Vec<u8>) -> impl IntoResponse + use<> {
+    let ascii: String = name
         .chars()
         .map(|c| {
             if c.is_ascii_graphic() && c != '"' || c == ' ' {
@@ -83,8 +91,7 @@ pub async fn download(
             }
         })
         .collect();
-    let encoded: String = a
-        .name
+    let encoded: String = name
         .bytes()
         .map(|b| match b {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
@@ -94,14 +101,14 @@ pub async fn download(
         })
         .collect();
     let disposition = format!("attachment; filename=\"{ascii}\"; filename*=UTF-8''{encoded}");
-    Ok((
+    (
         [
             (header::CONTENT_TYPE, "application/octet-stream".to_owned()),
             (header::CONTENT_DISPOSITION, disposition),
             (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_owned()),
         ],
-        a.content,
-    ))
+        content,
+    )
 }
 
 #[cfg(test)]

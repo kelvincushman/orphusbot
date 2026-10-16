@@ -3575,6 +3575,7 @@ dependencies = [
  "hex",
  "openssl",
  "orphusbot-proto",
+ "reqwest",
  "serde_json",
  "tokio",
  "tokio-tungstenite",

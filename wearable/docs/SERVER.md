@@ -132,9 +132,12 @@ WebSocket handshake and HTTP calls; that change is not in the app yet.
 From the app's pairing page (`app/lib/wearable/pages/pairing_page.dart`, client
 in `wearable_client.dart`):
 
-1. **On the LAN:** the app discovers the server via mDNS (`_wearable._tcp.local`)
-   and the operator pastes the dashboard bearer token; `POST /api/device/register`
-   returns the device id + pairing token.
+1. **With OrphusBot:** in OrphusBot's Settings → Wearable, choose **Pair a
+   wearable**. It shows the server address and a one-time code (valid 10 minutes).
+   In the app's pairing page, enter the address and paste the code where it asks
+   for the bearer token; `POST /api/device/register` uses it once and returns the
+   device id + pairing token. (On a LAN without OrphusBot's address, mDNS
+   discovery via `_wearable._tcp.local` still works.)
 2. **Off-LAN:** the operator pairs to a remote HTTPS `baseUrl` (e.g.
    `https://stt.example.com` or the server's NetBird name) instead of the LAN IP.
    `openAudioStream()` derives the WebSocket URL from the stored `baseUrl`

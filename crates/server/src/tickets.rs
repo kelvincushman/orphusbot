@@ -201,7 +201,7 @@ pub async fn start_now(
 }
 
 /// Hands the ticket to its bot (B-TKT-01).
-async fn start(app: &App, id: i64) -> Result<(), ApiError> {
+pub(crate) async fn start(app: &App, id: i64) -> Result<(), ApiError> {
     let ticket = get(&app.db, id)
         .await
         .map_err(|e| internal("reading a ticket", e))?
@@ -247,9 +247,14 @@ async fn start(app: &App, id: i64) -> Result<(), ApiError> {
         text: text.clone(),
     };
     record(app, &thread, message).await;
+    let device = sqlx::query_scalar!("select device_id from ticket where id = $1", id)
+        .fetch_one(&app.db)
+        .await
+        .map_err(|e| internal("reading a ticket", e))?;
     let source = runs::Source {
-        routine: None,
         ticket: Some(id),
+        device,
+        ..Default::default()
     };
     submit(app, &thread, text, source)
         .await

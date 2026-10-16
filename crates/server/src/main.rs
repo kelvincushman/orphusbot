@@ -8,6 +8,7 @@
 mod auth;
 mod bots;
 mod db;
+mod device;
 mod gate;
 mod links;
 mod nodes;
@@ -147,6 +148,7 @@ struct App {
     rt: Mutex<Runtime>,
     auth: auth::Auth,
     system1: system1::System1,
+    devices: device::Devices,
     /// The built web UI (crates/ui/dist), served at `/`.
     ui_dir: String,
 }
@@ -205,10 +207,12 @@ async fn main() -> anyhow::Result<()> {
         rt: Mutex::default(),
         auth,
         system1,
+        devices: device::Devices::default(),
         ui_dir,
     });
     tokio::spawn(reconcile_forever(app.clone()));
     tokio::spawn(routines::schedule_forever(app.clone()));
+    tokio::spawn(device::expire_forever(app.clone()));
 
     let router = router(app);
 
@@ -240,6 +244,8 @@ fn router(app: Shared) -> Router {
         .route("/api/tickets", get(tickets::list).post(tickets::create))
         .route("/api/tickets/update", post(tickets::update))
         .route("/api/tickets/start", post(tickets::start_now))
+        .route("/api/devices", get(device::list))
+        .route("/api/devices/pairing-code", post(device::pairing_code))
         .route("/api/screen", get(screens::open))
         .route("/api/links/{code}", get(links::lookup))
         .route("/api/links/approve", post(links::approve))
@@ -256,6 +262,18 @@ fn router(app: Shared) -> Router {
         .route("/auth/link/poll", post(links::poll))
         // Public: the secret token in the path is the credential.
         .route("/hooks/routine/{token}", post(routines::hook))
+        // The wearable's channel (wearable/docs/SERVER.md): device tokens, not sessions.
+        .route("/api/device/register", post(device::register))
+        .route("/api/device/event", post(device::event))
+        .route(
+            "/api/device/text",
+            post(device::text).layer(axum::extract::DefaultBodyLimit::max(8_192)),
+        )
+        .route("/api/device/command/poll", post(device::poll))
+        .route(
+            "/api/device/hands-free",
+            get(device::hands_free).post(device::set_hands_free),
+        )
         .route("/node", get(node_link))
         .merge(api)
         .fallback_service(ServeDir::new(&app.ui_dir))
@@ -362,6 +380,7 @@ async fn submit(
             lock(&app.rt).waiting.remove(&run);
             let event = ThreadEvent::RunQueued { run, waiting: None };
             publish(app, None, Some(&thread.bot), event);
+            device::run_news(app, run, device::RunNews::Queued).await;
             dispatch(app).await;
         }
         Submitted::Joined(_) => {}
@@ -444,7 +463,7 @@ async fn cancel_run(
     Ok(StatusCode::ACCEPTED)
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 struct Answer {
     id: String,
     /// For approvals: "allow", "always" or "deny".
@@ -466,6 +485,11 @@ async fn answer_dialog(
     State(app): State<Shared>,
     Json(answer): Json<Answer>,
 ) -> Result<StatusCode, ApiError> {
+    resolve_dialog(&app, answer).await
+}
+
+/// Answers an open dialog, from a card or from the wrist.
+async fn resolve_dialog(app: &App, answer: Answer) -> Result<StatusCode, ApiError> {
     let Some(pending) = lock(&app.rt).dialogs.remove(&answer.id) else {
         return Err((StatusCode::GONE, "That question is no longer open"));
     };
@@ -519,8 +543,8 @@ async fn answer_dialog(
             ),
         },
     };
-    respond(&app, pending.attempt, response).await;
-    dialog_closed(&app, &pending.thread, id, outcome).await;
+    respond(app, pending.attempt, response).await;
+    dialog_closed(app, &pending.thread, id, outcome).await;
     Ok(StatusCode::ACCEPTED)
 }
 
@@ -531,6 +555,7 @@ async fn respond(app: &App, attempt: Attempt, response: Value) {
 }
 
 async fn dialog_closed(app: &App, thread: &db::Thread, id: String, outcome: String) {
+    device::dialog_settled(app, &id).await;
     record(app, thread, ThreadEvent::DialogClosed { id, outcome }).await;
 }
 
@@ -648,6 +673,11 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
         tool_call_id,
     };
     lock(&app.rt).dialogs.insert(id.clone(), pending);
+    let news = device::RunNews::Dialog {
+        id: &id,
+        kind: &kind,
+    };
+    device::run_news(app, attempt.run, news).await;
     let dialog = Dialog {
         id,
         run: attempt.run,
@@ -770,6 +800,7 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
         why: Some(why.to_owned()),
     };
     publish(app, None, Some(&bot.slug), event);
+    device::run_news(app, run, device::RunNews::Running).await;
     let start = ToNode::StartTurn {
         attempt,
         text: claimed.prompt,
@@ -1173,6 +1204,12 @@ async fn run_ended(
 ) {
     expire_dialogs(app, run).await;
     tickets::run_ended(&app.db, run, outcome).await;
+    let news = match outcome {
+        RunOutcome::Completed => device::RunNews::Done,
+        RunOutcome::Failed => device::RunNews::Failed,
+        RunOutcome::Cancelled => device::RunNews::Cancelled,
+    };
+    device::run_news(app, run, news).await;
     let event = ThreadEvent::RunEnded {
         run,
         outcome,

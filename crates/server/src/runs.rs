@@ -22,10 +22,12 @@ pub enum Submitted {
 }
 
 /// What started a run, kept on it from the moment it's created.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Source {
     pub routine: Option<i64>,
     pub ticket: Option<i64>,
+    /// The wearable whose button started it; its cues go back to that wrist.
+    pub device: Option<String>,
 }
 
 /// Queues the message as a run, or attaches it to the thread's active run.
@@ -64,12 +66,13 @@ pub async fn submit(
         }
         None => {
             let id = sqlx::query_scalar!(
-                "insert into run (thread_id, prompt, routine_id, ticket_id) values ($1, $2, $3, $4)
-                 returning id",
+                "insert into run (thread_id, prompt, routine_id, ticket_id, device_id)
+                 values ($1, $2, $3, $4, $5) returning id",
                 thread,
                 text,
                 source.routine,
-                source.ticket
+                source.ticket,
+                source.device
             )
             .fetch_one(&mut *tx)
             .await?;

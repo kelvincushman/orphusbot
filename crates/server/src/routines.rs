@@ -433,7 +433,7 @@ pub async fn fire(
     record(app, &thread, message).await;
     let source = crate::runs::Source {
         routine: Some(id),
-        ticket: None,
+        ..Default::default()
     };
     submit(app, &thread, text, source).await?;
     info!(routine = id, trigger, bot = %r.slug, "routine fired");

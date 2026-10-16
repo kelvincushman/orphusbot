@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-025: The wearable pairs with a one-time code in the app's bearer field, and its tasks become tickets (2026-10-16)
+
+**Decided:** OrphusBot makes a one-time pairing code (10 minutes, stored hashed) from a signed-in session; the existing phone app sends it as the "bearer" on `POST /api/device/register` and gets its device token. A deliberate button capture becomes a ticket assigned by System 1 (or to the inbox), and runs, cues and asks follow from it. Until the app reports GATT write results (W-3), a habitat message counts as delivered when the app takes it from the poll.
+**Why:** the app already has a bearer field and a register call, so pairing needs no app release, and a code that works once and expires can't be replayed. Making the capture a ticket means a task the wearer didn't start (double tap on "should I start?") is still on the board rather than lost, and it gets the board's status tracking for free.
+**Alternatives:** an operator bearer token as in the reference server (a long-lived secret on the phone); a QR code (needs an app change); button captures as plain inbox messages.
+**Revisit if:** the app gains a QR pairing flow, or button tasks need to bypass tickets.
+
 ## D-024: Routines fire from a scheduler loop over a `next_at` column, still without a job queue (2026-10-16)
 
 **Decided:** a loop in the server wakes every 15 s and fires routines whose `next_at` has passed. Each firing is claimed by moving `next_at` to the next occurrence in the same statement that checks it, so it can't fire twice; one missed while the server was down fires once on start, then the schedule carries on from now. Cron is read in each routine's IANA time zone (`croner` + `chrono-tz`), so clock changes keep 08:00 at 08:00. This supersedes D-014's plan to add `graphile_worker` with routines.

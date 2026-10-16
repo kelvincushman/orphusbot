@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select state from habitat_message order by id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "habitat_message",
+            "name": "state"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0efb0a61de38fc5c5543807c1d8535cd3932827afd1b4796399ce9348fbb52ce"
+}

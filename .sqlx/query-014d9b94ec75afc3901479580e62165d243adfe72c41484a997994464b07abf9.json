@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update habitat_message set state = 'superseded', closed_at = now(), outcome = 'settled elsewhere'\n         where subject = $1 and kind = 'ask' and state in ('queued', 'sent', 'delivered')\n         returning device_id, (sent_at is not null) as \"was_on_wrist!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "device_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "habitat_message",
+            "name": "device_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "was_on_wrist!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "014d9b94ec75afc3901479580e62165d243adfe72c41484a997994464b07abf9"
+}

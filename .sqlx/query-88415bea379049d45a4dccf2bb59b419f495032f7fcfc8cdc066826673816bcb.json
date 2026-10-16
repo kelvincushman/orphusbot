@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update device set last_seen_at = now() where id = $1 and token_hash = $2 returning id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "device",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "88415bea379049d45a4dccf2bb59b419f495032f7fcfc8cdc066826673816bcb"
+}

@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select status::text as \"s!\" from ticket order by id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "s!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "78eab893d929383737f832db6d0609b8fd2463fcbbadfa7736cdc294d061b045"
+}

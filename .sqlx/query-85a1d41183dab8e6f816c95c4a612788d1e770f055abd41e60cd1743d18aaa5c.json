@@ -1,0 +1,57 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select id, label, hands_free, last_seen_at::text as last_seen from device order by id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "device",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "label",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "device",
+            "name": "label"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "hands_free",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "device",
+            "name": "hands_free"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "last_seen",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "85a1d41183dab8e6f816c95c4a612788d1e770f055abd41e60cd1743d18aaa5c"
+}

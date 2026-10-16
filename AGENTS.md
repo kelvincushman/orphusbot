@@ -47,6 +47,6 @@ Don't flag style the formatter or linter already enforces. Be specific and short
 | `docs/DESIGN.md` | How it's built; section numbers are referenced from code comments and PRs |
 | `docs/DECISIONS.md` | Decision log |
 | `docs/research/` | Background studies (not normative) |
-| `crates/` | Rust crates: `proto` (wire types and the thread reducer), `server`, `node`, `ui` (Leptos, browser only), `desktop` (Tauri) so far (layout in DESIGN §2; how to run in docs/DEVELOPMENT.md) |
+| `crates/` | Rust crates: `proto` (wire types and the thread reducer), `server`, `node`, `ui` (Leptos, browser only), `desktop` (Tauri), `device` (wearable wire constants) so far (layout in DESIGN §2; how to run in docs/DEVELOPMENT.md) |
 | `.sqlx/` | Compile-time query data; regenerate when SQL changes (docs/DEVELOPMENT.md) |
 | `wearable/` | The wearable: Zephyr firmware (C), Flutter companion app (Dart), hardware, the reference device-channel contract (TypeScript), and its docs. Follow its own README for toolchains |

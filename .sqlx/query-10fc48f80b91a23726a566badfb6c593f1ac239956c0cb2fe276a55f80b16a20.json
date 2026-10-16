@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select device_id from ticket where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "device_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ticket",
+            "name": "device_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "10fc48f80b91a23726a566badfb6c593f1ac239956c0cb2fe276a55f80b16a20"
+}

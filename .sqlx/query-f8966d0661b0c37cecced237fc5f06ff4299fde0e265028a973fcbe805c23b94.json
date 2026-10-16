@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into device_pairing_code (code_hash, expires_at) values ($1, now() + interval '10 minutes')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f8966d0661b0c37cecced237fc5f06ff4299fde0e265028a973fcbe805c23b94"
+}

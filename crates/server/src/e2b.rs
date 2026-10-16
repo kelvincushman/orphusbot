@@ -21,6 +21,16 @@ pub struct E2b {
     timeout: u32,
     /// Replaces `https://49983-<id>.<domain>` (tests and self-hosted E2B).
     sandbox_url: Option<String>,
+    /// Replaces `wss://6080-<id>.<domain>` for the screen (tests).
+    pub(crate) screen_url: Option<String>,
+}
+
+/// Where a sandbox's screen answers: websockify on port 6080, started by
+/// `images/desktop/start-screen` when the template sets `ORPHUSBOT_SCREEN_WEBSOCKET=1`.
+pub struct Screen {
+    pub url: String,
+    /// E2B's `trafficAccessToken`, sent as `e2b-traffic-access-token` when set.
+    pub token: Option<String>,
 }
 
 impl E2b {
@@ -41,6 +51,7 @@ impl E2b {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(3600),
             sandbox_url: var("ORPHUSBOT_E2B_SANDBOX_URL"),
+            screen_url: var("ORPHUSBOT_E2B_SCREEN_URL"),
         }
     }
 
@@ -53,6 +64,7 @@ impl E2b {
             template: "base".into(),
             timeout: 60,
             sandbox_url: None,
+            screen_url: None,
         }
     }
 
@@ -81,6 +93,28 @@ impl E2b {
 
     /// The bot's sandbox, resumed or made, ready for this run.
     pub async fn computer(&self, db: &PgPool, slug: &str) -> anyhow::Result<E2bComputer> {
+        let sandbox = self.sandbox(db, slug).await?;
+        self.reach(&sandbox)
+    }
+
+    /// The bot's screen, resuming its sandbox if it was paused.
+    pub async fn screen(&self, db: &PgPool, slug: &str) -> anyhow::Result<Screen> {
+        let sandbox = self.sandbox(db, slug).await?;
+        let id = sandbox["sandboxID"]
+            .as_str()
+            .context("E2B's answer had no sandboxID")?;
+        let domain = sandbox["domain"].as_str().unwrap_or("e2b.app");
+        Ok(Screen {
+            url: self
+                .screen_url
+                .clone()
+                .unwrap_or_else(|| format!("wss://6080-{id}.{domain}/websockify")),
+            token: sandbox["trafficAccessToken"].as_str().map(str::to_owned),
+        })
+    }
+
+    /// E2B's answer for the bot's sandbox (resumed, or made and remembered).
+    async fn sandbox(&self, db: &PgPool, slug: &str) -> anyhow::Result<Value> {
         let existing = sqlx::query_scalar!(
             "select s.sandbox_id from bot_sandbox s join bot b on b.id = s.bot_id where b.slug = $1",
             slug
@@ -90,7 +124,7 @@ impl E2b {
         if let Some(id) = existing {
             let path = format!("/v2/sandboxes/{id}/connect");
             match self.call(&path, json!({ "timeout": self.timeout })).await? {
-                (200 | 201, sandbox) => return self.reach(&sandbox),
+                (200 | 201, sandbox) => return Ok(sandbox),
                 // Gone (killed, or kept past E2B's limit): start a new one.
                 (404, _) => {}
                 (status, body) => bail!("E2B couldn't resume the sandbox ({status}): {body}"),
@@ -106,16 +140,18 @@ impl E2b {
             (200 | 201, sandbox) => sandbox,
             (status, body) => bail!("E2B couldn't create a sandbox ({status}): {body}"),
         };
-        let computer = self.reach(&sandbox)?;
+        let id = sandbox["sandboxID"]
+            .as_str()
+            .context("E2B's answer had no sandboxID")?;
         sqlx::query!(
             "insert into bot_sandbox (bot_id, sandbox_id) select id, $2 from bot where slug = $1
              on conflict (bot_id) do update set sandbox_id = excluded.sandbox_id, created_at = now()",
             slug,
-            computer.sandbox
+            id
         )
         .execute(db)
         .await?;
-        Ok(computer)
+        Ok(sandbox)
     }
 
     /// Where envd answers for this sandbox, and its access token.
@@ -137,7 +173,7 @@ impl E2b {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use axum::Json;
     use axum::extract::Path;
@@ -146,7 +182,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     /// A stand-in for E2B's API: records calls, knows one live sandbox.
-    async fn fake_e2b(live: &'static str) -> (E2b, Arc<Mutex<Vec<String>>>) {
+    pub(crate) async fn fake_e2b(live: &'static str) -> (E2b, Arc<Mutex<Vec<String>>>) {
         let calls = Arc::new(Mutex::new(Vec::new()));
         let (c1, c2) = (calls.clone(), calls.clone());
         let app = axum::Router::new()

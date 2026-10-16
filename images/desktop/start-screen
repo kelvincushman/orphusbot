@@ -7,4 +7,9 @@ Xvnc :1 -geometry 1280x800 -depth 24 -localhost yes -rfbport 5900 \
      -SecurityTypes None -AlwaysShared -desktop "OrphusBot" >/tmp/xvnc.log 2>&1 &
 for _ in 1 2 3 4 5 6 7 8 9 10; do [ -e /tmp/.X11-unix/X1 ] && break; sleep 0.3; done
 openbox >/tmp/openbox.log 2>&1 &
+# As an E2B template the screen is reached through E2B's port proxy, which only
+# carries HTTP and WebSockets: bridge it on 6080. Never set for local computers.
+if [ "$ORPHUSBOT_SCREEN_WEBSOCKET" = 1 ]; then
+  websockify 6080 localhost:5900 >/tmp/websockify.log 2>&1 &
+fi
 exec "$@"

@@ -19,6 +19,17 @@ allow = [
   "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.9
+# The passkey library (webauthn-rs, by the Kanidm project) is MPL-2.0: file-level
+# copyleft, fine for an MIT project that uses it unmodified (DECISIONS D-016).
+# Listed by name so no other MPL crate slips in.
+exceptions = [
+  { allow = ["MPL-2.0"], crate = "webauthn-rs" },
+  { allow = ["MPL-2.0"], crate = "webauthn-rs-core" },
+  { allow = ["MPL-2.0"], crate = "webauthn-rs-proto" },
+  { allow = ["MPL-2.0"], crate = "webauthn-attestation-ca" },
+  { allow = ["MPL-2.0"], crate = "base64urlsafedata" },
+  { allow = ["MPL-2.0"], crate = "webauthn-authenticator-rs" },
+]
 
 [bans]
 multiple-versions = "warn"

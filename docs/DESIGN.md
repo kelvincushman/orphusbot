@@ -605,7 +605,7 @@ Cards and cues follow the wearable's existing tiers. Nothing escalates to red fo
   - Device token in the Android keystore.
   - Offline outbox in SQLite for messages and card answers.
 - **Sync:** `GET /events?after=<seq>` SSE per subscribed thread, plus a global inbox stream. On reconnect the client replays from its last `seq`. A 20 s heartbeat; the session is re-validated every 60 s.
-- **Auth:** `webauthn-rs` passkeys for the browser and desktop. On Android, a passkey at first sign-in issues a long-lived device token, revocable from Settings.
+- **Auth:** `webauthn-rs` passkeys for the browser and desktop, on a host name with a real certificate (D-016). On Android, a passkey at first sign-in issues a long-lived device token, revocable from Settings. The Tauri desktop app on Linux runs in WebKitGTK, which has no WebAuthn; see open question D8.
 
 ---
 
@@ -722,7 +722,7 @@ Mapped to the PRD milestones. The wearable lands at M3, alongside System 1, beca
 
 ### 18.1 Built so far (M0 and M1.1)
 
-M0 implemented the smallest slice of §3 and §4 that carries a message from a browser to an Orphus engine and streams the reply back. M1.1 made runs durable. Where it is simpler than the full design, the code carries a `ponytail:` comment and [DEVELOPMENT.md](DEVELOPMENT.md#what-m0-deliberately-leaves-out) lists the milestone that replaces it.
+M0 implemented the smallest slice of §3 and §4 that carries a message from a browser to an Orphus engine and streams the reply back. M1.1 made runs durable, M1.2 added approvals and M1.3 passkeys. Where it is simpler than the full design, the code carries a `ponytail:` comment and [DEVELOPMENT.md](DEVELOPMENT.md#what-m0-deliberately-leaves-out) lists the milestone that replaces it.
 
 | Area | M0 | Full design |
 |---|---|---|
@@ -730,14 +730,14 @@ M0 implemented the smallest slice of §3 and §4 that carries a message from a b
 | Threads, bots, nodes | One of each; thread id 1 | Many |
 | Event log | Postgres `thread` + `event` tables, gap-free per-thread `seq`; `Message` and `RunEnded` persisted; deltas, `RunQueued`, `RunStarted` and node status live only (a connecting client is sent the current state) | §3.1, plus batched progress events |
 | Fan-out | In-process `tokio::sync::broadcast` | `PgListener` + `NOTIFY` once there are several server processes |
-| Client API | `POST /api/messages`, `POST /api/runs/cancel`, `GET /api/events` (SSE; resumes from `Last-Event-ID`), `POST /login` | Typed RPC over JSON (§3.1) |
+| Client API | `POST /api/messages`, `POST /api/runs/cancel`, `POST /api/dialogs/answer`, `GET /api/events` (SSE; resumes from `Last-Event-ID`), passkey and session routes under `/auth` and `/api/passkeys`. Everything under `/api` needs a session (one middleware) | Typed RPC over JSON (§3.1) |
 | Runs (M1.1) | `run` table, at most one queued-or-running run per thread (a partial unique index). A message joins the queued run's prompt, or steers the running one through Orphus `steer`. Runs are leased to a node for 120 s, renewed every 30 s; each dispatch bumps the fence; reports and updates for an older fence are ignored. A dropped node or lapsed lease re-queues the run; three attempts and it fails. Dispatch is a `select … for update skip locked` triggered by new runs, node connects and finished runs, not a job queue (D-014). On start the server re-queues every running run | §3.2–§3.4; the job queue arrives with routines (M3) |
 | Resume | The node runs Orphus with `--session-id orphusbot`, one lasting conversation per bot; a resumed attempt's prompt starts with a note to check what was already done | — |
 | Approvals (M1.2) | Bridge gate over the dialog protocol (§4.3). Order: read-only tools (`read`, `ls`, `find`, `grep`, `search`, `glob`) run; the ledger blocks an exact repeat (same tool, `jsonb`-equal input) of a call that completed in an earlier attempt and returns its result; a call approved but never reported done in an earlier attempt is asked again, flagged "may already have run"; `approval_rule` (allow/deny per tool) decides; otherwise an approval card (Allow once / Always allow / Deny). Other dialogs become question cards. Open dialogs expire when their run ends or moves, and on server start | §7.4 adds System 1 (M3) and irreversible-action classes |
 | Effect ledger (M1.2) | `effect` rows per (run, fence, tool call): pending → approved/denied → completed/failed, with who decided and a 2,000-character result | §3.4 |
-| Node link | WebSocket `/node`, bearer token checked before upgrade, `hello` first; the newest connection wins and anything leased under its name is re-queued; the server pings every 30 s and drops a node silent for 75 s | Ed25519 enrolment (M1.3), heartbeats with load (§4.1) |
+| Node link | WebSocket `/node`, bearer token checked before upgrade, `hello` first; the newest connection wins and anything leased under its name is re-queued; the server pings every 30 s and drops a node silent for 75 s | Ed25519 enrolment (next in M1), heartbeats with load (§4.1) |
 | Engine | One `orphus --mode rpc --session-dir …` per link, started on the first turn; text deltas, final assistant messages, rejected prompts and model errors are mapped to frames | §4.2 |
-| Sign-in | Shared UI token, HttpOnly `SameSite=Strict` cookie | Passkeys (§12) |
+| Sign-in (M1.3) | `webauthn-rs` passkeys for one owner. While no passkey exists, `ORPHUSBOT_SETUP_TOKEN` gives a one-hour setup session that can only be used to add one; adding it upgrades that session and ends any other setup session. Sessions are 32 random bytes in an HttpOnly `SameSite=Strict` cookie (`Secure` on HTTPS), stored as SHA-256 hashes, 30 days fixed. Removing a passkey ends its sessions; removing all of them reopens setup (the recovery path). The relying-party ID is the host of `ORPHUSBOT_ORIGIN`; deployment behind Caddy with a DNS-01 certificate (D-016, [DEPLOY.md](DEPLOY.md)) | Device tokens for Android (§12) |
 | UI | One plain HTML page with `EventSource` (D-013) | Leptos in Tauri (§12) |
 
 Capture (§10) waits for M4 on purpose: it needs receipts, proposals and the Android app to be useful, and it's the most privacy-sensitive part, so it should land on a stable base.
@@ -755,4 +755,5 @@ Capture (§10) waits for M4 on purpose: it needs receipts, proposals and the And
 | D5 | Hands-free pause schedule and places | Phone toggle + a time schedule; no location in v1 |
 | D6 | Should explicit wearable captures skip the "should I start?" card when System 1 says act-now with high confidence? | Yes, for reversible work only |
 | D7 | Obsidian as the note store for captures, or OrphusBot's own notes with an export? | Obsidian via the laptop node; if the laptop is offline, queue and write later |
+| D8 | Desktop sign-in on Linux: WebKitGTK (Tauri's Linux webview) has no WebAuthn | The desktop app opens the system browser for the passkey prompt once, then holds a device session, like Android |
 | PRD Q3 | Subscription use for unattended routines | Daily cap of 20 subscription turns for routines until decided |

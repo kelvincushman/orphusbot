@@ -13,7 +13,11 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
   main { max-width: 46rem; margin: 0 auto; padding: 1rem; display: flex; flex-direction: column; min-height: 100vh; }
-  header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+  #account { display: flex; gap: .5rem; }
+  #account button, #signin p { font-size: .875rem; }
+  #signin { display: flex; flex-direction: column; gap: .75rem; padding: 1rem 0; }
+  #signin p { margin: 0; color: var(--muted); }
   h1 { font-size: 1.25rem; margin: 0 0 .5rem; }
   #status { color: var(--muted); font-size: .875rem; }
   #log { flex: 1; display: flex; flex-direction: column; gap: .5rem; padding: .5rem 0; }
@@ -38,12 +42,32 @@
 </head>
 <body>
 <main>
-  <header><h1>OrphusBot</h1><span id="status" role="status">Connecting…</span></header>
+  <header>
+    <h1>OrphusBot</h1>
+    <span id="status" role="status">Connecting…</span>
+    <span id="account" hidden>
+      <button id="pk-show" type="button">Add a passkey</button>
+      <button id="logout" type="button">Sign out</button>
+    </span>
+  </header>
 
-  <form id="login" method="post" action="/login" hidden>
-    <input id="token" name="token" type="password" aria-label="Access token" placeholder="Access token" autocomplete="current-password" required>
-    <button>Sign in</button>
-  </form>
+  <section id="signin" hidden>
+    <button id="pk-signin" type="button" hidden>Sign in with a passkey</button>
+    <form id="setup" method="post" action="/auth/setup" hidden>
+      <input name="token" type="password" aria-label="Setup token" placeholder="Setup token" autocomplete="off" required>
+      <button>Continue</button>
+    </form>
+    <p id="setup-help" hidden>First run: enter the setup token from the server's environment, then add a passkey.</p>
+  </section>
+
+  <section id="pk-card" class="card" hidden aria-label="Add a passkey">
+    <h2>Add a passkey</h2>
+    <p id="pk-why" class="warn" hidden>You are signed in with the setup token for one hour. Add a passkey to keep access.</p>
+    <div class="row">
+      <input id="pk-name" value="This device" maxlength="60" aria-label="Passkey name">
+      <button id="pk-add" type="button">Add passkey</button>
+    </div>
+  </section>
 
   <div id="chat" hidden>
     <div id="log" role="log" aria-live="polite" aria-label="Conversation"></div>
@@ -52,8 +76,8 @@
       <button id="go">Send</button>
       <button id="stop" type="button" hidden>Stop</button>
     </form>
-    <p id="err" class="error" role="alert"></p>
   </div>
+  <p id="err" class="error" role="alert"></p>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -167,14 +191,76 @@ function handle(ev) {
 function connect() {
   const es = new EventSource("/api/events");
   es.onmessage = (m) => handle(JSON.parse(m.data));
-  es.onopen = () => { $("chat").hidden = false; $("login").hidden = true; };
+  es.onopen = () => { $("chat").hidden = false; };
   es.onerror = async () => {
     // EventSource retries by itself; only stop and ask to sign in on a 401.
     const r = await fetch("/api/events?after=999999999", { method: "HEAD" }).catch(() => null);
-    if (r && r.status === 401) { es.close(); $("login").hidden = false; $("chat").hidden = true; $("status").textContent = "Signed out"; }
+    if (r && r.status === 401) { es.close(); boot(); }
     else $("status").textContent = "Reconnecting…";
   };
 }
+
+// Sign-in. Passkeys use the browser's own JSON helpers, so no base64 code here.
+const postJSON = (url, body) => fetch(url, {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+}).catch(() => null);
+const say = (text) => { $("err").textContent = text; };
+const failed = async (r) => say(r ? await r.text() : "Could not reach the server");
+const passkeysWork = () => !!window.PublicKeyCredential?.parseCreationOptionsFromJSON;
+
+async function boot() {
+  const r = await fetch("/auth/state").catch(() => null);
+  if (!r || !r.ok) return failed(r);
+  const s = await r.json();
+  $("signin").hidden = s.signed_in;
+  $("account").hidden = !s.signed_in;
+  $("chat").hidden = true;
+  if (!s.signed_in) {
+    $("status").textContent = "Signed out";
+    $("setup").hidden = $("setup-help").hidden = !s.setup_open;
+    $("pk-signin").hidden = s.setup_open;
+    return;
+  }
+  $("pk-card").hidden = $("pk-why").hidden = !s.needs_passkey;
+  connect();
+}
+
+$("pk-signin").addEventListener("click", async () => {
+  say("");
+  if (!passkeysWork()) return say("This browser is too old for passkeys.");
+  const r = await postJSON("/auth/login/start", {});
+  if (!r || !r.ok) return failed(r);
+  const { id, options } = await r.json();
+  let credential;
+  try {
+    credential = await navigator.credentials.get({ publicKey: PublicKeyCredential.parseRequestOptionsFromJSON(options.publicKey) });
+  } catch (e) { return say("Passkey sign-in didn't finish: " + e.message); }
+  const f = await postJSON("/auth/login/finish", { id, credential: credential.toJSON() });
+  if (!f || !f.ok) return failed(f);
+  boot();
+});
+
+$("pk-show").addEventListener("click", () => { $("pk-card").hidden = false; $("pk-name").focus(); });
+$("pk-add").addEventListener("click", async () => {
+  say("");
+  if (!passkeysWork()) return say("This browser is too old for passkeys.");
+  const r = await postJSON("/api/passkeys/start", {});
+  if (!r || !r.ok) return failed(r);
+  const { id, options } = await r.json();
+  let credential;
+  try {
+    credential = await navigator.credentials.create({ publicKey: PublicKeyCredential.parseCreationOptionsFromJSON(options.publicKey) });
+  } catch (e) { return say("The passkey wasn't added: " + e.message); }
+  const f = await postJSON("/api/passkeys/finish", { id, name: $("pk-name").value, credential: credential.toJSON() });
+  if (!f || !f.ok) return failed(f);
+  $("pk-card").hidden = true;
+  say("Passkey added.");
+});
+
+$("logout").addEventListener("click", async () => {
+  const r = await postJSON("/api/logout", {});
+  if (r && r.ok) location.reload(); else failed(r);
+});
 
 $("send").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -196,7 +282,7 @@ $("text").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("send").requestSubmit(); }
 });
 
-connect();
+boot();
 </script>
 </body>
 </html>

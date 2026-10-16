@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-023: System 1 may only let through file changes inside a bot's computer; it routes inbox messages (2026-10-16)
+
+**Decided:** in the gate, Laya is asked only about `write` and `edit` calls that run inside the bot's computer, and only when no rule decided; at 0.95 confidence or more they run without a card. Bash, anything on the host and everything else always asks the owner unless a rule says otherwise. For routing, Laya picks among the enabled bots' remits for new inbox messages and acts at 0.85 or more. Both thresholds are settings, the gate's never below 0.9. Every ask leaves a receipt.
+**Why:** a file change in the bot's own container is reversible and can't reach anyone else; a shell command can send, pay or publish over the network, so it is never "reversible by construction" (AGENTS rule 5). Strict thresholds mean Laya acts only on clear cases until it's calibrated on the owner's own approvals and reassignments.
+**Alternatives:** let System 1 judge bash commands too; route every message, not just the inbox's; no receipts until calibration exists.
+**Revisit if:** calibration (M5) shows Laya is reliable on a wider class, such as read-only shell commands.
+
 ## D-022: One event stream for all bots, each event tagged with its bot (2026-10-16)
 
 **Decided:** clients open one SSE stream that carries every bot's thread events and the node list, each wrapped in an `Envelope { bot, event }`. Events get a global id, which clients resume from with `Last-Event-ID`; each thread still numbers its events without gaps.

@@ -14,6 +14,7 @@ mod nodes;
 mod placement;
 mod runs;
 mod screens;
+mod system1;
 
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -143,6 +144,7 @@ struct App {
     // ponytail: one std Mutex for all link state; per-node state when there is more than one node.
     rt: Mutex<Runtime>,
     auth: auth::Auth,
+    system1: system1::System1,
     /// The built web UI (crates/ui/dist), served at `/`.
     ui_dir: String,
 }
@@ -161,6 +163,10 @@ async fn main() -> anyhow::Result<()> {
     let origin =
         std::env::var("ORPHUSBOT_ORIGIN").unwrap_or_else(|_| "http://localhost:7480".into());
     let auth = auth::Auth::new(&origin, setup_token)?;
+    let system1 = system1::System1::from_env();
+    if system1.enabled() {
+        info!("System 1 is on: inbox messages are routed and reversible calls may pass");
+    }
     let ui_dir = std::env::var("ORPHUSBOT_UI_DIR").unwrap_or_else(|_| "crates/ui/dist".into());
     if !std::path::Path::new(&ui_dir).join("index.html").exists() {
         warn!(
@@ -196,6 +202,7 @@ async fn main() -> anyhow::Result<()> {
         live,
         rt: Mutex::default(),
         auth,
+        system1,
         ui_dir,
     });
     tokio::spawn(reconcile_forever(app.clone()));
@@ -223,6 +230,7 @@ fn router(app: Shared) -> Router {
         .route("/api/logout", post(auth::logout))
         .route("/api/bots", get(bots::list).post(bots::create))
         .route("/api/bots/update", post(bots::update))
+        .route("/api/decisions", get(system1::list))
         .route("/api/screen", get(screens::open))
         .route("/api/links/{code}", get(links::lookup))
         .route("/api/links/approve", post(links::approve))
@@ -313,31 +321,75 @@ async fn send_message(
         .map_err(|e| internal("storing message", e))?;
     publish(&app, Some(id), Some(&thread.bot), event);
 
-    match runs::submit(&app.db, thread.id, &text)
+    // A new task for the inbox goes to System 1 first; a follow-up joins the inbox's run.
+    if thread.bot == "inbox" && app.system1.enabled() {
+        let busy = runs::busy(&app.db, thread.id)
+            .await
+            .map_err(|e| internal("checking the inbox", e))?;
+        if !busy {
+            tokio::spawn(triage(app.clone(), thread, text));
+            return Ok(StatusCode::ACCEPTED);
+        }
+    }
+    submit(&app, &thread, text)
         .await
-        .map_err(|e| internal("queueing run", e))?
-    {
+        .map_err(|e| internal("queueing run", e))?;
+    Ok(StatusCode::ACCEPTED)
+}
+
+/// Queues `text` as a run in `thread`, or adds it to the thread's active run.
+async fn submit(app: &App, thread: &db::Thread, text: String) -> sqlx::Result<()> {
+    match runs::submit(&app.db, thread.id, &text).await? {
         Submitted::Queued(run) => {
             lock(&app.rt).waiting.remove(&run);
-            publish(
-                &app,
-                None,
-                Some(&thread.bot),
-                ThreadEvent::RunQueued { run, waiting: None },
-            );
-            dispatch(&app).await;
+            let event = ThreadEvent::RunQueued { run, waiting: None };
+            publish(app, None, Some(&thread.bot), event);
+            dispatch(app).await;
         }
         Submitted::Joined(_) => {}
         Submitted::Steer { run, fence } => {
             let attempt = Attempt { run, fence };
-            if let Some(tx) = node_for(&app, attempt) {
+            if let Some(tx) = node_for(app, attempt) {
                 // If this fails the node is going away; the run is re-queued and the text is
                 // already in the thread for the resumed attempt to see.
                 let _ = tx.send(ToNode::Steer { attempt, text }).await;
             }
         }
     }
-    Ok(StatusCode::ACCEPTED)
+    Ok(())
+}
+
+/// Asks System 1 which bot an inbox message is for (DESIGN §7.2). If it's sure,
+/// the message moves to that bot's thread and the inbox says so; otherwise the
+/// inbox keeps it (PRD B-BOT-03).
+async fn triage(app: Shared, inbox: db::Thread, text: String) {
+    let roster = bots::all(&app.db).await.unwrap_or_default();
+    let routed = app.system1.route(&app.db, &text, &roster).await;
+    let target = match &routed {
+        Some((bot, _)) => db::bot_thread(&app.db, &bot.slug).await.ok().flatten(),
+        None => None,
+    };
+    let thread = match (routed, target) {
+        (Some((bot, sure)), Some(target)) => {
+            let sure = (sure * 100.0).round().clamp(0.0, 100.0) as u8;
+            let event = ThreadEvent::Routed {
+                to: bot.slug,
+                name: bot.name,
+                sure,
+            };
+            record(&app, &inbox, event).await;
+            let copy = ThreadEvent::Message {
+                role: Role::User,
+                text: text.clone(),
+            };
+            record(&app, &target, copy).await;
+            target
+        }
+        _ => inbox,
+    };
+    if let Err(e) = submit(&app, &thread, text).await {
+        warn!("queueing a run: {e}");
+    }
 }
 
 async fn bot_thread(app: &App, slug: &str) -> Result<db::Thread, ApiError> {
@@ -516,11 +568,16 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
             tool_call_id: call_id,
             tool,
             input: &input,
+            in_computer: call["inComputer"].as_bool().unwrap_or(false),
         };
-        let verdict = gate::decide(&app.db, &gate_call).await.unwrap_or_else(|e| {
-            warn!("deciding a tool call: {e}");
-            gate::Verdict::Deny("OrphusBot could not check this call, so it was blocked.".into())
-        });
+        let verdict = gate::decide(&app.db, &app.system1, &gate_call)
+            .await
+            .unwrap_or_else(|e| {
+                warn!("deciding a tool call: {e}");
+                gate::Verdict::Deny(
+                    "OrphusBot could not check this call, so it was blocked.".into(),
+                )
+            });
         match verdict {
             gate::Verdict::Allow => {
                 return respond(app, attempt, ui_response(&id, "value", json!("allow"))).await;

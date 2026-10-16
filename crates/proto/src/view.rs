@@ -100,6 +100,10 @@ impl ThreadView {
                     self.items.push(Item::Notice { text, error });
                 }
             }
+            ThreadEvent::Routed { name, sure, .. } => self.items.push(Item::Notice {
+                text: format!("Sent to {name} (System 1 was {sure}% sure)"),
+                error: false,
+            }),
             // The node list is for every thread; clients keep it beside their thread views.
             ThreadEvent::Nodes { .. } => {}
             ThreadEvent::DialogOpened { dialog } => self.items.push(Item::Card {

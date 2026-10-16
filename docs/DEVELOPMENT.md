@@ -54,6 +54,20 @@ How to build, run and test OrphusBot on your own machine. This covers what is bu
    cargo run -p orphusbot-node
    ```
 
+## System 1 (Laya)
+
+Optional. Run laya-serve (Apache-2.0) and point the server at it:
+
+```sh
+uv venv ~/.local/share/laya-venv --python 3.12
+uv pip install --python ~/.local/share/laya-venv/bin/python torch --index-url https://download.pytorch.org/whl/cpu
+uv pip install --python ~/.local/share/laya-venv/bin/python 'laya[serve]==0.4.8'
+LAYA_HOST=127.0.0.1 LAYA_PORT=7600 LAYA_MODELS=english ~/.local/share/laya-venv/bin/laya-serve
+export ORPHUSBOT_LAYA_URL=http://127.0.0.1:7600
+```
+
+The English checkpoint needs about 2.5 GB of memory. On a small laptop answers can take seconds, so raise `ORPHUSBOT_LAYA_TIMEOUT_MS` for local testing; on the GPU box they take tens of milliseconds. Settings → **Decisions** shows what it decided.
+
 ## Desktop app
 
 Needs WebKitGTK 4.1 and its development files (Arch: `webkit2gtk-4.1`; Debian and Ubuntu: `libwebkit2gtk-4.1-dev librsvg2-dev libayatana-appindicator3-dev`).
@@ -85,6 +99,10 @@ All settings are environment variables.
 | `ORPHUSBOT_SETUP_TOKEN` | required | Signs you in for one hour to add your first passkey. Works only while no passkey exists |
 | `ORPHUSBOT_ORIGIN` | `http://localhost:7480` | The address browsers use. Passkeys are tied to its host name, so it can't be an IP address. An `https` origin also marks cookies `Secure` |
 | `ORPHUSBOT_UI_DIR` | `crates/ui/dist` | The built web UI, served at `/` |
+| `ORPHUSBOT_LAYA_URL` | none | laya-serve for System 1, such as `http://127.0.0.1:7600`. Without it System 1 abstains: the inbox keeps its messages and every non-read tool call asks |
+| `ORPHUSBOT_LAYA_TIMEOUT_MS` | `1500` | How long to wait for Laya before abstaining |
+| `ORPHUSBOT_ROUTE_THRESHOLD` | `0.85` | Confidence Laya needs to move an inbox message to another bot |
+| `ORPHUSBOT_GATE_THRESHOLD` | `0.95` | Confidence Laya needs to let a file change inside a bot's computer through (never below 0.9) |
 | `ORPHUSBOT_BIND` | `127.0.0.1:7480` | Address to listen on. Bind to your NetBird address to reach it from other machines; **never** to a public interface |
 | `RUST_LOG` | off | Log level, e.g. `info` |
 
@@ -151,7 +169,7 @@ These are known simplifications, each marked `ponytail:` in the code, with the m
 
 | Simplification | Replaced in |
 |---|---|
-| Bots are routed by hand: you pick the bot; System 1 routing of the inbox comes next | M3.2 |
+| System 1 asks one triage question (which bot) and one gate question (pass or ask); urgency, act-now and untrusted come later | M3.3+ |
 | Streaming text isn't stored; only finished messages are replayed after a reconnect | M2 (batched progress events) |
 | Read-only tools still round-trip to the server before running | When it measurably slows bots down |
 | Live events fan out inside one server process, not through Postgres `NOTIFY` | When there's more than one server process |

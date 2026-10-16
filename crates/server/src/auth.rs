@@ -463,6 +463,7 @@ pub(crate) mod tests {
             live: tokio::sync::broadcast::channel(16).0,
             rt: Mutex::default(),
             auth: Auth::new(ORIGIN, SETUP.into()).unwrap(),
+            system1: crate::system1::System1::off(),
             ui_dir: String::new(),
         })
     }

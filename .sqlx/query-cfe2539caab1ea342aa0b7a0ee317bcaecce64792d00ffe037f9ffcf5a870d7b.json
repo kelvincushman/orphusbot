@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select decided_by from effect order by id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "decided_by",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "effect",
+            "name": "decided_by"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "cfe2539caab1ea342aa0b7a0ee317bcaecce64792d00ffe037f9ffcf5a870d7b"
+}

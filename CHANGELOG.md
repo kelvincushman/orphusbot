@@ -13,6 +13,9 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **Bots work as a team (M8.2):** a bot can hand a teammate part of the job ("ask Coder to write the benchmark"); it becomes a ticket for that bot, and the answer comes back to the asking bot, which carries on. Each bot knows who is on the team, and team bots share a `/shared` folder.
+- **A model drop-down when setting up a bot:** pick from every model your machines can use, or type one under Other.
+- **Laptops work unplugged above 30% battery** (`ORPHUSBOT_MIN_BATTERY` on the node).
 - **Pick a bot's model from a list (M8.1):** the Model field suggests every model your machines can use (Claude through Claude Code, Codex, local models such as Qwen on the GPU box), and says which machine has each.
 - **A setup script for the Mac:** `sh scripts/macos-setup.sh <user>@<gpu-box>` builds and installs the app and keeps the tunnel to your server open.
 - **Sign in to MCP servers (M6.5):** a connection with an address has **Sign in**: you sign in on the provider's page and come back connected. OrphusBot keeps the sign-in fresh before each run, and the tokens stay on the server.

@@ -26,6 +26,7 @@ mod runs;
 mod screens;
 mod secrets;
 mod system1;
+mod team;
 mod tickets;
 mod usage;
 
@@ -648,6 +649,14 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
     let method = request["method"].as_str().unwrap_or_default().to_owned();
     let title = request["title"].as_str().unwrap_or_default().to_owned();
 
+    if method == "input" && title == team::ASK_TITLE {
+        let ask: Value = request["placeholder"]
+            .as_str()
+            .and_then(|p| serde_json::from_str(p).ok())
+            .unwrap_or_default();
+        let answer = team::ask(app, attempt.run, &active.thread.bot, &ask).await;
+        return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
+    }
     let (kind, tool_call_id) = if method == "input" && title == GATE_TITLE {
         let call: Value = request["placeholder"]
             .as_str()
@@ -936,6 +945,11 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
     publish(app, None, Some(&bot.slug), event);
     device::run_news(app, run, device::RunNews::Running).await;
     spec.mcp = connections::for_bot(app, &bot.slug).await;
+    if let Ok(roster) = bots::all(&app.db).await
+        && let Some(note) = team::roster_note(&roster, &bot.slug)
+    {
+        spec.instructions.push_str(&note);
+    }
     let start = ToNode::StartTurn {
         attempt,
         text: claimed.prompt,
@@ -1380,6 +1394,7 @@ async fn run_ended(
 ) {
     expire_dialogs(app, run).await;
     tickets::run_ended(&app.db, run, outcome).await;
+    team::answered(app, run, outcome, error.as_deref()).await;
     let news = match outcome {
         RunOutcome::Completed => device::RunNews::Done,
         RunOutcome::Failed => device::RunNews::Failed,

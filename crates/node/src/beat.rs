@@ -12,9 +12,14 @@ pub fn load() -> u32 {
     (one * 100.0 / cpus as f64).round() as u32
 }
 
-/// On battery: the machine has mains power supplies and none of them is online.
-/// A desktop or server without them never is.
+/// Low on battery: unplugged with less charge than `ORPHUSBOT_MIN_BATTERY`
+/// percent (default 30; `101` never works unplugged). A desktop or server without
+/// mains supplies never is; an unplugged laptop whose charge can't be read is.
 pub fn on_battery() -> bool {
+    let min = std::env::var("ORPHUSBOT_MIN_BATTERY")
+        .ok()
+        .and_then(|v| v.trim().parse::<u32>().ok())
+        .unwrap_or(30);
     let Ok(supplies) = fs::read_dir("/sys/class/power_supply") else {
         return false;
     };
@@ -24,13 +29,24 @@ pub fn on_battery() -> bool {
             .trim()
             .to_owned()
     };
-    let mains: Vec<bool> = supplies
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| read(p, "type") == "Mains")
-        .map(|p| read(&p, "online") == "1")
-        .collect();
-    !mains.is_empty() && !mains.contains(&true)
+    let (mut mains, mut charge) = (Vec::new(), None::<u32>);
+    for p in supplies.flatten().map(|e| e.path()) {
+        match read(&p, "type").as_str() {
+            "Mains" => mains.push(read(&p, "online") == "1"),
+            "Battery" => {
+                if let Ok(c) = read(&p, "capacity").parse::<u32>() {
+                    charge = Some(charge.map_or(c, |prev| prev.min(c)));
+                }
+            }
+            _ => {}
+        }
+    }
+    low_battery(&mains, charge, min)
+}
+
+fn low_battery(mains: &[bool], charge: Option<u32>, min: u32) -> bool {
+    let unplugged = !mains.is_empty() && !mains.contains(&true);
+    unplugged && charge.is_none_or(|c| c < min)
 }
 
 /// `hours` is `START-END` in whole local hours, such as `22-7` (it may wrap past midnight).
@@ -62,6 +78,19 @@ pub async fn local_hour() -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn works_unplugged_only_with_enough_charge() {
+        assert!(!low_battery(&[true], Some(10), 30), "plugged in");
+        assert!(!low_battery(&[false], Some(79), 30));
+        assert!(low_battery(&[false], Some(29), 30));
+        assert!(low_battery(&[false], None, 30), "unknown charge holds back");
+        assert!(
+            low_battery(&[false], Some(100), 101),
+            "101: never unplugged"
+        );
+        assert!(!low_battery(&[], None, 30), "no mains supply: a server");
+    }
 
     #[test]
     fn quiet_hours_wrap_past_midnight() {

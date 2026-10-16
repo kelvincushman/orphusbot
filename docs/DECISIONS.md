@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-013: M0 ships a plain HTML page; the Leptos UI starts in M1 (2026-10-16)
+
+**Decided:** M0's browser page is one static HTML file with `EventSource`, served by the server. The Leptos UI (D-002) starts in M1, together with the Tauri desktop shell that needs it.
+**Why:** M0 exists to prove the server ↔ node ↔ Orphus path. A WebAssembly toolchain and Leptos build on a 2-core laptop would add most of M0's build time for a page that M1 replaces anyway.
+**Alternatives:** a bare Leptos page in M0, as the PRD first said.
+**Revisit if:** never; M1 removes the page.
+
 ## D-012: The wearable is imported as a cleaned snapshot, without history (2026-10-16)
 
 **Decided:** the OmarchyWearable repository is copied into `wearable/` as one cleaned snapshot. Its history stays in the old private repository, which is retired.

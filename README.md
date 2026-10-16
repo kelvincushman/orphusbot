@@ -4,7 +4,7 @@
 
 OrphusBot is an open-source, self-hosted bot service. You hand it a task from the web, your desktop, your Android phone or a one-button wearable, and named bots carry it out on real computers using the [Orphus](https://github.com/kelvincushman/orphus) agent harness and the Claude and ChatGPT subscriptions you already pay for. A fast decision model routes every task and checks every risky step, and every decision it makes is recorded so you can see it and correct it.
 
-> **Status: design stage.** There is no runnable code yet. The product requirements and the design are written and open for review; implementation starts at milestone M0 (see [Roadmap](#roadmap)). Issues and design feedback are welcome.
+> **Status: early development.** Milestone M0 works: a message from the browser streams a reply from Orphus on a node. Everything else is designed but not built yet (see [Roadmap](#roadmap)). To run it, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). Issues and design feedback are welcome.
 
 ---
 
@@ -52,7 +52,7 @@ Full detail: [docs/DESIGN.md](docs/DESIGN.md).
 
 | Milestone | Delivers |
 |---|---|
-| **M0 Skeleton** | A message from the browser streams a reply from Orphus on your laptop |
+| **M0 Skeleton** ✅ | A message from the browser streams a reply from Orphus on your laptop |
 | **M1 Durable runs** | Approvals, crash recovery, desktop app |
 | **M2 Computers** | Per-bot containers, live screen, takeover, GPU-box node |
 | **M3 System 1 + wearable** | Laya triage and approvals, tickets, routines, wearable tasks with the full duplex loop |
@@ -67,6 +67,7 @@ Full detail: [docs/DESIGN.md](docs/DESIGN.md).
 | [docs/README.md](docs/README.md) | Documentation index |
 | [docs/PRD.md](docs/PRD.md) | Product requirements: goals, requirements by area, user journeys, milestones, open questions |
 | [docs/DESIGN.md](docs/DESIGN.md) | Design: components, run loop, decision layer, computers, wearable duplex habitat, capture, security, testing, deployment |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Building, running and testing it locally |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Decision log: what was decided, when and why |
 | [docs/research/rakazo-architecture.md](docs/research/rakazo-architecture.md) | The study of Rakazo that informed the design |
 | [wearable/README.md](wearable/README.md) | The wearable: firmware, companion app, hardware, device channel, its own docs |

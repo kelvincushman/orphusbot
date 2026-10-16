@@ -1,0 +1,121 @@
+<!doctype html>
+<!-- M0 placeholder UI: plain HTML and EventSource. The Leptos UI replaces it in M1 (DECISIONS D-013). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OrphusBot</title>
+<style>
+  :root { --bg: #fff; --fg: #111; --muted: #666; --line: #ddd; --you: #eef3ff; --bot: #f4f4f4; --bad: #b00020; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #000; --fg: #eee; --muted: #999; --line: #333; --you: #14213d; --bot: #1a1a1a; --bad: #ff6b81; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 46rem; margin: 0 auto; padding: 1rem; display: flex; flex-direction: column; min-height: 100vh; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+  h1 { font-size: 1.25rem; margin: 0 0 .5rem; }
+  #status { color: var(--muted); font-size: .875rem; }
+  #log { flex: 1; display: flex; flex-direction: column; gap: .5rem; padding: .5rem 0; }
+  .msg { padding: .5rem .75rem; border-radius: .5rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .user { background: var(--you); align-self: flex-end; max-width: 85%; }
+  .assistant { background: var(--bot); max-width: 100%; }
+  .error { color: var(--bad); font-size: .875rem; }
+  form { display: flex; gap: .5rem; border-top: 1px solid var(--line); padding-top: .75rem; }
+  textarea, input { flex: 1; font: inherit; padding: .5rem; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: .5rem; }
+  button { font: inherit; padding: .5rem 1rem; border-radius: .5rem; border: 1px solid var(--line); background: var(--fg); color: var(--bg); cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  :focus-visible { outline: 2px solid #4c8dff; outline-offset: 2px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header><h1>OrphusBot</h1><span id="status" role="status">Connecting…</span></header>
+
+  <form id="login" method="post" action="/login" hidden>
+    <input id="token" name="token" type="password" aria-label="Access token" placeholder="Access token" autocomplete="current-password" required>
+    <button>Sign in</button>
+  </form>
+
+  <div id="chat" hidden>
+    <div id="log" role="log" aria-live="polite" aria-label="Conversation"></div>
+    <form id="send">
+      <textarea id="text" rows="2" aria-label="Message" placeholder="Message the bot (Enter to send, Shift+Enter for a new line)" required></textarea>
+      <button id="go">Send</button>
+    </form>
+    <p id="err" class="error" role="alert"></p>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const log = $("log");
+let pending = null; // the assistant bubble that is still streaming
+
+function bubble(role, text) {
+  const div = document.createElement("div");
+  div.className = "msg " + role;
+  div.textContent = text; // textContent, never innerHTML: bot output is untrusted
+  log.append(div);
+  div.scrollIntoView({ block: "end" });
+  return div;
+}
+
+function setStatus(online, node, busy) {
+  $("status").textContent = (online ? "Node " + node + " online" : "No node connected") + (busy ? " · working…" : "");
+}
+let node = { online: false, name: null }, busy = false;
+
+function handle(ev) {
+  switch (ev.type) {
+    case "message":
+      if (ev.role === "assistant" && pending) { pending.textContent = ev.text; pending = null; }
+      else bubble(ev.role, ev.text);
+      break;
+    case "delta":
+      pending ??= bubble("assistant", "");
+      pending.textContent += ev.text;
+      pending.scrollIntoView({ block: "end" });
+      break;
+    case "turn_started": busy = true; break;
+    case "turn_ended":
+      busy = false; pending = null;
+      if (ev.error) bubble("error", "Turn failed: " + ev.error);
+      break;
+    case "node_status": node = { online: ev.online, name: ev.node }; break;
+  }
+  setStatus(node.online, node.name, busy);
+}
+
+function connect() {
+  const es = new EventSource("/api/events");
+  es.onmessage = (m) => handle(JSON.parse(m.data));
+  es.onopen = () => { $("chat").hidden = false; $("login").hidden = true; };
+  es.onerror = async () => {
+    // EventSource retries by itself; only stop and ask to sign in on a 401.
+    const r = await fetch("/api/events?after=999999999", { method: "HEAD" }).catch(() => null);
+    if (r && r.status === 401) { es.close(); $("login").hidden = false; $("chat").hidden = true; $("status").textContent = "Signed out"; }
+    else $("status").textContent = "Reconnecting…";
+  };
+}
+
+$("send").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = $("text").value.trim();
+  if (!text) return;
+  $("go").disabled = true; $("err").textContent = "";
+  const r = await fetch("/api/messages", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }),
+  }).catch(() => null);
+  $("go").disabled = false;
+  if (r && r.ok) $("text").value = "";
+  else $("err").textContent = r ? await r.text() : "Could not reach the server";
+});
+$("text").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("send").requestSubmit(); }
+});
+
+connect();
+</script>
+</body>
+</html>

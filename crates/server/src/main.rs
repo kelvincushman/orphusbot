@@ -15,6 +15,7 @@ mod connections;
 mod db;
 mod device;
 mod e2b;
+mod fleets;
 mod gate;
 mod links;
 mod nodes;
@@ -273,6 +274,8 @@ fn router(app: Shared) -> Router {
             get(connections::list).post(connections::create),
         )
         .route("/api/connections/delete", post(connections::delete))
+        .route("/api/fleets", get(fleets::list).post(fleets::save))
+        .route("/api/fleets/delete", post(fleets::delete))
         .route("/api/connections/grant", post(connections::grant))
         .route("/api/connections/oauth", post(oauth::start))
         .route("/api/artifacts/{id}", get(artifacts::download))
@@ -1003,6 +1006,7 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
         resumed: claimed.resumed,
         bot: Box::new(spec),
         files: attachments::for_run(&app.db, run).await,
+        fleets: fleets::all(&app.db).await,
     };
     if link.tx.send(start).await.is_err() {
         // The link closed under us; its disconnect handler re-queues the run.

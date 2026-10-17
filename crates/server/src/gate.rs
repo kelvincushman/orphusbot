@@ -130,12 +130,6 @@ pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Re
     if READ_ONLY.contains(&call.tool) || memory_read(call) {
         return Ok(Verdict::Allow);
     }
-    // A discussion's verdict filing its own room into memory (DESIGN §11.4).
-    if call.tool == "memory"
-        && crate::discussions::files_its_room(db, call.attempt.run, call.input).await
-    {
-        return Ok(Verdict::Allow);
-    }
     // Helpers must run inside the turn: once it ends, the server answers no more of
     // their calls, so a background helper would wait for ever (DESIGN §11.2).
     if call.tool == "subagent" && call.input["async"] != false {

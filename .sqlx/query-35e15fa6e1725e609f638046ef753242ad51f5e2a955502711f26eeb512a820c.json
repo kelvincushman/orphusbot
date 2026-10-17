@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer\n         from bot where slug = $1",
+  "query": "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google\n         from bot where slug = $1",
   "describe": {
     "columns": [
       {
@@ -112,6 +112,17 @@
             "name": "computer"
           }
         }
+      },
+      {
+        "ordinal": 10,
+        "name": "google",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "google"
+          }
+        }
       }
     ],
     "parameters": {
@@ -129,8 +140,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "2253b0c2f79593a9b9e9c1c679db8540b4c790497f20ad2709b082becbde0925"
+  "hash": "35e15fa6e1725e609f638046ef753242ad51f5e2a955502711f26eeb512a820c"
 }

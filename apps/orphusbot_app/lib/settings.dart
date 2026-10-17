@@ -638,6 +638,7 @@ class _BotEditorState extends State<BotEditor> {
     'scope': 'private',
     'disabled': false,
     'computer': 'node',
+    'google': 'read',
     ...?widget.bot,
   };
   late final name = TextEditingController(text: bot['name'] as String);
@@ -744,6 +745,25 @@ class _BotEditorState extends State<BotEditor> {
                     DropdownMenuItem(value: t, child: Text(t)),
                 ],
                 onChanged: (t) => bot['thinking'] = t,
+              ),
+              DropdownButtonFormField<String>(
+                isExpanded: true,
+                initialValue: bot['google'] as String? ?? 'read',
+                decoration: const InputDecoration(
+                  labelText: 'Google (Gmail, Calendar, Tasks, Drive, Docs)',
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'none', child: Text('No access')),
+                  DropdownMenuItem(
+                    value: 'read',
+                    child: Text('Look things up only'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'write',
+                    child: Text('Also create and change (asks you each time)'),
+                  ),
+                ],
+                onChanged: (g) => bot['google'] = g,
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,

@@ -46,6 +46,8 @@ export const ASK_TITLE = "orphusbot-ask";
 export const DISCUSS_TITLE = "orphusbot-discuss";
 
 const computer = process.env.ORPHUSBOT_COMPUTER;
+/** The node's gws, when this bot may use Google (`read` or `write`). */
+const google = process.env.ORPHUSBOT_GWS && process.env.ORPHUSBOT_GOOGLE ? process.env.ORPHUSBOT_GWS : undefined;
 const runtime = process.env.ORPHUSBOT_RUNTIME ?? "podman";
 const home = process.env.ORPHUSBOT_COMPUTER_HOME ?? "/home/bot";
 /**
@@ -69,6 +71,9 @@ const COMPUTER_TOOLS = [
   // the host but only reads and writes the memory project, and only the
   // librarian role may write (DESIGN §11.4).
   ...(process.env.ORPHUS_MEMORY_COMMAND ? ["memory"] : []),
+  // Google through gws on the host, with the owner's credentials, which never
+  // enter the computer; the gate decides each call (DESIGN §11.5).
+  ...(google ? ["google"] : []),
 ];
 const IMAGES: Record<string, string> = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
@@ -306,6 +311,47 @@ export default function (pi: ExtensionAPI) {
       return { content: [{ type: "text", text: answer.replace(/^ok:/, "") }], details: {} };
     },
   });
+
+  if (google) {
+    const MAX_OUT = 200 * 1024;
+    pi.registerTool({
+      name: "google",
+      label: "Google Workspace",
+      description:
+        `Use Kelvin's Google Workspace (Gmail, Calendar, Tasks, Drive, Docs, Sheets, People) through the gws CLI. ` +
+        `Give the command line as a list: service, resource(s), method, then flags, e.g. ` +
+        `["calendar","events","list","--params","{\"calendarId\":\"primary\",\"timeMin\":\"2026-10-17T00:00:00Z\",\"singleEvents\":true,\"orderBy\":\"startTime\"}"] or ` +
+        `["tasks","tasks","insert","--params","{\"tasklist\":\"@default\"}","--json","{\"title\":\"Call the dentist\"}"]. ` +
+        `["schema","calendar.events.insert"] shows a method's parameters. Output is JSON. ` +
+        (process.env.ORPHUSBOT_GOOGLE === "write"
+          ? "You may create and change things; each change asks Kelvin first."
+          : "You may only look things up; ask pa to create or change anything."),
+      promptSnippet: "Look things up (or change them) in Kelvin's Google Workspace",
+      parameters: Type.Object({
+        args: Type.Array(Type.String(), { description: "The gws command line, one argument per item" }),
+      }),
+      async execute(_id, params, signal) {
+        const out = await new Promise<string>((done, fail) => {
+          const child = spawn(google, params.args, { stdio: ["ignore", "pipe", "pipe"], signal, timeout: 60_000 });
+          const chunks: Buffer[] = [];
+          let size = 0;
+          const take = (b: Buffer) => {
+            if (size < MAX_OUT) chunks.push(b);
+            size += b.length;
+          };
+          child.stdout.on("data", take);
+          child.stderr.on("data", take);
+          child.on("error", fail);
+          child.on("close", (code) => {
+            const text = Buffer.concat(chunks).toString().slice(0, MAX_OUT);
+            const cut = size > MAX_OUT ? `\n[output cut at ${MAX_OUT} bytes; ask for less, e.g. with fields or pageSize]` : "";
+            code === 0 ? done(text + cut) : fail(new Error(`gws exited ${code}: ${text}${cut}`));
+          });
+        });
+        return { content: [{ type: "text", text: out }], details: {} };
+      },
+    });
+  }
 
   if (!computer) return; // ORPHUSBOT_RUNTIME=none: tools run on the host, still gated.
 

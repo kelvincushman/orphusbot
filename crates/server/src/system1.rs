@@ -684,6 +684,7 @@ pub(crate) mod tests {
             scope: "private".into(),
             disabled,
             computer: "node".into(),
+            google: "read".into(),
         }
     }
 

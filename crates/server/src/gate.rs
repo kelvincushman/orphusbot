@@ -105,6 +105,28 @@ pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Re
             "You've already posted this round; leave the room and stop.".into(),
         ));
     }
+    // Google through the node's gog (DESIGN §11.5): look-ups pass; changes only
+    // for a bot that may write, and then they ask like any other change.
+    if call.tool == "google" {
+        match crate::google::kind(&crate::google::args(call.input)) {
+            crate::google::Kind::Refused => {
+                return Ok(Verdict::Deny(format!(
+                    "Use one of these Google services: {}.",
+                    crate::google::SERVICES.join(", ")
+                )));
+            }
+            crate::google::Kind::Lookup => return Ok(Verdict::Allow),
+            crate::google::Kind::Change
+                if crate::google::mode(db, call.attempt.run).await? != "write" =>
+            {
+                return Ok(Verdict::Deny(
+                    "You can only look things up in Google. Ask pa to create or change anything."
+                        .into(),
+                ));
+            }
+            crate::google::Kind::Change => {}
+        }
+    }
     if READ_ONLY.contains(&call.tool) || memory_read(call) {
         return Ok(Verdict::Allow);
     }

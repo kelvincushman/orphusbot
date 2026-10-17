@@ -591,6 +591,11 @@ impl Engine {
                 .args(["--mcp-config", &file])
                 .env("ORPHUSBOT_MCP", "1");
         }
+        // Google: the node's gws, when this node has one (ORPHUSBOT_GWS, inherited)
+        // and the bot may use it; the credentials stay on this machine.
+        if let Some(google) = &bot.google {
+            command.env("ORPHUSBOT_GOOGLE", google);
+        }
         if let Some(sandbox) = &bot.e2b {
             // The computer is an E2B sandbox: the bridge reaches its envd over HTTPS.
             command

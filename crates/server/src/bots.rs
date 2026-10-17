@@ -26,7 +26,11 @@ pub const HOUSE_STYLE: &str = "\n\nHow to write replies (they are shown as Markd
 - Links as [what it is](url), not bare URLs. Say when you are unsure, and what would settle it.\n\n\
 How your work runs: your turn is the whole task. When you start helpers (subagents or a /fleet), run them \
 in the foreground and wait for their results before you finish; never send them to the background. Once \
-your turn ends, nothing you started can be approved any more, so background helpers would wait for ever.";
+your turn ends, nothing you started can be approved any more, so background helpers would wait for ever.\n\n\
+The team's memory is a Karpathy-style LLM wiki in the shared folder: /shared/raw (sources, never edited) and \
+/shared/wiki (articles, with wiki/index.md). Use the karpathy-llm-wiki skill with /shared as its root: before \
+researching something, query the wiki; when you learn something lasting (a decision, a finding, a fact about \
+Kelvin's work), ingest it so the next bot finds it. If /shared isn't there, you're a private bot: skip this.";
 
 const THINKING: &[&str] = &["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 

@@ -22,8 +22,9 @@
 // in RPC mode under orphusbot-node, so in any other mode it blocks everything.
 
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
-import { basename, resolve } from "node:path";
+import { access, readFile, realpath } from "node:fs/promises";
+import { homedir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
 import { Type } from "typebox";
 import type { ExtensionAPI } from "@orphus/coding-agent";
 import {
@@ -227,6 +228,19 @@ export default function (pi: ExtensionAPI) {
   // The engine's working folder on the host stands for the computer's home.
   const cwd = process.cwd();
   const inside = (p: string) => (p === cwd || p.startsWith(cwd + "/") ? home + p.slice(cwd.length) : p);
+  // Skills are instructions Orphus keeps on the host (the user's skills folder and
+  // the ones Orphus ships); a bot reads them from there, read only, since they
+  // aren't in its computer. Everything else is read in the computer (DESIGN §11.4).
+  const skillRoots = [
+    join(process.env.ORPHUS_CODING_AGENT_DIR ?? join(homedir(), ".orphus", "agent"), "skills"),
+    join(dirname(process.execPath), "builtin"),
+  ].map((r) => resolve(r) + "/");
+  // The real path, so a link inside a skills folder can't point the read elsewhere.
+  const skillFile = async (p: string): Promise<string | undefined> => {
+    if (!skillRoots.some((r) => resolve(cwd, p).startsWith(r))) return undefined;
+    const real = await realpath(resolve(cwd, p)).catch(() => undefined);
+    return real && skillRoots.some((r) => real.startsWith(r)) ? real : undefined;
+  };
 
   // An artifact (DESIGN §11.1): the file travels in `details`, which the node
   // forwards to the server and the model never sees.
@@ -296,8 +310,16 @@ export default function (pi: ExtensionAPI) {
   if (!computer) return; // ORPHUSBOT_RUNTIME=none: tools run on the host, still gated.
 
   const read: ReadOperations = {
-    readFile: (p) => (e2bUrl ? e2bFile(inside(p)) : inComputer('cat -- "$1"', [inside(p)])),
-    access: (p) => inComputer('test -r "$1"', [inside(p)]).then(() => {}),
+    readFile: async (p) => {
+      const skill = await skillFile(p);
+      if (skill) return readFile(skill);
+      return e2bUrl ? e2bFile(inside(p)) : inComputer('cat -- "$1"', [inside(p)]);
+    },
+    access: async (p) => {
+      const skill = await skillFile(p);
+      if (skill) return access(skill);
+      await inComputer('test -r "$1"', [inside(p)]);
+    },
     detectImageMimeType: async (p) => IMAGES[p.split(".").pop()?.toLowerCase() ?? ""] ?? null,
   };
   const write: WriteOperations = {

@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-038: The bots' memory is a Karpathy-style LLM wiki, not Dossier (2026-10-17)
+
+- **Context:** Dossier needed its own model server; the chosen Qwen3.5-27B didn't fit beside the box's other models, the two cards can't share a model, and an attempt left GPU 0 needing a reset. Kelvin pointed at karpathy-llm-wiki, an MIT Agent Skill implementing the same LLM-wiki pattern Dossier is built on.
+- **Decision (Kelvin's choice):** the team's memory is one wiki in the shared folder (`/shared/raw`, `/shared/wiki`), maintained by every bot with the karpathy-llm-wiki skill and its own model; discussion verdicts are filed into it. The bridge reads skill files from the host, read only.
+- **Alternatives:** Dossier on local models (better retrieval on benchmarks, but a model server and GPU memory to keep up); Dossier on a cloud API (a key and running costs); per-bot private wikis (no shared memory).
+- **Revisit if:** the wiki grows past what bots can search with file tools, at which point Dossier, or EmbeddingGemma search over the wiki, can sit behind it.
+
 ## D-037: A separate Orchestrator bot coordinates the team (2026-10-17)
 
 - **Context:** Kelvin wants a main bot that runs the others. Requests already reach Inbox, which System 1 routes from, and team bots can hand work to each other with `ask_bot`; nothing plans a job across bots or starts a discussion on its own.

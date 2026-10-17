@@ -112,6 +112,13 @@ pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Re
     {
         return Ok(Verdict::Allow);
     }
+    // Helpers must run inside the turn: once it ends, the server answers no more of
+    // their calls, so a background helper would wait for ever (DESIGN §11.2).
+    if call.tool == "subagent" && call.input["async"] != false {
+        return Ok(Verdict::Deny(
+            "Run helpers in the foreground: call subagent again with \"async\": false and wait for the result.".into(),
+        ));
+    }
     if ungated_helper(call) {
         return Ok(Verdict::Deny(format!(
             "{} starts helpers whose actions OrphusBot can't check, so it isn't allowed. Do the work yourself.",
@@ -343,14 +350,24 @@ mod tests {
         }
         // With the bridge installed for helpers, a subagent follows the rules like any call;
         // a workflow's own code still can't be gated.
+        let foreground = json!({"agent": "worker", "task": "x", "async": false});
         let gated = |id, tool| Call {
             helpers_gated: true,
-            ..call(a, id, tool, &input)
+            ..call(a, id, tool, &foreground)
         };
         assert_eq!(
             decide(&db, &gated("h2", "subagent")).await.unwrap(),
             Verdict::Allow
         );
+        // In the background it would outlive the turn and wait for ever: refused.
+        let background = Call {
+            helpers_gated: true,
+            ..call(a, "h5", "subagent", &input)
+        };
+        assert!(matches!(
+            decide(&db, &background).await.unwrap(),
+            Verdict::Deny(why) if why.contains("async")
+        ));
         assert!(matches!(
             decide(&db, &gated("h3", "workflow")).await.unwrap(),
             Verdict::Deny(_)

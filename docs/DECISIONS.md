@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-037: A separate Orchestrator bot coordinates the team (2026-10-17)
+
+- **Context:** Kelvin wants a main bot that runs the others. Requests already reach Inbox, which System 1 routes from, and team bots can hand work to each other with `ask_bot`; nothing plans a job across bots or starts a discussion on its own.
+- **Decision (Kelvin's choice):** a new team bot, Orchestrator, alongside Inbox: it plans and delegates with `ask_bot`, starts discussions with a new `discuss` tool (the verdict comes back to it as a message), and runs fleets. It's listed first and opened by default.
+- **Alternatives:** turn Inbox into the Orchestrator (one front door, but quick triage and big jobs would share one bot and one context); hide the other bots behind the Orchestrator (simpler surface, but the owner loses direct access to specialists).
+- **Revisit if:** the owner ends up sending everything to the Orchestrator, in which case Inbox can retire, or if routing between the two confuses.
+
 ## D-036: Discussions are rounds of ordinary bot runs in one Orphus room (2026-10-16)
 
 - **Context:** Kelvin wants OrphusBot's bots to deliberate the way Orphus agents do: outside their context windows, so each task stays clean, with what was decided kept in memory. Orphus offers this inside one engine as a fleet's `deliberate` team (helper sessions in one room).

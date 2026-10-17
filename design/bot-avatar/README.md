@@ -10,7 +10,7 @@ States, left to right: 0 idle, 1 thinking, 2 working, 3 needs you, 4 done. The a
 
 Each bot has its own face style, all from `gen.py` and all with the same contract (artboard `Avatar`, state machine `Bot`, input `state`). In state 3 every style turns red with an amber light, so "needs you" looks the same everywhere. A bot without a style of its own (one you create) gets `default`.
 
-![styles: rows default, inbox, researcher, coder, checker, blogger, pa; columns states 0-4](styles.png)
+![styles: rows default, inbox, researcher, coder, checker, blogger, pa, orchestrator; columns states 0-4](styles.png)
 
 | Style | Colour | Look |
 |---|---|---|
@@ -21,6 +21,7 @@ Each bot has its own face style, all from `gen.py` and all with the same contrac
 | `checker` | green | wide visor, check-mark antenna |
 | `blogger` | pink | beret whose tip is its light, no antenna |
 | `pa` | gold | bow tie |
+| `orchestrator` | silver | the main bot: deep navy face, three-point crown whose centre jewel is its light, no antenna |
 
 ## Changing it
 

@@ -3,9 +3,9 @@
 # frames.sh wrote: ./sheet.sh <webp dir> [out.png, default styles.png]
 set -euo pipefail
 src=${1:?usage: sheet.sh <webp dir> [out.png]}; out=${2:-styles.png}
-styles=${STYLES:-"default inbox researcher coder checker blogger pa"}
+styles=${STYLES:-"default inbox researcher coder checker blogger pa orchestrator"}
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
-pick=(0 15 3 4 -1)   # a telling frame per state: rest, looking, scanning, pulse peak, final pose
+pick=(0 7 3 4 -1)   # a telling frame per state: rest, looking, scanning, pulse peak, final pose
 rows=()
 for style in $styles; do
   cells=()

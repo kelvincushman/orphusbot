@@ -747,6 +747,7 @@ class _BotEditorState extends State<BotEditor> {
                 onChanged: (t) => bot['thinking'] = t,
               ),
               DropdownButtonFormField<String>(
+                isExpanded: true,
                 initialValue: bot['google'] as String? ?? 'read',
                 decoration: const InputDecoration(
                   labelText: 'Google (Gmail, Calendar, Tasks, Drive, Docs)',

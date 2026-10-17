@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-039: Google through `gws` on the node, gated per command (2026-10-17)
+
+- **Context:** Kelvin keeps his documents, calendar and to-dos in Google and wants bots to use them, with everyone able to look things up and only PA able to change anything.
+- **Decision (Kelvin's choice of CLI):** Google's `gws`, run on the node by a bridge `google` tool, with the owner's exported credentials kept on the node. Each bot has `google` = none, read or write. The gate classifies each gws command by its API method: reads pass, changes are refused for read bots and asked of the owner for write bots, and node file flags are refused.
+- **Alternatives:** `gog` (already on the box, MIT, per-service allowlists, but not Google's); an MCP server such as the PA's (another service to run, and per-tool rather than per-bot control); giving bots the CLI inside their computers (the credentials would sit where bot-run code can read them).
+- **Revisit if:** gws changes its command shape before 1.0, or the owner wants finer rights than read/write (per service).
+
 ## D-038: The bots' memory is a Karpathy-style LLM wiki, not Dossier (2026-10-17)
 
 - **Context:** Dossier needed its own model server; the chosen Qwen3.5-27B didn't fit beside the box's other models, the two cards can't share a model, and an attempt left GPU 0 needing a reset. Kelvin pointed at karpathy-llm-wiki, an MIT Agent Skill implementing the same LLM-wiki pattern Dossier is built on.

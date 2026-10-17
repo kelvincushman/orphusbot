@@ -4,6 +4,8 @@
 //! so it carries on. Every action either bot takes still goes through the gate.
 //! Hand-offs stop three deep, and a bot can't ask itself.
 
+use std::collections::HashMap;
+
 use orphusbot_proto::{Role, RunOutcome, ThreadEvent};
 use serde_json::Value;
 use tracing::warn;
@@ -144,16 +146,63 @@ pub async fn answered(app: &App, run: i64, outcome: RunOutcome, error: Option<&s
     }
 }
 
-/// Appended to a bot's instructions: who else is on the team, so it can ask them.
-pub fn roster_note(roster: &[crate::bots::Bot], me: &str) -> Option<String> {
+/// What a bot can do, in one line, for the team roster: its model, Google
+/// access, connections and special tools (DESIGN §5.3).
+fn abilities(b: &crate::bots::Bot, connections: &HashMap<String, Vec<String>>) -> String {
+    let mut parts = vec![format!(
+        "model {}",
+        b.model.as_deref().unwrap_or("Orphus default")
+    )];
+    parts.push(
+        match b.google.as_str() {
+            "write" => "Google: looks up and changes (each change asks Kelvin)",
+            "read" => "Google: looks up only",
+            _ => "no Google",
+        }
+        .into(),
+    );
+    match connections.get(&b.slug) {
+        Some(names) if !names.is_empty() => {
+            parts.push(format!("connections: {}", names.join(", ")))
+        }
+        _ => {}
+    }
+    if b.slug == "orchestrator" {
+        parts.push("starts discussions and runs fleets".into());
+    }
+    parts.join("; ")
+}
+
+/// Appended to a bot's instructions: what it can do itself, and who else is on
+/// the team and what each can do, so it hands work to the one that can do it.
+pub fn roster_note(
+    roster: &[crate::bots::Bot],
+    me: &str,
+    connections: &HashMap<String, Vec<String>>,
+) -> Option<String> {
     let mates: Vec<String> = roster
         .iter()
         .filter(|b| !b.disabled && b.slug != me && b.slug != "inbox")
-        .map(|b| format!("- {} ({}): {}", b.slug, b.name, b.remit))
+        .map(|b| {
+            format!(
+                "- {} ({}): {}. Can: {}",
+                b.slug,
+                b.name,
+                b.remit,
+                abilities(b, connections)
+            )
+        })
         .collect();
+    let mine = roster
+        .iter()
+        .find(|b| b.slug == me)
+        .map(|b| abilities(b, connections));
     (!mates.is_empty()).then(|| {
         format!(
-            "\n\nYour teammates. Hand one a task with the ask_bot tool when it suits them better; their answer comes back to you as a message. Files you both need can go in /shared.\n{}",
+            "\n\nYou: {}. If a job needs something you can't do (say, changing something in Google), hand it to the \
+             teammate who can with the ask_bot tool; their answer comes back to you as a message. Files you both \
+             need can go in /shared.\n\nYour teammates and what each can do:\n{}",
+            mine.unwrap_or_default(),
             mates.join("\n")
         )
     })
@@ -307,9 +356,12 @@ mod tests {
             b("checker", false),
             b("old", true),
         ];
-        let note = roster_note(&roster, "coder").unwrap();
-        assert!(note.contains("- checker (CHECKER): checker work"));
+        let mut grants = HashMap::new();
+        grants.insert("checker".to_string(), vec!["github".to_string()]);
+        let note = roster_note(&roster, "coder", &grants).unwrap();
+        assert!(note.contains("- checker (CHECKER): checker work. Can: model Orphus default; Google: looks up only; connections: github"));
+        assert!(note.starts_with("\n\nYou: model Orphus default; Google: looks up only."));
         assert!(!note.contains("- coder") && !note.contains("inbox") && !note.contains("old"));
-        assert!(roster_note(&[b("coder", false)], "coder").is_none());
+        assert!(roster_note(&[b("coder", false)], "coder", &grants).is_none());
     }
 }

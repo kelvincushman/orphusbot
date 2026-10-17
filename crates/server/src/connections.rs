@@ -242,6 +242,25 @@ pub async fn grant(
 }
 
 /// The servers a bot may use, with their tokens, for its engine.
+/// Each bot's connection names, for the team roster (no addresses or tokens).
+pub async fn names_by_bot(db: &sqlx::PgPool) -> std::collections::HashMap<String, Vec<String>> {
+    let rows = sqlx::query!(
+        "select b.slug, c.name from bot_connection g join bot b on b.id = g.bot_id
+         join connection c on c.id = g.connection_id order by c.name"
+    )
+    .fetch_all(db)
+    .await
+    .unwrap_or_else(|e| {
+        warn!("reading connection names: {e}");
+        Vec::new()
+    });
+    let mut by_bot = std::collections::HashMap::<String, Vec<String>>::new();
+    for r in rows {
+        by_bot.entry(r.slug).or_default().push(r.name);
+    }
+    by_bot
+}
+
 pub async fn for_bot(app: &App, slug: &str) -> Vec<McpServer> {
     let rows = sqlx::query!(
         "select c.id, c.name, c.url, c.command, c.args, c.token_env, c.secret_id from connection c

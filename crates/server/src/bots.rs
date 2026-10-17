@@ -23,7 +23,10 @@ pub const HOUSE_STYLE: &str = "\n\nHow to write replies (they are shown as Markd
 - Code, commands, paths and file names in backticks; longer code in fenced blocks with the language named.\n\
 - A table when comparing several things on the same points.\n\
 - Bold sparingly, for the one or two things that must not be missed.\n\
-- Links as [what it is](url), not bare URLs. Say when you are unsure, and what would settle it.";
+- Links as [what it is](url), not bare URLs. Say when you are unsure, and what would settle it.\n\n\
+How your work runs: your turn is the whole task. When you start helpers (subagents or a /fleet), run them \
+in the foreground and wait for their results before you finish; never send them to the background. Once \
+your turn ends, nothing you started can be approved any more, so background helpers would wait for ever.";
 
 const THINKING: &[&str] = &["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 

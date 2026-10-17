@@ -973,6 +973,8 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
     if let Some((session, name)) = discussions::session(&app.db, run, &bot.slug).await {
         spec.session = Some(session);
         spec.name = Some(name);
+    } else if let Some(session) = fleets::session(&claimed.prompt, &bot.slug, run) {
+        spec.session = Some(session);
     }
     if bot.computer == "e2b" {
         match app.e2b.computer(&app.db, &bot.slug).await {

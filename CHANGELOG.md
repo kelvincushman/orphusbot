@@ -68,7 +68,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Fixed
 
-- **Fleets no longer stall:** a bot that starts helpers now waits for them, instead of finishing while they sit waiting for approvals nobody could give.
+- **Fleets no longer stall:** a bot that starts helpers now waits for them, instead of finishing while they sit waiting for approvals nobody could give, and each fleet run starts with a clean slate, separate from the bot's own chat.
 - The Omarchy panel now shows the chosen bot's reply (and "working…" while it thinks), and the "finished" notification carries the reply; before, a message sent from the panel was answered but you never saw the answer.
 - Bots without a computer could start Orphus helpers (`subagent`, `workflow`, `fleet`) once you approved that call, and the helpers then ran commands without asking. Those tools are now refused everywhere.
 - Choice lists (a bot's thinking level, a ticket's bot, urgency and status, a routine's bot and schedule) showed their first option instead of the saved one, so editing a bot could reset its thinking level. They now show the saved value.

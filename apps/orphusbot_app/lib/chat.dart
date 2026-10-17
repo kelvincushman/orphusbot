@@ -30,7 +30,8 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   List<Map<String, dynamic>> bots = [];
   final threads = <String, t.ThreadView>{};
-  String chosen = 'inbox';
+  // The Orchestrator is the main bot; older servers start on the first bot listed.
+  String chosen = 'orchestrator';
   String? problem;
   StreamSubscription<Map<String, dynamic>>? sub;
   final composer = TextEditingController();
@@ -48,12 +49,15 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _loadBots() async {
     final list = await widget.api.get('/api/bots') as List<dynamic>;
-    setState(
-      () => bots = list
+    setState(() {
+      bots = list
           .cast<Map<String, dynamic>>()
           .where((b) => b['disabled'] != true)
-          .toList(),
-    );
+          .toList();
+      if (bots.isNotEmpty && !bots.any((b) => b['slug'] == chosen)) {
+        chosen = bots.first['slug'] as String;
+      }
+    });
   }
 
   Future<void> _settings() async {

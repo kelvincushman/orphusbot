@@ -41,6 +41,8 @@ export const GATE_TITLE = "orphusbot-gate";
 export const TAKEOVER_TITLE = "orphusbot-takeover";
 /** Title of the dialog that hands a teammate a task (DESIGN §5.3). */
 export const ASK_TITLE = "orphusbot-ask";
+/** Title of the dialog that starts a discussion among teammates (DESIGN §11.4). */
+export const DISCUSS_TITLE = "orphusbot-discuss";
 
 const computer = process.env.ORPHUSBOT_COMPUTER;
 const runtime = process.env.ORPHUSBOT_RUNTIME ?? "podman";
@@ -58,7 +60,7 @@ const HELPER_TOOLS = ["subagent", "fleet", "roundtable"];
 // Plus `mcp`, Orphus's MCP gateway, when the owner granted the bot a connection:
 // it only talks to those servers, so it is safe to run outside the computer.
 const COMPUTER_TOOLS = [
-  "read", "write", "edit", "bash", "request_takeover", "share_file", "ask_bot",
+  "read", "write", "edit", "bash", "request_takeover", "share_file", "ask_bot", "discuss",
   ...(process.env.ORPHUSBOT_MCP ? ["mcp"] : []),
   // Fleets: helpers whose calls come back through this gate and into the computer.
   ...(process.env.ORPHUSBOT_HELPERS_GATED === "1" ? HELPER_TOOLS : []),
@@ -266,6 +268,26 @@ export default function (pi: ExtensionAPI) {
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const ui = dialogs(ctx as unknown as { mode: string; ui: Dialogs }) ?? ctx.ui;
       const answer = String((await ui.input(ASK_TITLE, JSON.stringify({ bot: params.bot, task: params.task }))) ?? "error:no answer");
+      if (answer.startsWith("error:")) throw new Error(answer.slice("error:".length));
+      return { content: [{ type: "text", text: answer.replace(/^ok:/, "") }], details: {} };
+    },
+  });
+
+  // A discussion among teammates: the server runs it; the verdict comes back as a message.
+  pi.registerTool({
+    name: "discuss",
+    label: "Start a discussion",
+    description:
+      "Ask 2 to 6 teammates to argue a question out in a room, each on its own model, seeing the others only as a short digest. A chair writes the verdict (decision, reasons, strongest dissent), which comes back to you as a new message when they finish, so don't wait for it. Use it for decisions with real trade-offs.",
+    promptSnippet: "Have teammates deliberate a decision",
+    parameters: Type.Object({
+      question: Type.String({ description: "The question, with the context they need" }),
+      bots: Type.Array(Type.String(), { description: "2 to 6 teammates' short names, chair first, such as researcher" }),
+      rounds: Type.Optional(Type.Number({ description: "1 to 4 rounds; 2 if left out" })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const ui = dialogs(ctx as unknown as { mode: string; ui: Dialogs }) ?? ctx.ui;
+      const answer = String((await ui.input(DISCUSS_TITLE, JSON.stringify(params))) ?? "error:no answer");
       if (answer.startsWith("error:")) throw new Error(answer.slice("error:".length));
       return { content: [{ type: "text", text: answer.replace(/^ok:/, "") }], details: {} };
     },

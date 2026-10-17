@@ -23,7 +23,7 @@ Panel {
   // From `orphusbot watch`: { running, needs_you, bots: [...], waiting: [...] }.
   property var status: ({ running: 0, needs_you: 0, bots: [], waiting: [] })
   property string problem: "Connecting…"
-  property string chosenBot: "inbox"
+  property string chosenBot: "orchestrator"
   property string note: ""
 
   // The chosen bot's entry in the status, for its state and latest reply.

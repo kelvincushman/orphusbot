@@ -231,6 +231,10 @@ Model credentials stay in the engine process on the host. Nothing in the bridge 
 
 - **Built (M8.2):** the bridge's `ask_bot {bot, task}` tool opens an `orphusbot-ask` dialog; the server (`server::team`) makes the task a ticket for that bot (`asked_by`, `ask_depth`) and starts it, or leaves it on the board if the bot is busy, and answers at once so the asker carries on. When that ticket's run ends, the teammate's last reply goes back to the asker as a labelled message and queues the asker's next run. A bot can't ask itself; hand-offs stop three deep (a check constraint backs it). `ask_bot` runs without asking (it only makes a ticket); everything the teammate does is gated as usual. When a run starts, the bot's instructions get its teammates (slug, name, remit) and a pointer to `/shared`, which team-scope bots' computers share.
 
+### 5.4 The Orchestrator
+
+- **Built (M9.5, D-037):** a team bot, `orchestrator`, seeded by migration 0027, is the owner's main bot: listed first, opened by default in the app and the bar panel, with a crowned silver face. Its instructions say how to handle a request: answer small things itself; hand a clear specialist job to a teammate with `ask_bot`; split a bigger job across teammates and combine their answers; start a discussion with the `discuss` tool when a decision has real trade-offs (§11.4); run a fleet when a job needs a fixed team of helpers (§11.2); and keep the owner's load low, saying what it has set going. `discuss` is a bridge tool (dialog `orphusbot-discuss`, passed by the gate like `ask_bot`): the server starts the discussion (`discussions::ask`; the bot can't take part itself, and every chosen bot must be free), records `discussion.asked_by`, and when the chair's verdict is in, posts it to the asking bot's thread as data and queues a run there, so it can relay the decision. Inbox stays as the catch-all that System 1 routes from.
+
 ## 6. Computers and placement
 
 ### 6.1 Trait

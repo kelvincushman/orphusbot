@@ -25,8 +25,10 @@ const READ_ONLY: &[&str] = &[
     "request_takeover",
     // Only gives the owner a copy of a file (an artifact).
     "share_file",
-    // Hands a teammate a ticket; everything the teammate does is gated itself.
+    // Hands a teammate a ticket, or starts a discussion; everything the
+    // teammates do is gated itself.
     "ask_bot",
+    "discuss",
     // A fleet's blueprints, read only; and its rooms, where the bot's own
     // helpers talk to each other (DESIGN §11.2).
     "fleet",

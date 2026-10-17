@@ -13,6 +13,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **The Orchestrator (M9.5):** a new main bot that plans bigger jobs and coordinates the team: it hands parts to the right bots, starts a discussion when a decision needs several views, runs fleets, and brings it all back as one answer. It's first in the list and opens by default.
 - **Discuss (M9.2):** ask a few bots to argue a question out. Each thinks on its own model and sees the others only as a short summary, so its own work stays clean; you watch the discussion live with each bot's face, and the chair writes a verdict with the strongest dissent kept, then files the discussion into memory so any bot can recall it later.
 - **Bots can use Orphus's memory (M9.1):** a bot can ask the long-term memory what was decided before, without asking you each time; filing things into memory still asks, and only the librarian may write. Rooms, where bots talk outside their context windows, were already available.
 - **Set up fleets in the app (M7.6):** Settings → Fleets: create and edit Orphus fleets (teams of agents, each seat on its own model, that argue a question in a room or split up the work), starting from a council template, and run one as any bot with ▶. Every machine gets them automatically.

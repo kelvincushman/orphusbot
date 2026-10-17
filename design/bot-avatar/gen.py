@@ -43,6 +43,11 @@ STYLES = {
                     face="FF2A0A18", eye="FFFFE3EE", mouth="FFFFE3EE",
                     shape=(140, 108, 34), plate=(108, 70, 26, 6), eyes="oval", eye_y=2, mouth_y=28,
                     ears="rect", top="beret", extras=["beret"], by=122),
+    # the leader: silver head, deep navy face, a three-point crown with a jewel light
+    "orchestrator": dict(head="FFE3E9F4", trim="FFA9B8D8", light="FF5FD3FF", glow="FF5FD3FF",
+                         face="FF0B1638", eye="FF8FE0FF", mouth="FF8FE0FF",
+                         shape=(140, 106, 34), plate=(108, 68, 26, 4), eyes="oval", eye_y=0, mouth_y=25,
+                         ears="rect", top="crown", extras=[], by=124),
     "pa": dict(head="FFF2C230", trim="FFFFE9A0", light="FFFFE9A0", glow="FFFFD54F",
                face="FF2B2104", eye="FFFFF4C8", mouth="FFFFF4C8",
                shape=(140, 104, 34), plate=(108, 68, 26, 2), eyes="oval", eye_y=-2, mouth_y=24,
@@ -163,8 +168,16 @@ elif top == "beret":   # the beret's tip is the light; no antenna stem
     stem = shape("Beret Stalk", rect(4, 10, 2), fill("FF9A2459"), -9, top_y - 18, 'rotation="-0.17" ')
     beret_at = next(k for k, a in enumerate(art) if 'name="Beret"' in a)
     art.insert(beret_at, shape("Beret Tip", ell(12, 12), fill("light"), gx, gy))
+elif top == "crown":   # three points; the centre jewel is the light, no stem
+    gx, gy, gw, gh = 0, top_y - 15, 26, 26
+    stem = None
+    crown = [(-34, 3), (-34, -27), (-17, -10), (0, -36), (17, -10), (34, -27), (34, 3)]
+    art += [shape("Crown Jewel", ell(14, 14), fill("light"), gx, gy)]
 art.append(shape("Antenna Glow", ell(gw, gh), fill("glow"), gx, gy, 'opacity="0.35" ', "0:47"))
-art.append(stem)
+if top == "crown":   # the halo sits on the crown, not behind it
+    art.append(shape("Crown", path(crown, True, radius=3), fill("trim"), 0, top_y))
+if stem:
+    art.append(stem)
 
 # --- animation tracks: (objectId or colour role, property) ---
 TRACKS = [("0:20", "y"), ("0:20", "scaleX"), ("0:20", "scaleY"), ("0:20", "rotation"),

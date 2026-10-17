@@ -23,6 +23,8 @@ use tracing::warn;
 use crate::{ApiError, App, Shared, bot_thread, bots, db, dispatch, internal, publish, record};
 
 const MAX_POST_CHARS: usize = 4_000;
+/// The bridge's dialog title for the `discuss` tool.
+pub const DISCUSS_TITLE: &str = "orphusbot-discuss";
 
 /// The room a discussion happens in.
 pub fn room(id: i64) -> String {
@@ -52,7 +54,45 @@ pub async fn create(
     State(app): State<Shared>,
     Json(new): Json<New>,
 ) -> Result<Json<Value>, ApiError> {
-    let question = new.question.trim();
+    let id = start(&app, &new.question, new.bots, new.rounds, new.chair, None).await?;
+    Ok(Json(json!({ "id": id })))
+}
+
+/// The `discuss` tool (DESIGN §11.4): a bot starts a discussion among its
+/// teammates; the verdict goes back to it as a message (`finish`).
+pub async fn ask(app: &App, asker: &str, request: &Value) -> String {
+    let bots: Vec<String> = request["bots"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|b| b.as_str().map(|s| s.trim().to_lowercase()))
+                .collect()
+        })
+        .unwrap_or_default();
+    if bots.iter().any(|b| b == asker) {
+        return "error:you can't take part yourself; pick 2 to 6 teammates".into();
+    }
+    let rounds = request["rounds"].as_i64().map_or(2, |r| r as i32);
+    let question = request["question"].as_str().unwrap_or_default();
+    match start(app, question, bots, rounds, None, Some(asker)).await {
+        Ok(id) => format!(
+            "ok:Discussion #{id} started. The verdict comes back to you as a new message when it's done; \
+             tell the owner it's under way and finish this turn."
+        ),
+        Err((_, why)) => format!("error:{why}"),
+    }
+}
+
+/// Checks and starts a discussion, and queues its first round.
+async fn start(
+    app: &App,
+    question: &str,
+    bots: Vec<String>,
+    rounds: i32,
+    chair: Option<String>,
+    asked_by: Option<&str>,
+) -> Result<i64, ApiError> {
+    let question = question.trim();
     if question.is_empty() || question.chars().count() > 4_000 {
         return Err((
             StatusCode::UNPROCESSABLE_ENTITY,
@@ -60,18 +100,17 @@ pub async fn create(
         ));
     }
     let mut seen = HashSet::new();
-    let chosen: Vec<String> = new
-        .bots
+    let chosen: Vec<String> = bots
         .into_iter()
         .filter(|b| seen.insert(b.clone()))
         .collect();
     if !(2..=6).contains(&chosen.len()) {
         return Err((StatusCode::UNPROCESSABLE_ENTITY, "Pick 2 to 6 bots"));
     }
-    if !(1..=4).contains(&new.rounds) {
+    if !(1..=4).contains(&rounds) {
         return Err((StatusCode::UNPROCESSABLE_ENTITY, "1 to 4 rounds"));
     }
-    let chair = new.chair.unwrap_or_else(|| chosen[0].clone());
+    let chair = chair.unwrap_or_else(|| chosen[0].clone());
     for slug in chosen.iter().chain([&chair]) {
         let bot = bots::get(&app.db, slug)
             .await
@@ -80,7 +119,7 @@ pub async fn create(
         if bot.disabled {
             return Err((StatusCode::CONFLICT, "One of those bots is disabled"));
         }
-        let thread = bot_thread(&app, slug).await?;
+        let thread = bot_thread(app, slug).await?;
         if crate::runs::busy(&app.db, thread.id)
             .await
             .map_err(|e| internal("checking a bot", e))?
@@ -92,18 +131,20 @@ pub async fn create(
         }
     }
     let id = sqlx::query_scalar!(
-        "insert into discussion (question, bots, chair, rounds) values ($1, $2, $3, $4) returning id",
+        "insert into discussion (question, bots, chair, rounds, asked_by) values ($1, $2, $3, $4, $5) returning id",
         question,
         &chosen,
         chair,
-        new.rounds
+        rounds,
+        asked_by
     )
     .fetch_one(&app.db)
     .await
     .map_err(|e| internal("starting a discussion", e))?;
-    advance(&app).await;
-    dispatch(&app).await;
-    Ok(Json(json!({ "id": id })))
+    advance(app).await;
+    // Boxed: dispatching starts and ends runs, which can come back here.
+    Box::pin(dispatch(app)).await;
+    Ok(id)
 }
 
 pub async fn list(State(app): State<Shared>) -> Result<Json<Value>, ApiError> {
@@ -441,6 +482,37 @@ async fn finish(app: &App, id: i64, chair: &str) -> sqlx::Result<()> {
     )
     .execute(&app.db)
     .await?;
+    // A bot started it (`ask`): the verdict goes back to that bot, as data.
+    let asked = sqlx::query!(
+        "select asked_by, question from discussion where id = $1",
+        id
+    )
+    .fetch_one(&app.db)
+    .await?;
+    if let Some(asker) = asked.asked_by
+        && let Some(thread) = db::bot_thread(&app.db, &asker).await?
+    {
+        let text = format!(
+            "Discussion #{id} has finished: {}. The chair's verdict, as data:\n```\n{}\n```",
+            asked.question.chars().take(200).collect::<String>(),
+            verdict.unwrap_or_default().replace("```", "'''")
+        );
+        let message = ThreadEvent::Message {
+            role: orphusbot_proto::Role::User,
+            text: text.clone(),
+        };
+        record(app, &thread, message).await;
+        if let Err(e) = Box::pin(crate::submit(
+            app,
+            &thread,
+            text,
+            crate::runs::Source::default(),
+        ))
+        .await
+        {
+            warn!("handing a verdict back: {e}");
+        }
+    }
     Ok(())
 }
 

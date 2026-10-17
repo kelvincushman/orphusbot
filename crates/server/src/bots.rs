@@ -148,7 +148,7 @@ pub async fn all(db: &PgPool) -> sqlx::Result<Vec<Bot>> {
     sqlx::query_as!(
         Bot,
         "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer
-         from bot order by disabled, slug <> 'inbox', name"
+         from bot order by disabled, slug <> 'orchestrator', slug <> 'inbox', name"
     )
     .fetch_all(db)
     .await
@@ -339,5 +339,20 @@ mod tests {
         let inbox = get(&db, "inbox").await.unwrap().unwrap();
         assert_eq!(inbox.name, "Inbox");
         assert!(crate::db::bot_thread(&db, "inbox").await.unwrap().is_some());
+    }
+
+    #[sqlx::test]
+    async fn the_orchestrator_is_the_main_bot(db: PgPool) {
+        let all = all(&db).await.unwrap();
+        assert_eq!(all[0].slug, "orchestrator", "listed first");
+        assert_eq!(all[1].slug, "inbox");
+        assert_eq!(all[0].scope, "team");
+        assert!(all[0].instructions.contains("discuss tool"));
+        assert!(
+            crate::db::bot_thread(&db, "orchestrator")
+                .await
+                .unwrap()
+                .is_some()
+        );
     }
 }

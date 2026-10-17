@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "insert into discussion (question, bots, chair, rounds) values ($1, $2, $3, $4) returning id",
+  "query": "insert into discussion (question, bots, chair, rounds, asked_by) values ($1, $2, $3, $4, $5) returning id",
   "describe": {
     "columns": [
       {
@@ -20,12 +20,13 @@
         "Text",
         "TextArray",
         "Text",
-        "Int4"
+        "Int4",
+        "Text"
       ]
     },
     "nullable": [
       false
     ]
   },
-  "hash": "5a6648bd6fe4ae77b19dbf3d86cda6551c3a8c83166ff62ca57e5a92d3c87a15"
+  "hash": "c92765a80df0147e82b02ae1ddc262f196ffacc879561c3de853771ffdd4489e"
 }

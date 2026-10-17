@@ -713,6 +713,14 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
     let method = request["method"].as_str().unwrap_or_default().to_owned();
     let title = request["title"].as_str().unwrap_or_default().to_owned();
 
+    if method == "input" && title == discussions::DISCUSS_TITLE {
+        let request: Value = request["placeholder"]
+            .as_str()
+            .and_then(|p| serde_json::from_str(p).ok())
+            .unwrap_or_default();
+        let answer = discussions::ask(app, &active.thread.bot, &request).await;
+        return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
+    }
     if method == "input" && title == team::ASK_TITLE {
         let ask: Value = request["placeholder"]
             .as_str()

@@ -5,9 +5,9 @@
 //! stays out of the bot's everyday conversation), on its own model with its own
 //! instructions. A bot sees the others only through the room's bounded digest.
 //! When every bot has finished a round the next starts; after the last, the
-//! chair writes the verdict and, as Orphus's `librarian`, files the room into
-//! memory. The server sees each post at the gate (`posted`), which is what the
-//! app shows live.
+//! chair writes the verdict and files it, with the discussion, into the
+//! team wiki in /shared (karpathy-llm-wiki). The server sees each post at
+//! the gate (`posted`), which is what the app shows live.
 
 use std::collections::HashSet;
 
@@ -29,11 +29,6 @@ pub const DISCUSS_TITLE: &str = "orphusbot-discuss";
 /// The room a discussion happens in.
 pub fn room(id: i64) -> String {
     format!("discuss-{id}")
-}
-
-/// Where the chair files the room for memory, relative to the memory project.
-fn filed_as(id: i64) -> String {
-    format!("raw/discuss-{id}.md")
 }
 
 #[derive(Deserialize)]
@@ -228,14 +223,13 @@ async fn turn(db: &PgPool, run: i64) -> Option<Turn> {
     })
 }
 
-/// The session a discussion turn runs in, and its name in the room: the bot's
-/// slug, or `librarian` for the verdict, which may file the room into memory.
+/// The session a discussion turn runs in, and its name in the room (the bot's slug).
 pub async fn session(db: &PgPool, run: i64, slug: &str) -> Option<(String, String)> {
     let t = turn(db, run).await?;
     Some(if t.round > t.rounds {
         (
             format!("{slug}-discuss-{}-verdict", t.discussion),
-            "librarian".to_owned(),
+            slug.to_owned(),
         )
     } else {
         (format!("{slug}-discuss-{}", t.discussion), slug.to_owned())
@@ -295,17 +289,6 @@ pub async fn posted_already(db: &PgPool, run: i64, input: &Value) -> bool {
     .unwrap_or(false)
 }
 
-/// The verdict turn filing its own room into memory, which the gate lets through:
-/// the owner asked for it by starting the discussion.
-pub async fn files_its_room(db: &PgPool, run: i64, input: &Value) -> bool {
-    let Some(t) = turn(db, run).await else {
-        return false;
-    };
-    t.round > t.rounds
-        && input["action"] == "ingest"
-        && input["source"] == filed_as(t.discussion).as_str()
-}
-
 fn prompt(id: i64, question: &str, names: &str, round: i32, rounds: i32) -> String {
     let room = room(id);
     // Leaving stops the room's activity pings, which would otherwise wake the bot
@@ -334,14 +317,14 @@ fn prompt(id: i64, question: &str, names: &str, round: i32, rounds: i32) -> Stri
 
 fn verdict_prompt(id: i64, question: &str) -> String {
     let room = room(id);
-    let file = filed_as(id);
     format!(
         "You chair discussion #{id}. The question was:\n\n{question}\n\n\
          1. Join room `{room}`, then pull its digest with a budget of 6000.\n\
          2. Write the verdict for the owner: **Decision**; **Why** (short bullets); **Strongest dissent**, \
          quoted word for word with who said it; **Open questions**.\n\
-         3. File the discussion into memory: `roundtable` export of room `{room}` to path `{file}`, \
-         then `memory` ingest with source `{file}`. If memory isn't available, skip this step and say so.\n\
+         3. Save it in the team wiki: write the question, the posts from the digest and your verdict to \
+         `/shared/raw/discussions/discussion-{id}.md`, then ingest that file with the karpathy-llm-wiki skill \
+         (root /shared). If /shared isn't there, skip this step and say so.\n\
          4. Leave the room.\n\n\
          Reply with the verdict only."
     )
@@ -531,7 +514,10 @@ mod tests {
         assert!(prompt(7, "Ship it?", "x", 2, 2).contains("FINAL:"));
         assert!(!prompt(7, "Ship it?", "x", 2, 3).contains("FINAL:"));
         let verdict = verdict_prompt(7, "Ship it?");
-        assert!(verdict.contains("raw/discuss-7.md") && verdict.contains("Strongest dissent"));
+        assert!(
+            verdict.contains("/shared/raw/discussions/discussion-7.md")
+                && verdict.contains("Strongest dissent")
+        );
         assert!(first.contains("leave the room") && verdict.contains("Leave the room"));
     }
 }

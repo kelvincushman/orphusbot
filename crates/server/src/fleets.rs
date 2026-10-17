@@ -38,6 +38,16 @@ fn problem(name: &str, yaml: &str) -> Option<&'static str> {
     }
 }
 
+/// A `/fleet` run gets a fresh session of its own (DESIGN §11.2): its helpers'
+/// orchestration stays out of the bot's everyday conversation, and an old fleet
+/// run there can't confuse a new one.
+pub fn session(prompt: &str, slug: &str, run: i64) -> Option<String> {
+    prompt
+        .trim_start()
+        .starts_with("/fleet ")
+        .then(|| format!("{slug}-fleet-{run}"))
+}
+
 /// Every fleet, for a run.
 pub async fn all(db: &PgPool) -> Vec<FleetFile> {
     sqlx::query_as!(FleetFile, "select name, yaml from fleet order by name")
@@ -106,6 +116,20 @@ pub async fn delete(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fleet_runs_get_their_own_session() {
+        assert_eq!(
+            session("/fleet council Ship it?", "coder", 9).as_deref(),
+            Some("coder-fleet-9")
+        );
+        assert_eq!(
+            session("  /fleet council x", "coder", 9).as_deref(),
+            Some("coder-fleet-9")
+        );
+        assert_eq!(session("what's a /fleet?", "coder", 9), None);
+        assert_eq!(session("/fleetsetup", "coder", 9), None);
+    }
 
     #[test]
     fn checks_name_size_and_self_name() {

@@ -67,6 +67,9 @@ pub struct BotSpec {
     /// The session's name, which Orphus rooms use for the member (default: the slug).
     #[serde(default)]
     pub name: Option<String>,
+    /// Google through the node's `gog` (DESIGN §11.5): `read` or `write`; none if unset.
+    #[serde(default)]
+    pub google: Option<String>,
 }
 
 /// An Orphus fleet blueprint the owner set up (DESIGN §11.2), written into the

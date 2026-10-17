@@ -266,6 +266,9 @@ struct Bot {
     disabled: bool,
     /// `node` or `e2b`.
     computer: String,
+    /// Google access (none, read, write); passed through so saving keeps it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    google: String,
 }
 
 /// Everything the signed-in screens share: the bots, which one is open, every

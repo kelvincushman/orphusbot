@@ -45,10 +45,17 @@ pub struct Bot {
     /// Where its computer is: `node` (a container on a node) or `e2b`.
     #[serde(default = "on_node")]
     pub computer: String,
+    /// What it may do in Google through `gog` (DESIGN §11.5): none, read or write.
+    #[serde(default = "read")]
+    pub google: String,
 }
 
 fn on_node() -> String {
     "node".into()
+}
+
+fn read() -> String {
+    "read".into()
 }
 
 impl Bot {
@@ -66,6 +73,7 @@ impl Bot {
             // A discussion turn sets these (`discussions::session`).
             session: None,
             name: None,
+            google: (self.google != "none").then(|| self.google.clone()),
         }
     }
 
@@ -110,6 +118,9 @@ impl Bot {
             _ if !["node", "e2b"].contains(&self.computer.as_str()) => {
                 Err("The computer is on a node or in E2B")
             }
+            _ if !["none", "read", "write"].contains(&self.google.as_str()) => {
+                Err("Google is none, read or write")
+            }
             _ => Ok(self),
         }
     }
@@ -147,7 +158,7 @@ fn slugify(name: &str) -> String {
 pub async fn all(db: &PgPool) -> sqlx::Result<Vec<Bot>> {
     sqlx::query_as!(
         Bot,
-        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer
+        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google
          from bot order by disabled, slug <> 'orchestrator', slug <> 'inbox', name"
     )
     .fetch_all(db)
@@ -157,7 +168,7 @@ pub async fn all(db: &PgPool) -> sqlx::Result<Vec<Bot>> {
 pub async fn get(db: &PgPool, slug: &str) -> sqlx::Result<Option<Bot>> {
     sqlx::query_as!(
         Bot,
-        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer
+        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google
          from bot where slug = $1",
         slug
     )
@@ -188,6 +199,8 @@ pub struct NewBot {
     scope: String,
     #[serde(default = "on_node")]
     computer: String,
+    #[serde(default = "read")]
+    google: String,
 }
 
 fn private() -> String {
@@ -209,6 +222,7 @@ pub async fn create(
         scope: new.scope,
         disabled: false,
         computer: new.computer,
+        google: new.google,
     }
     .check()
     .map_err(|why| (StatusCode::UNPROCESSABLE_ENTITY, why))?;
@@ -235,8 +249,8 @@ pub async fn create(
         .find(|s| !taken.contains(s))
         .unwrap_or_default();
     let id = sqlx::query_scalar!(
-        "insert into bot (slug, name, remit, instructions, model, thinking, exclude_tools, scope, computer)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning id",
+        "insert into bot (slug, name, remit, instructions, model, thinking, exclude_tools, scope, computer, google)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning id",
         slug,
         bot.name,
         bot.remit,
@@ -245,7 +259,8 @@ pub async fn create(
         bot.thinking,
         &bot.exclude_tools,
         bot.scope,
-        bot.computer
+        bot.computer,
+        bot.google
     )
     .fetch_one(&mut *tx)
     .await
@@ -277,7 +292,7 @@ pub async fn update(
     }
     let done = sqlx::query!(
         "update bot set name = $2, remit = $3, instructions = $4, model = $5, thinking = $6,
-                exclude_tools = $7, scope = $8, disabled = $9, computer = $10
+                exclude_tools = $7, scope = $8, disabled = $9, computer = $10, google = $11
          where slug = $1",
         bot.slug,
         bot.name,
@@ -288,7 +303,8 @@ pub async fn update(
         &bot.exclude_tools,
         bot.scope,
         bot.disabled,
-        bot.computer
+        bot.computer,
+        bot.google
     )
     .execute(&app.db)
     .await
@@ -327,6 +343,7 @@ mod tests {
             scope: "private".into(),
             disabled: false,
             computer: "node".into(),
+            google: "read".into(),
         };
         let ok = bot(" Researcher ", Some("high")).check().unwrap();
         assert_eq!((ok.name.as_str(), ok.model), ("Researcher", None));

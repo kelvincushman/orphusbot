@@ -299,6 +299,7 @@ mod tests {
             scope: "team".into(),
             disabled,
             computer: "node".into(),
+            google: "read".into(),
         };
         let roster = [
             b("inbox", false),

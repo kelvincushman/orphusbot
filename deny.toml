@@ -10,6 +10,11 @@ ignore = [
   { id = "RUSTSEC-2024-0436", reason = "unmaintained proc-macro pulled in by leptos; no vulnerability" },
   # `proc-macro-error` is unmaintained, not vulnerable; it comes in through the GTK bindings Tauri uses on Linux.
   { id = "RUSTSEC-2024-0370", reason = "unmaintained proc-macro pulled in by gtk-rs via tauri; no vulnerability" },
+  # zbus's name/variant crates were marked unmaintained on 2026-10-20, not vulnerable; they come in
+  # through tauri-plugin-opener in the old Tauri desktop app, which the Flutter app replaces (D-033).
+  { id = "RUSTSEC-2026-0370", reason = "unmaintained, via tauri-plugin-opener in the legacy Tauri app; no vulnerability" },
+  { id = "RUSTSEC-2026-0371", reason = "unmaintained, via tauri-plugin-opener in the legacy Tauri app; no vulnerability" },
+  { id = "RUSTSEC-2026-0372", reason = "unmaintained, via tauri-plugin-opener in the legacy Tauri app; no vulnerability" },
 ]
 
 [licenses]

@@ -687,6 +687,10 @@ Orphus's answer to multi-agent work is a context-window contract: a discussion l
 
 ---
 
+### 12.2 The Gallery
+
+- **Built (M11.1, D-040):** files the owner keeps for the bots: reference pictures, brand material, documents, audio and video. `gallery_item` (migration 0029) holds the details (name, type, size, SHA-256, tags, description, the bots it's standing context for, and its source: `upload` or `bot:<slug>`); the bytes are files in `ORPHUSBOT_GALLERY_DIR` (on the GPU box, the 2 TB SSD), named by SHA-256 so a file is kept once and removed when its last item goes. `POST /api/gallery?name=…` streams the body to disk (up to 2 GB), hashing on the way; `GET /api/gallery?q=` searches names, descriptions and tags; `GET /api/gallery/{id}/file` serves pictures, video and audio inline with ranges (so video seeks) and anything else only as a download, always with `nosniff` and a `sandbox` content policy, so an uploaded page can't run; `/api/gallery/update`, `/api/gallery/delete`, and `/api/gallery/from-artifact` ("Save to the gallery" on a file a bot shared). The app has a Gallery screen (grid, search, Add files streamed from disk, an item sheet to edit details, pin as standing context for bots, open with the computer's own app, delete), and the composer's 📎 offers **From the gallery**: the app fetches the chosen items and attaches them like any file (up to 10 MB together), so pictures reach the model. Next: a `gallery` tool for bots (search and fetch into the computer, for larger files too), standing context in bots' instructions (names and descriptions only), and video thumbnails.
+
 ## 13. Data model (Postgres, sqlx migrations)
 
 Core tables follow research/rakazo-architecture.md §10 (device, passkey, session, node, bot, engine_session, thread, message, event, task, run, attempt, steering_message, computer, computer_lease, routine, ticket, ticket_comment, connection, mcp_server, bot_mcp_grant, secret, approval_rule, external_effect, decision, decision_label, decision_model, artifact). Additions for this design:

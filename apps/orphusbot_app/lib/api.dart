@@ -165,6 +165,43 @@ class Api {
 
   String artifactUrl(int id) => '$server/api/artifacts/$id';
 
+  /// The Gallery (DESIGN §12.2): newest first, `q` matching a name, a
+  /// description or a tag.
+  Future<List<Map<String, dynamic>>> gallery([String q = '']) async =>
+      (await get('/api/gallery?q=${Uri.encodeQueryComponent(q)}') as List)
+          .cast<Map<String, dynamic>>();
+
+  String galleryUrl(int id) => '$server/api/gallery/$id/file';
+
+  /// Streams a file from disk into the gallery, so a long video never sits in memory.
+  Future<Map<String, dynamic>> galleryUpload(String path, String name) async {
+    final file = File(path);
+    final req =
+        http.StreamedRequest(
+            'POST',
+            Uri.parse('$server/api/gallery')
+                .replace(queryParameters: {'name': name}),
+          )
+          ..headers.addAll({
+            ...headers,
+            'content-type': 'application/octet-stream',
+          })
+          ..contentLength = await file.length();
+    file.openRead().listen(
+      req.sink.add,
+      onDone: req.sink.close,
+      onError: req.sink.addError,
+    );
+    final res = await http.Response.fromStream(await _http.send(req));
+    await _check(Future.value(res));
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  /// A file a bot shared, kept in the gallery.
+  Future<Map<String, dynamic>> galleryFromArtifact(int artifact) async =>
+      await postJson('/api/gallery/from-artifact', {'artifact': artifact})
+          as Map<String, dynamic>;
+
   /// The server's events, each `{bot?, type, …}`, from the start; reconnects after a drop.
   Stream<Map<String, dynamic>> events() async* {
     var after = 0;

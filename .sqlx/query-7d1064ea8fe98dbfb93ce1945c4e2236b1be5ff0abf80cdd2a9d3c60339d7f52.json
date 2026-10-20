@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select exists (select 1 from gallery_item where sha256 = $1) as \"still!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "still!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7d1064ea8fe98dbfb93ce1945c4e2236b1be5ff0abf80cdd2a9d3c60339d7f52"
+}

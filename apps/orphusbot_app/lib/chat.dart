@@ -15,6 +15,7 @@ import 'package:markdown_widget/markdown_widget.dart';
 import 'api.dart';
 import 'avatar.dart';
 import 'discuss.dart';
+import 'gallery.dart';
 import 'settings.dart';
 import 'thread.dart' as t;
 
@@ -187,6 +188,32 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// Picks items from the gallery and attaches them like any file.
+  Future<void> _fromGallery() async {
+    final picked = await Navigator.of(context).push<List<Map<String, dynamic>>>(
+      MaterialPageRoute(
+        builder: (_) =>
+            GalleryScreen(api: widget.api, bots: bots, picking: true),
+      ),
+    );
+    for (final item in picked ?? <Map<String, dynamic>>[]) {
+      if ((item['size'] as int) > maxBytes) {
+        setState(
+          () => problem =
+              "${item['name']} is over 10 MB, too big to send in a chat.",
+        );
+        continue;
+      }
+      await _act(() async {
+        final bytes = await widget.api.download(
+          widget.api.galleryUrl(item['id'] as int),
+        );
+        _add(item['name'] as String, Uint8List.fromList(bytes));
+      });
+    }
+    focus.requestFocus();
+  }
+
   /// Ctrl+V: a copied picture becomes an attachment; text pastes as usual.
   Future<void> _paste() async {
     final image = await Pasteboard.image;
@@ -276,6 +303,15 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Text(
                   'OrphusBot',
                   style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Gallery',
+                icon: const Icon(Icons.photo_library_outlined),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => GalleryScreen(api: widget.api, bots: bots),
+                  ),
                 ),
               ),
               IconButton(
@@ -542,13 +578,30 @@ class _ChatScreenState extends State<ChatScreen> {
                 a.isImage ? Icons.image_outlined : Icons.description_outlined,
               ),
               title: Text(label),
-              trailing: IconButton(
-                tooltip: 'Save',
-                icon: const Icon(Icons.download),
-                onPressed: () => _act(() async {
-                  final bytes = await widget.api.download(url);
-                  await _save(a.name, () => bytes);
-                }),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Save to the gallery',
+                    icon: const Icon(Icons.add_photo_alternate_outlined),
+                    onPressed: () async {
+                      await _act(() => widget.api.galleryFromArtifact(a.id));
+                      if (mounted && problem == null) {
+                        setState(
+                          () => problem = 'Saved ${a.name} to the gallery.',
+                        );
+                      }
+                    },
+                  ),
+                  IconButton(
+                    tooltip: 'Save',
+                    icon: const Icon(Icons.download),
+                    onPressed: () => _act(() async {
+                      final bytes = await widget.api.download(url);
+                      await _save(a.name, () => bytes);
+                    }),
+                  ),
+                ],
               ),
             ),
           ],
@@ -675,10 +728,27 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         Row(
           children: [
-            IconButton(
+            PopupMenuButton<String>(
               tooltip: 'Attach pictures or files',
               icon: const Icon(Icons.attach_file),
-              onPressed: _attach,
+              onSelected: (how) =>
+                  how == 'gallery' ? _fromGallery() : _attach(),
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'computer',
+                  child: ListTile(
+                    leading: Icon(Icons.computer),
+                    title: Text('From this computer'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'gallery',
+                  child: ListTile(
+                    leading: Icon(Icons.photo_library_outlined),
+                    title: Text('From the gallery'),
+                  ),
+                ),
+              ],
             ),
             Expanded(
               child: CallbackShortcuts(

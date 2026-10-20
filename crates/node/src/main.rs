@@ -188,7 +188,12 @@ async fn session(cfg: &Config, key: &NodeKey) -> anyhow::Result<()> {
         tokio::spawn(async move {
             match list_models(&orphus).await {
                 Ok(models) => {
-                    let _ = out.send(FromNode::Models { models }).await;
+                    let _ = out
+                        .send(FromNode::Models {
+                            models,
+                            google: google_ready(),
+                        })
+                        .await;
                 }
                 Err(e) => warn!("listing Orphus's models: {e:#}"),
             }
@@ -420,6 +425,13 @@ fn write_fleets(work: &std::path::Path, fleets: &[FleetFile]) -> anyhow::Result<
             .with_context(|| format!("writing {}", path.display()))?;
     }
     Ok(())
+}
+
+/// Bots can use Google here: gws is set (ORPHUSBOT_GWS) and the owner's
+/// exported credentials file exists (DESIGN §11.5).
+fn google_ready() -> bool {
+    let set = |var: &str| std::env::var_os(var).is_some_and(|p| std::path::Path::new(&p).is_file());
+    set("ORPHUSBOT_GWS") && set("GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE")
 }
 
 /// Saves the owner's files in the bot's computer under `inbox/`: through envd

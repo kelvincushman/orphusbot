@@ -254,8 +254,13 @@ pub enum FromNode {
         text: Option<String>,
         error: Option<String>,
     },
-    /// The models this node's Orphus can use, as `provider/model` (from `orphus --list-models`).
-    Models { models: Vec<String> },
+    /// The models this node's Orphus can use, as `provider/model` (from `orphus --list-models`),
+    /// and whether it can give bots Google (gws and its credentials are set up, DESIGN §11.5).
+    Models {
+        models: Vec<String>,
+        #[serde(default)]
+        google: bool,
+    },
     /// The screen stream ended, or couldn't start (`error` says why).
     ScreenClosed { stream: u64, error: Option<String> },
     /// What one assistant message used, as the model's provider reported it

@@ -148,19 +148,26 @@ pub async fn answered(app: &App, run: i64, outcome: RunOutcome, error: Option<&s
 
 /// What a bot can do, in one line, for the team roster: its model, Google
 /// access, connections and special tools (DESIGN §5.3).
-fn abilities(b: &crate::bots::Bot, connections: &HashMap<String, Vec<String>>) -> String {
+fn abilities(
+    b: &crate::bots::Bot,
+    connections: &HashMap<String, Vec<String>>,
+    google_ready: bool,
+) -> String {
     let mut parts = vec![format!(
         "model {}",
         b.model.as_deref().unwrap_or("Orphus default")
     )];
-    parts.push(
-        match b.google.as_str() {
-            "write" => "Google: looks up and changes (each change asks Kelvin)",
-            "read" => "Google: looks up only",
-            _ => "no Google",
-        }
-        .into(),
-    );
+    // Only where its machine really has Google; otherwise roster_note says it isn't set up.
+    if google_ready {
+        parts.push(
+            match b.google.as_str() {
+                "write" => "Google: looks up and changes (each change asks Kelvin)",
+                "read" => "Google: looks up only",
+                _ => "no Google",
+            }
+            .into(),
+        );
+    }
     match connections.get(&b.slug) {
         Some(names) if !names.is_empty() => {
             parts.push(format!("connections: {}", names.join(", ")))
@@ -179,6 +186,7 @@ pub fn roster_note(
     roster: &[crate::bots::Bot],
     me: &str,
     connections: &HashMap<String, Vec<String>>,
+    google_ready: bool,
 ) -> Option<String> {
     let mates: Vec<String> = roster
         .iter()
@@ -189,14 +197,14 @@ pub fn roster_note(
                 b.slug,
                 b.name,
                 b.remit,
-                abilities(b, connections)
+                abilities(b, connections, google_ready)
             )
         })
         .collect();
     let mine = roster
         .iter()
         .find(|b| b.slug == me)
-        .map(|b| abilities(b, connections));
+        .map(|b| abilities(b, connections, google_ready));
     (!mates.is_empty()).then(|| {
         format!(
             "\n\nYou: {}. If a job needs something you can't do (say, changing something in Google), hand it to the \
@@ -204,7 +212,12 @@ pub fn roster_note(
              need can go in /shared.\n\nYour teammates and what each can do:\n{}",
             mine.unwrap_or_default(),
             mates.join("\n")
-        )
+        ) + if google_ready {
+            ""
+        } else {
+            "\n\nGoogle (Gmail, Calendar, Tasks, Drive) isn't set up yet, so no bot can use it. If a task needs it, \
+             tell Kelvin plainly rather than handing it to a teammate."
+        }
     })
 }
 
@@ -358,10 +371,14 @@ mod tests {
         ];
         let mut grants = HashMap::new();
         grants.insert("checker".to_string(), vec!["github".to_string()]);
-        let note = roster_note(&roster, "coder", &grants).unwrap();
+        let note = roster_note(&roster, "coder", &grants, true).unwrap();
         assert!(note.contains("- checker (CHECKER): checker work. Can: model Orphus default; Google: looks up only; connections: github"));
         assert!(note.starts_with("\n\nYou: model Orphus default; Google: looks up only."));
         assert!(!note.contains("- coder") && !note.contains("inbox") && !note.contains("old"));
-        assert!(roster_note(&[b("coder", false)], "coder", &grants).is_none());
+        assert!(roster_note(&[b("coder", false)], "coder", &grants, true).is_none());
+        // Without Google set up, no bot is told it has Google, and all are told why.
+        let none = roster_note(&roster, "coder", &grants, false).unwrap();
+        assert!(!none.contains("Google: looks up"));
+        assert!(none.contains("isn't set up yet"));
     }
 }

@@ -1042,9 +1042,12 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
     {
         spec.instructions.push_str(&note);
     }
+    // The date and time, in the owner's time zone: models don't know them, and
+    // in the message (not the instructions) so the engine isn't restarted for it.
+    let now = time_line(chrono::Utc::now(), profiles::current(&app.db).await.tz);
     let start = ToNode::StartTurn {
         attempt,
-        text: claimed.prompt,
+        text: format!("{now}\n\n{}", claimed.prompt),
         resumed: claimed.resumed,
         bot: Box::new(spec),
         files: attachments::for_run(&app.db, run).await,
@@ -1054,6 +1057,14 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
         // The link closed under us; its disconnect handler re-queues the run.
         warn!(run, "node went away while starting a run");
     }
+}
+
+/// "(It's Tuesday 20 October 2026, 22:15 in Europe/London.)"
+fn time_line(now: chrono::DateTime<chrono::Utc>, tz: chrono_tz::Tz) -> String {
+    format!(
+        "(It's {} in {tz}.)",
+        now.with_timezone(&tz).format("%A %-d %B %Y, %H:%M")
+    )
 }
 
 /// Renews leases for connected nodes and re-queues lapsed ones, forever.
@@ -1566,4 +1577,20 @@ fn publish(app: &App, id: Option<i64>, bot: Option<&str>, event: ThreadEvent) {
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     // A poisoned lock only means another task panicked mid-update; the state is still usable.
     m.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::TimeZone;
+
+    #[test]
+    fn the_time_line_is_in_the_owners_zone() {
+        let at = chrono::Utc
+            .with_ymd_and_hms(2026, 10, 20, 21, 15, 0)
+            .unwrap();
+        assert_eq!(
+            super::time_line(at, chrono_tz::Europe::London),
+            "(It's Tuesday 20 October 2026, 22:15 in Europe/London.)"
+        );
+    }
 }

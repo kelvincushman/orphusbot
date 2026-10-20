@@ -12,6 +12,17 @@ const userAgent = 'OrphusBot app';
 
 class SignedOut implements Exception {}
 
+/// The server couldn't be reached at all (this computer offline, the tunnel
+/// reconnecting, the server restarting), as opposed to the server saying no.
+bool isOffline(Object e) =>
+    e is SocketException || e is http.ClientException || e is TimeoutException;
+
+/// An error in words for the owner.
+String explain(Object e) => isOffline(e)
+    ? "Can't reach the OrphusBot server right now. It reconnects by itself; "
+          'check this computer is online.'
+    : '$e'.replaceFirst('Exception: ', '');
+
 class Api {
   Api(this.server, this.cookie, [http.Client? client])
     : _http = client ?? http.Client();

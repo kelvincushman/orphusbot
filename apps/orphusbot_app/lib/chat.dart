@@ -111,7 +111,7 @@ class _ChatScreenState extends State<ChatScreen> {
     } on SignedOut {
       widget.onSignedOut();
     } catch (e) {
-      setState(() => problem = '$e');
+      setState(() => problem = explain(e));
     }
   }
 
@@ -122,14 +122,52 @@ class _ChatScreenState extends State<ChatScreen> {
     final bot = chosen;
     composer.clear();
     setState(pending.clear);
-    _act(() async {
-      final ids = <int>[];
-      for (final (name, bytes) in files) {
-        ids.add(await widget.api.upload(bot, name, bytes));
-      }
-      await widget.api.send(bot, text, attachments: ids);
-    });
+    _deliver(bot, text, files);
     focus.requestFocus();
+  }
+
+  /// Sends, waiting for the server for up to two minutes if it can't be
+  /// reached (the tunnel reconnects by itself); if it still can't, or the
+  /// server says no, the text and files go back in the composer, never lost.
+  Future<void> _deliver(
+    String bot,
+    String text,
+    List<(String, Uint8List)> files,
+  ) async {
+    final until = DateTime.now().add(const Duration(minutes: 2));
+    while (true) {
+      try {
+        final ids = <int>[];
+        for (final (name, bytes) in files) {
+          ids.add(await widget.api.upload(bot, name, bytes));
+        }
+        await widget.api.send(bot, text, attachments: ids);
+        if (mounted) setState(() => problem = null);
+        return;
+      } on SignedOut {
+        return widget.onSignedOut();
+      } catch (e) {
+        if (isOffline(e) && DateTime.now().isBefore(until)) {
+          if (mounted) {
+            setState(
+              () => problem =
+                  'Waiting for the server; your message will send when '
+                  "it's back.",
+            );
+          }
+          await Future<void>.delayed(const Duration(seconds: 5));
+          continue;
+        }
+        if (!mounted) return;
+        setState(() {
+          problem = '${explain(e)} Your message is back in the box.';
+          if (composer.text.trim().isEmpty) composer.text = text;
+          if (pending.isEmpty) pending.addAll(files);
+          chosen = bot;
+        });
+        return;
+      }
+    }
   }
 
   void _add(String name, Uint8List bytes) {

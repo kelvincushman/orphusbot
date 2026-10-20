@@ -725,15 +725,17 @@ class _BotEditorState extends State<BotEditor> {
               ),
               // Every model the machines reported, or one typed by hand;
               // empty means Orphus's default.
-              DropdownMenu<String>(
-                controller: model,
-                expandedInsets: EdgeInsets.zero,
-                enableFilter: true,
-                requestFocusOnTap: true,
-                label: const Text('Model (empty: Orphus default)'),
-                dropdownMenuEntries: [
-                  for (final m in models) DropdownMenuEntry(value: m, label: m),
-                ],
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Model'),
+                subtitle: Text(
+                  model.text.isEmpty ? 'Orphus default' : model.text,
+                ),
+                trailing: const Icon(Icons.unfold_more),
+                onTap: () async {
+                  final picked = await pickModel(context, models, model.text);
+                  if (picked != null) setState(() => model.text = picked);
+                },
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String?>(
@@ -1055,6 +1057,94 @@ class _ConnectionFormState extends State<_ConnectionForm> {
           child: const Text('Cancel'),
         ),
         FilledButton(onPressed: _add, child: const Text('Add')),
+      ],
+    );
+  }
+}
+
+/// Chooses a model: every model the machines reported, searchable, plus Orphus's
+/// default and one typed by hand. Returns '' for the default, null if cancelled.
+Future<String?> pickModel(
+  BuildContext context,
+  List<String> models,
+  String current,
+) => showDialog<String>(
+  context: context,
+  builder: (_) => _ModelPicker(models: models, current: current),
+);
+
+class _ModelPicker extends StatefulWidget {
+  const _ModelPicker({required this.models, required this.current});
+  final List<String> models;
+  final String current;
+  @override
+  State<_ModelPicker> createState() => _ModelPickerState();
+}
+
+class _ModelPickerState extends State<_ModelPicker> {
+  final search = TextEditingController();
+
+  @override
+  void dispose() {
+    search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final q = search.text.trim();
+    final shown = widget.models
+        .where((m) => m.toLowerCase().contains(q.toLowerCase()))
+        .toList();
+    Widget row(String value, String label) => ListTile(
+      dense: true,
+      title: Text(label),
+      trailing: value == widget.current ? const Icon(Icons.check) : null,
+      onTap: () => Navigator.pop(context, value),
+    );
+    return AlertDialog(
+      title: const Text('Choose a model'),
+      content: SizedBox(
+        width: 520,
+        height: 420,
+        child: Column(
+          children: [
+            TextField(
+              controller: search,
+              autofocus: true,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search),
+                hintText: 'Search, or type provider/model',
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView(
+                children: [
+                  if (q.isEmpty) row('', 'Orphus default'),
+                  if (q.contains('/') && !widget.models.contains(q))
+                    row(q, 'Use "$q"'),
+                  for (final m in shown) row(m, m),
+                  if (widget.models.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text(
+                        'No machine has reported its models yet; '
+                        'type one as provider/model.',
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
       ],
     );
   }

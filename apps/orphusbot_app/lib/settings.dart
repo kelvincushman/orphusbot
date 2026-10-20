@@ -75,7 +75,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } on SignedOut {
       _signedOut();
     } catch (e) {
-      _say('$e');
+      _say(explain(e));
     }
   }
 

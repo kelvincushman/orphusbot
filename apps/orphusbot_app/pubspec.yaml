@@ -10,11 +10,17 @@ dependencies:
   file_selector: ^1.1.0
   flutter:
     sdk: flutter
+  flutter_local_notifications: ^22.3.2
   http: ^1.6.0
   markdown_widget: ^2.3.2+8
+  media_kit: ^1.2.6
+  media_kit_libs_video: ^1.0.7
+  media_kit_video: ^2.0.1
   pasteboard: ^0.5.0
   path_provider: ^2.1.6
+  pdfrx: ^2.9.0
   rive: ^0.14.11
+  unifiedpush: ^6.2.0
   url_launcher: ^6.3.3
 
 dev_dependencies:

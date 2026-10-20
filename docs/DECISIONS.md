@@ -11,6 +11,12 @@ Format:
 
 ---
 
+## D-041: Phone push through UnifiedPush on our own ntfy, not Firebase (2026-10-20)
+
+**Decided:** the Android app registers a UnifiedPush endpoint with the server (`/api/push`); the ntfy app is the distributor, pointed at OrphusBot's own ntfy (its own container on the box, deny-all except anonymous `up*` topics, reached through the Cloudflare tunnel). The server posts each push to every endpoint as JSON and the app shows it as its own notification; a tap opens the bot.
+**Why:** no Google account or Firebase project, which keeps the self-hosted stance of D-004 and the wearable; the server's ntfy sender already existed; notifications open the app rather than the browser.
+**Revisit if:** a public distributor is used (then encrypt payloads with Web Push), or installing the ntfy app proves a barrier for other owners (then offer FCM as an option).
+
 ## D-040: Gallery files live on disk by content hash; the database keeps the details (2026-10-20)
 
 - **Context:** Kelvin wants a gallery of context for the bots, including video. Attachments and artifacts are kept in Postgres, capped at 10 MB, which suits chat files but not video.

@@ -2,13 +2,11 @@
 // pictures, brand material, documents and video. Browse, search, upload, edit
 // details and mark items as standing context for bots; the chat's 📎 can pick
 // from here too.
-import 'dart:io';
-
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'api.dart';
+import 'viewer.dart';
 
 bool isImage(Map<String, dynamic> i) =>
     (i['mime'] as String).startsWith('image/') && i['mime'] != 'image/svg+xml';
@@ -307,20 +305,13 @@ class _ItemSheetState extends State<_ItemSheet> {
     }
   }
 
-  /// Saves a copy and opens it with the computer's own app (video, PDFs, …).
-  Future<void> _openOutside() async {
-    try {
-      final bytes = await widget.api.download(
-        widget.api.galleryUrl(widget.item['id'] as int),
-      );
-      final dir = await Directory.systemTemp.createTemp('orphusbot-');
-      final file = File('${dir.path}/${widget.item['name']}');
-      await file.writeAsBytes(bytes);
-      await launchUrl(Uri.file(file.path));
-    } catch (e) {
-      setState(() => error = explain(e));
-    }
-  }
+  /// Opens it full screen: PDFs, video, audio, pictures, Markdown, code.
+  Future<void> _view() => openViewer(
+    context,
+    widget.api,
+    widget.item['name'] as String,
+    widget.api.galleryUrl(widget.item['id'] as int),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -408,7 +399,7 @@ class _ItemSheetState extends State<_ItemSheet> {
       ),
       actions: [
         TextButton(onPressed: _delete, child: const Text('Delete')),
-        TextButton(onPressed: _openOutside, child: const Text('Open')),
+        TextButton(onPressed: _view, child: const Text('View')),
         TextButton(
           onPressed: () => Navigator.pop(context, false),
           child: const Text('Cancel'),

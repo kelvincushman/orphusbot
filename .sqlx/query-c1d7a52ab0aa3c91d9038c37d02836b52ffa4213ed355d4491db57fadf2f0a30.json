@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select url from push_endpoint",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "url",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "push_endpoint",
+            "name": "url"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c1d7a52ab0aa3c91d9038c37d02836b52ffa4213ed355d4491db57fadf2f0a30"
+}

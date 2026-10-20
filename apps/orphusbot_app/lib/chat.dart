@@ -213,6 +213,42 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => problem = 'Saved to ${where.path}');
   }
 
+  Map<String, dynamic>? get _bot =>
+      bots.where((b) => b['slug'] == chosen).firstOrNull;
+
+  /// The chosen bot's model, short: `claude-opus-5` for `claude-bridge/claude-opus-5`.
+  String _modelLabel() {
+    final model = _bot?['model'] as String?;
+    return model == null ? 'Default model' : model.split('/').last;
+  }
+
+  /// Switches the chosen bot's model from the chat; it takes effect on its next message.
+  Future<void> _changeModel() async {
+    final bot = _bot;
+    if (bot == null) return;
+    List<String> models = [];
+    try {
+      models = [
+        for (final m in await widget.api.get('/api/models') as List)
+          m['id'] as String,
+      ];
+    } catch (_) {
+      // The picker still lets the owner type one.
+    }
+    if (!mounted) return;
+    final picked = await pickModel(
+      context,
+      models,
+      bot['model'] as String? ?? '',
+    );
+    if (picked == null) return;
+    final edited = {...bot, 'model': picked.isEmpty ? null : picked};
+    await _act(() async {
+      await widget.api.post('/api/bots/update', edited);
+      await _loadBots();
+    });
+  }
+
   t.ThreadView get view => threads[chosen] ?? t.ThreadView();
 
   @override
@@ -324,7 +360,11 @@ class _ChatScreenState extends State<ChatScreen> {
               'Working${v.where == null ? '' : ' ${v.where}'}',
           }),
           trailing: v.run == t.RunState.idle
-              ? null
+              ? TextButton.icon(
+                  onPressed: _changeModel,
+                  icon: const Icon(Icons.tune, size: 18),
+                  label: Text(_modelLabel()),
+                )
               : OutlinedButton.icon(
                   onPressed: () => _act(() => widget.api.stop(chosen)),
                   icon: const Icon(Icons.stop),

@@ -362,6 +362,7 @@ mod tests {
             disabled,
             computer: "node".into(),
             google: "read".into(),
+            face: None,
         };
         let roster = [
             b("inbox", false),

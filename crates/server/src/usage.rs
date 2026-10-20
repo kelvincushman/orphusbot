@@ -114,17 +114,38 @@ pub async fn summary(State(app): State<Shared>) -> Result<Json<Value>, ApiError>
     let week = period(6.0)
         .await
         .map_err(|e| internal("summing usage", e))?;
-    let bots = sqlx::query!(
-        r#"select bot, count(*) as "turns!", sum(input + output)::bigint as "tokens!"
-           from usage where created_at >= date_trunc('day', now()) group by bot order by 3 desc"#
-    )
-    .fetch_all(&app.db)
-    .await
-    .map_err(|e| internal("summing usage", e))?;
+    // Per bot, today and over the last seven days (DESIGN §12.1: shown in each chat's header).
+    let per_bot = |days: f64| {
+        let db = app.db.clone();
+        async move {
+            sqlx::query!(
+                r#"select bot, count(*) as "turns!", sum(input + output)::bigint as "tokens!",
+                          sum(cost_micros)::bigint as "cost!"
+                   from usage where created_at >= date_trunc('day', now()) - make_interval(days => $1::float8::int)
+                   group by bot order by 3 desc"#,
+                days
+            )
+            .fetch_all(&db)
+            .await
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|b| json!({ "bot": b.bot, "turns": b.turns, "tokens": b.tokens,
+                                     "cost": b.cost as f64 / 1_000_000.0 }))
+                    .collect::<Vec<_>>()
+            })
+        }
+    };
+    let bots = per_bot(0.0)
+        .await
+        .map_err(|e| internal("summing usage", e))?;
+    let bots_week = per_bot(6.0)
+        .await
+        .map_err(|e| internal("summing usage", e))?;
     Ok(Json(json!({
         "today": by_model(today),
         "week": by_model(week),
-        "bots_today": bots.into_iter().map(|b| json!({ "bot": b.bot, "turns": b.turns, "tokens": b.tokens })).collect::<Vec<_>>(),
+        "bots_today": bots,
+        "bots_week": bots_week,
         "today_tokens": today_tokens(&app.db).await,
         "budget": budget(),
     })))

@@ -685,6 +685,7 @@ pub(crate) mod tests {
             disabled,
             computer: "node".into(),
             google: "read".into(),
+            face: None,
         }
     }
 

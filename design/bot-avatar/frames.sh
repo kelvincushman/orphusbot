@@ -11,7 +11,7 @@ mkdir -p "${1:?usage: frames.sh <out dir>}"
 out=$(realpath "$1")
 here=$(cd "$(dirname "$0")" && pwd)
 rive=${RIVE:-$HOME/.rive/bin/rive}
-styles=${STYLES:-"default inbox researcher coder checker blogger pa orchestrator"}
+styles=${STYLES:-$(cat "$here/styles.txt")}
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 for style in $styles; do
   # state: first frame (after the 200 ms blend in), frames in one loop

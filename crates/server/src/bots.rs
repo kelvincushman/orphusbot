@@ -52,6 +52,9 @@ pub struct Bot {
     /// What it may do in Google through `gog` (DESIGN §11.5): none, read or write.
     #[serde(default = "read")]
     pub google: String,
+    /// Its face from the library; none keeps its own style or the default.
+    #[serde(default)]
+    pub face: Option<String>,
 }
 
 fn on_node() -> String {
@@ -125,6 +128,16 @@ impl Bot {
             _ if !["none", "read", "write"].contains(&self.google.as_str()) => {
                 Err("Google is none, read or write")
             }
+            _ if self.face.as_deref().is_some_and(|f| {
+                f.is_empty()
+                    || f.len() > 40
+                    || !f
+                        .chars()
+                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+            }) =>
+            {
+                Err("A face is a style name from the library")
+            }
             _ => Ok(self),
         }
     }
@@ -162,7 +175,7 @@ fn slugify(name: &str) -> String {
 pub async fn all(db: &PgPool) -> sqlx::Result<Vec<Bot>> {
     sqlx::query_as!(
         Bot,
-        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google
+        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face
          from bot order by disabled, slug <> 'orchestrator', slug <> 'inbox', name"
     )
     .fetch_all(db)
@@ -172,7 +185,7 @@ pub async fn all(db: &PgPool) -> sqlx::Result<Vec<Bot>> {
 pub async fn get(db: &PgPool, slug: &str) -> sqlx::Result<Option<Bot>> {
     sqlx::query_as!(
         Bot,
-        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google
+        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face
          from bot where slug = $1",
         slug
     )
@@ -205,6 +218,8 @@ pub struct NewBot {
     computer: String,
     #[serde(default = "read")]
     google: String,
+    #[serde(default)]
+    face: Option<String>,
 }
 
 fn private() -> String {
@@ -227,6 +242,7 @@ pub async fn create(
         disabled: false,
         computer: new.computer,
         google: new.google,
+        face: new.face,
     }
     .check()
     .map_err(|why| (StatusCode::UNPROCESSABLE_ENTITY, why))?;
@@ -253,8 +269,8 @@ pub async fn create(
         .find(|s| !taken.contains(s))
         .unwrap_or_default();
     let id = sqlx::query_scalar!(
-        "insert into bot (slug, name, remit, instructions, model, thinking, exclude_tools, scope, computer, google)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning id",
+        "insert into bot (slug, name, remit, instructions, model, thinking, exclude_tools, scope, computer, google, face)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) returning id",
         slug,
         bot.name,
         bot.remit,
@@ -264,7 +280,8 @@ pub async fn create(
         &bot.exclude_tools,
         bot.scope,
         bot.computer,
-        bot.google
+        bot.google,
+        bot.face
     )
     .fetch_one(&mut *tx)
     .await
@@ -296,7 +313,7 @@ pub async fn update(
     }
     let done = sqlx::query!(
         "update bot set name = $2, remit = $3, instructions = $4, model = $5, thinking = $6,
-                exclude_tools = $7, scope = $8, disabled = $9, computer = $10, google = $11
+                exclude_tools = $7, scope = $8, disabled = $9, computer = $10, google = $11, face = $12
          where slug = $1",
         bot.slug,
         bot.name,
@@ -308,7 +325,8 @@ pub async fn update(
         bot.scope,
         bot.disabled,
         bot.computer,
-        bot.google
+        bot.google,
+        bot.face
     )
     .execute(&app.db)
     .await
@@ -348,11 +366,21 @@ mod tests {
             disabled: false,
             computer: "node".into(),
             google: "read".into(),
+            face: None,
         };
         let ok = bot(" Researcher ", Some("high")).check().unwrap();
         assert_eq!((ok.name.as_str(), ok.model), ("Researcher", None));
         assert!(bot("", None).check().is_err());
         assert!(bot("R", Some("turbo")).check().is_err());
+        let face = |f: &str| {
+            Bot {
+                face: Some(f.into()),
+                ..bot("R", None)
+            }
+            .check()
+        };
+        assert!(face("fox").is_ok() && face("cat-ears").is_ok());
+        assert!(face("../x").is_err() && face("Fox").is_err() && face("").is_err());
     }
 
     #[sqlx::test]

@@ -103,6 +103,7 @@ Without `ORPHUSBOT_URL`, the first run asks for the server address and saves it;
 cd apps/orphusbot_app
 flutter test                       # the reducer tests
 flutter build linux --release      # build/linux/x64/release/bundle/orphusbot-app
+flutter build apk --release        # build/app/outputs/flutter-apk/app-release.apk (needs the Android SDK and JDK 17+)
 ```
 
 The bot faces come from `design/bot-avatar` and are built with the [Rive CLI](https://rive.app/docs/cli/overview) (no account needed); its README has the commands, which put one `.riv` per style in `apps/orphusbot_app/assets/faces/` and animated WebPs for the bar panel in `omarchy/kelvincushman.orphusbot/faces/`.

@@ -234,7 +234,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ListTile(
                   leading: BotAvatar(
                     key: ValueKey(b['slug']),
-                    slug: b['slug'] as String,
+                    slug: faceOf(b, b['slug'] as String),
                     mood: 0,
                   ),
                   title: Text(
@@ -349,15 +349,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       '${m['output']} out · \$${(m['cost'] as num).toStringAsFixed(2)}',
                     ),
                   ),
-              for (final b in (usage['bots_today'] as List? ?? []))
+              for (final b in (usage['bots_week'] as List? ?? []))
                 ListTile(
                   dense: true,
                   title: Text('${b['bot']}'),
-                  subtitle: Text(
-                    'today · ${b['turns']} turns · ${b['tokens']} tokens',
-                  ),
+                  subtitle: Text(_botUsage(b as Map<String, dynamic>)),
                 ),
-
               heading(
                 'Passkeys',
                 'Add passkeys from the web page in a browser; this app signs '
@@ -486,6 +483,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  /// One bot's tokens and cost: today, then the last seven days.
+  String _botUsage(Map<String, dynamic> week) {
+    final today = (usage['bots_today'] as List? ?? [])
+        .cast<Map<String, dynamic>>()
+        .where((b) => b['bot'] == week['bot'])
+        .firstOrNull;
+    String part(Map<String, dynamic>? b, String when) => b == null
+        ? 'nothing $when'
+        : '${b['tokens']} tokens in ${b['turns']} turns '
+              '(\$${((b['cost'] as num?) ?? 0).toStringAsFixed(2)}) $when';
+    return '${part(today, 'today')} · ${part(week, 'this week')}';
   }
 
   String _usageLine() {
@@ -722,6 +732,28 @@ class _BotEditorState extends State<BotEditor> {
                   labelText: 'Instructions',
                   alignLabelWithHint: true,
                 ),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: BotAvatar(
+                  key: ValueKey('face-${bot['face']}'),
+                  slug: faceOf(bot, bot['slug'] as String? ?? 'default'),
+                  mood: 0,
+                ),
+                title: const Text('Face'),
+                subtitle: Text(bot['face'] as String? ?? 'its own'),
+                trailing: const Icon(Icons.unfold_more),
+                onTap: () async {
+                  final picked = await pickFace(
+                    context,
+                    bot['face'] as String?,
+                  );
+                  if (picked != null) {
+                    setState(
+                      () => bot['face'] = picked.isEmpty ? null : picked,
+                    );
+                  }
+                },
               ),
               // Every model the machines reported, or one typed by hand;
               // empty means Orphus's default.

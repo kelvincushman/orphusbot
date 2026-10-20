@@ -255,7 +255,7 @@ Panel {
                   width: Style.space(26); height: width
                   // Each house bot has its own style; others get the default face.
                   property bool ownStyle: true
-                  source: "faces/" + (ownStyle ? modelData.slug : "default") + "-"
+                  source: "faces/" + (ownStyle ? (modelData.face || modelData.slug) : "default") + "-"
                     + (modelData.waiting > 0 ? 3
                     : modelData.state === "running" ? 2
                     : modelData.state === "queued" ? 1 : 0) + ".webp"

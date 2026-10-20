@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select bot, count(*) as \"turns!\", sum(input + output)::bigint as \"tokens!\"\n           from usage where created_at >= date_trunc('day', now()) group by bot order by 3 desc",
+  "query": "select bot, count(*) as \"turns!\", sum(input + output)::bigint as \"tokens!\",\n                          sum(cost_micros)::bigint as \"cost!\"\n                   from usage where created_at >= date_trunc('day', now()) - make_interval(days => $1::float8::int)\n                   group by bot order by 3 desc",
   "describe": {
     "columns": [
       {
@@ -25,16 +25,25 @@
         "name": "tokens!",
         "type_info": "Int8",
         "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "cost!",
+        "type_info": "Int8",
+        "origin": "Expression"
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Float8"
+      ]
     },
     "nullable": [
       false,
       null,
+      null,
       null
     ]
   },
-  "hash": "aec0cca6f8f3746bbab04f9d647feb191dec382ecc741f2e8257a418cda0477e"
+  "hash": "a9a5f5cfc1176fc795deec983043eaeb299a6bd0c19fe979c7ce18dc5d0475b9"
 }

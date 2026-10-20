@@ -48,6 +48,30 @@ class _ChatScreenState extends State<ChatScreen> {
     _start();
   }
 
+  // Tokens per bot today and this week (`/api/usage`), shown in the header.
+  Map<String, dynamic> usage = {};
+
+  Future<void> _loadUsage() async {
+    try {
+      final got = await widget.api.get('/api/usage') as Map<String, dynamic>;
+      if (mounted) setState(() => usage = got);
+    } catch (_) {
+      // Usage is a nicety; the chat works without it.
+    }
+  }
+
+  /// "12.4k tokens today · 81k this week" for a bot, or '' if it hasn't run.
+  String _usageLine(String slug) {
+    int tokens(String key) =>
+        ((usage[key] as List?) ?? []).cast<Map<String, dynamic>>().fold(
+          0,
+          (n, b) => b['bot'] == slug ? n + (b['tokens'] as num).toInt() : n,
+        );
+    final today = tokens('bots_today'), week = tokens('bots_week');
+    if (week == 0) return '';
+    return '${compactCount(today)} tokens today · ${compactCount(week)} this week';
+  }
+
   Future<void> _loadBots() async {
     final list = await widget.api.get('/api/bots') as List<dynamic>;
     setState(() {
@@ -74,6 +98,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _start() async {
     try {
       await _loadBots();
+      _loadUsage();
     } on SignedOut {
       return widget.onSignedOut();
     } catch (e) {
@@ -85,6 +110,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if (bot == null) return;
         setState(() => threads.putIfAbsent(bot, t.ThreadView.new).apply(e));
         if (bot == chosen) _toBottom();
+        if (e['type'] == 'run_ended') _loadUsage();
       },
       onError: (Object e) => e is SignedOut
           ? widget.onSignedOut()
@@ -278,16 +304,47 @@ class _ChatScreenState extends State<ChatScreen> {
 
   t.ThreadView get view => threads[chosen] ?? t.ThreadView();
 
+  // On a phone: the bot list, or one bot's chat over it (back returns to the list).
+  bool chatOpen = false;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      body: Row(
-        children: [
-          SizedBox(width: 220, child: _botList(scheme)),
-          VerticalDivider(width: 1, color: scheme.outlineVariant),
-          Expanded(child: _conversation(scheme)),
-        ],
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, box) {
+            if (box.maxWidth >= 640) {
+              return Row(
+                children: [
+                  SizedBox(width: 220, child: _botList(scheme)),
+                  VerticalDivider(width: 1, color: scheme.outlineVariant),
+                  Expanded(child: _conversation(scheme)),
+                ],
+              );
+            }
+            if (!chatOpen) return _botList(scheme);
+            return PopScope(
+              canPop: false,
+              onPopInvokedWithResult: (didPop, _) {
+                if (!didPop) setState(() => chatOpen = false);
+              },
+              child: Column(
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: IconButton(
+                      tooltip: 'All bots',
+                      icon: const Icon(Icons.arrow_back),
+                      onPressed: () => setState(() => chatOpen = false),
+                    ),
+                  ),
+                  Expanded(child: _conversation(scheme)),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -342,7 +399,7 @@ class _ChatScreenState extends State<ChatScreen> {
               return ListTile(
                 leading: BotAvatar(
                   key: ValueKey(slug),
-                  slug: slug,
+                  slug: faceOf(b, slug),
                   mood: v?.mood ?? 0,
                 ),
                 selected: slug == chosen,
@@ -358,7 +415,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 trailing: waiting > 0 ? Badge(label: Text('$waiting')) : null,
                 onTap: () {
-                  setState(() => chosen = slug);
+                  setState(() {
+                    chosen = slug;
+                    chatOpen = true;
+                  });
                   _toBottom();
                   focus.requestFocus();
                 },
@@ -383,18 +443,25 @@ class _ChatScreenState extends State<ChatScreen> {
         ListTile(
           leading: BotAvatar(
             key: ValueKey(chosen),
-            slug: chosen,
+            slug: faceOf(_bot, chosen),
             mood: v.mood,
             size: 56,
           ),
           title: Text(name, style: Theme.of(context).textTheme.titleMedium),
-          subtitle: Text(switch (v.run) {
-            t.RunState.idle => 'Ready',
-            t.RunState.queued =>
-              'Waiting${v.where == null ? '' : ': ${v.where}'}',
-            t.RunState.running =>
-              'Working${v.where == null ? '' : ' ${v.where}'}',
-          }),
+          subtitle: Text(
+            [
+              switch (v.run) {
+                t.RunState.idle => 'Ready',
+                t.RunState.queued =>
+                  'Waiting${v.where == null ? '' : ': ${v.where}'}',
+                t.RunState.running =>
+                  'Working${v.where == null ? '' : ' ${v.where}'}',
+              },
+              _usageLine(chosen),
+            ].where((p) => p.isNotEmpty).join(' · '),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
           trailing: v.run == t.RunState.idle
               ? TextButton.icon(
                   onPressed: _changeModel,
@@ -889,3 +956,10 @@ MarkdownConfig markdownConfig(bool dark, ColorScheme scheme) {
     ],
   );
 }
+
+/// 950, 12.4k, 3.1M.
+String compactCount(int n) => n < 1000
+    ? '$n'
+    : n < 1000000
+    ? '${(n / 1000).toStringAsFixed(n < 10000 ? 1 : 0)}k'
+    : '${(n / 1000000).toStringAsFixed(1)}M';

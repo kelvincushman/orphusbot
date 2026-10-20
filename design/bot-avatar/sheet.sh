@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
-# Contact sheet of every style (rows) and state 0-4 (columns) from the WebPs
-# frames.sh wrote: ./sheet.sh <webp dir> [out.png, default styles.png]
+# Contact sheets from the WebPs frames.sh wrote:
+#   ./sheet.sh <webp dir> [out.png] [library.png]
+# out.png (default styles.png): every style (rows) by state 0-4 (columns).
+# library.png (default styles-library.png): state 0 of every style in a
+# labelled grid, for picking a face.
 set -euo pipefail
-src=${1:?usage: sheet.sh <webp dir> [out.png]}; out=${2:-styles.png}
-styles=${STYLES:-"default inbox researcher coder checker blogger pa orchestrator"}
+here=$(cd "$(dirname "$0")" && pwd)
+src=${1:?usage: sheet.sh <webp dir> [out.png] [library.png]}
+out=${2:-styles.png}; lib=${3:-styles-library.png}
+styles=${STYLES:-$(cat "$here/styles.txt")}
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 pick=(0 7 3 4 -1)   # a telling frame per state: rest, looking, scanning, pulse peak, final pose
 rows=()
@@ -19,4 +24,11 @@ for style in $styles; do
   rows+=("$work/row-$style.png")
 done
 magick "${rows[@]}" -background '#101418' -append -bordercolor '#101418' -border 8 "$out"
-echo "wrote $out"
+labelled=()
+for style in $styles; do
+  magick "$work/$style-0.png" -background '#101418' -resize 80x80 -gravity center -extent 96x84 \
+    -font "${FONT:-Liberation-Sans}" -fill '#C9D1DC' -pointsize 13 -gravity south -splice 0x18 -annotate +0+2 "$style" "$work/lib-$style.png"
+  labelled+=("$work/lib-$style.png")
+done
+magick montage "${labelled[@]}" -tile 6x -geometry +4+4 -background '#101418' "$lib"
+echo "wrote $out $lib"

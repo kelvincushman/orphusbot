@@ -175,7 +175,7 @@ class _NewDiscussionState extends State<_NewDiscussion> {
                   FilterChip(
                     avatar: BotAvatar(
                       key: ValueKey(b['slug']),
-                      slug: b['slug'] as String,
+                      slug: faceOf(b, b['slug'] as String),
                       mood: 0,
                       size: 24,
                     ),
@@ -328,7 +328,12 @@ class _DiscussionScreenState extends State<DiscussionScreen> {
                     children: [
                       BotAvatar(
                         key: ValueKey('${p['bot']}'),
-                        slug: p['bot'] as String,
+                        slug: faceOf(
+                          widget.bots
+                              .where((b) => b['slug'] == p['bot'])
+                              .firstOrNull,
+                          p['bot'] as String,
+                        ),
                         mood: 0,
                         size: 36,
                       ),

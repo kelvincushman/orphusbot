@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The app talks to your OrphusBot server. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="orphusbot_app"
+        android:label="OrphusBot"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

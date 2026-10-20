@@ -1,6 +1,6 @@
 """Writes a bot face scene (RML) for the Rive CLI: `python3 gen.py <style> [state] > scene.rml`.
 
-Styles: default, inbox, researcher, coder, checker, blogger, pa (see STYLES).
+Styles: see STYLES, or `python3 gen.py --list` (that list is styles.txt).
 `state` is the starting value of the `state` input (0 idle, 1 thinking,
 2 working, 3 needs you, 4 done); use 0 for real files and others only to
 screenshot a state. `python3 gen.py 0` still means the default style, state 0.
@@ -52,9 +52,100 @@ STYLES = {
                face="FF2B2104", eye="FFFFF4C8", mouth="FFFFF4C8",
                shape=(140, 104, 34), plate=(108, 68, 26, 2), eyes="oval", eye_y=-2, mouth_y=24,
                ears="rect", top="ball", extras=["bowtie"], by=110),
+    # --- the library: generic styles any bot can pick ---
+    "headphones": dict(head="FFFF7F50", trim="FFFFC2A8", light="FFFFE0D2", glow="FFFFA07A",
+                       face="FF2A1208", eye="FFFFE3D6", mouth="FFFFE3D6",
+                       shape=(132, 104, 34), plate=(104, 66, 24, 4), eyes="oval", eye_y=0, mouth_y=25,
+                       ears=None, top=None, extras=[], acc="headphones", by=122),
+    "fox": dict(head="FFFF9A1F", trim="FFFFE2BD", light="FFFFE7CC", glow="FFFFC27A",
+                face="FF2B1606", eye="FFFFE7CC", mouth="FFFFE7CC",
+                shape=(140, 104, 34), plate=(108, 66, 26, 6), eyes="oval", eye_y=-2, mouth_y=28,
+                ears=None, top=None, extras=[], acc="fox", by=128),
+    "owl": dict(head="FF8A5A36", trim="FFE9C79A", light="FFF7E3C0", glow="FFF0C890",
+                face="FF241509", eye="FF2A1A0E", mouth="FFF3DDB5", happy="FF2A1A0E",
+                shape=(140, 108, 40), plate=(116, 74, 30, 4), eyes="small", eye_y=-2, mouth_y=30,
+                ears=None, top=None, extras=[], acc="owl", by=122),
+    "sprout": dict(head="FF8C9B32", trim="FFD7E59A", light="FFB8F06A", glow="FFB8F06A",
+                   face="FF1C2208", eye="FFE6F5B8", mouth="FFE6F5B8",
+                   shape=(140, 108, 34), plate=(108, 70, 26, 4), eyes="round", eye_y=0, mouth_y=26,
+                   ears="round", top=None, extras=[], acc="sprout", by=124),
+    "bolt": dict(head="FFA6D62C", trim="FFE4F7A8", light="FFFFF27A", glow="FFFFF27A",
+                 face="FF1A2406", eye="FFF2FFC8", mouth="FFF2FFC8",
+                 shape=(140, 108, 26), plate=(108, 70, 18, 4), eyes="slim", eye_y=0, mouth_y=26,
+                 ears="rect", top=None, extras=[], acc="bolt", by=124),
+    "nurse": dict(head="FF62E0B3", trim="FFD4FFF0", light="FF2FB98C", glow="FF8FF0CF",
+                  face="FF06281D", eye="FFD4FFF0", mouth="FFD4FFF0",
+                  shape=(140, 108, 34), plate=(108, 70, 26, 6), eyes="oval", eye_y=2, mouth_y=28,
+                  ears="round", top=None, extras=[], acc="nurse", by=122),
+    "astronaut": dict(head="FF22C7E8", trim="FFB5F1FF", light="FFE0FAFF", glow="FF7FE3F7",
+                      face="FF04202A", eye="FFC8F6FF", mouth="FFC8F6FF",
+                      shape=(136, 100, 32), plate=(104, 64, 24, 4), eyes="oval", eye_y=2, mouth_y=26,
+                      ears="rect", top="ball", extras=[], acc="helmet", by=110),
+    "detective": dict(head="FFB8A773", trim="FFE8DDB8", light="FFE8DDB8", glow="FFE8DDB8",
+                      face="FF221D0E", eye="FFF2EBD2", mouth="FFF2EBD2",
+                      shape=(140, 104, 30), plate=(108, 66, 24, 6), eyes="small", eye_y=2, mouth_y=28,
+                      ears="rect", top=None, extras=[], acc="fedora", by=126),
+    "pirate": dict(head="FF6F82A3", trim="FFC4CFE3", light="FFF0F3F8", glow="FFC4CFE3",
+                   face="FF0E1420", eye="FFD6E2F5", mouth="FFD6E2F5",
+                   shape=(140, 108, 34), plate=(108, 64, 24, 10), eyes="oval", eye_y=8, mouth_y=31,
+                   ears=None, top=None, extras=[], acc="pirate", by=114),
+    "wizard": dict(head="FF9D4EDD", trim="FFD9B8F5", light="FFFFE680", glow="FFFFE680",
+                   face="FF1E0B2E", eye="FFEBD9FF", mouth="FFEBD9FF",
+                   shape=(140, 104, 34), plate=(108, 66, 26, 6), eyes="oval", eye_y=2, mouth_y=28,
+                   ears="rect", top=None, extras=[], acc="wizard", by=124),
+    "cat": dict(head="FFD84FC4", trim="FFF5B8EC", light="FFFFC2EC", glow="FFFF9BE2",
+                face="FF2B0A27", eye="FFFFE0F8", mouth="FFFFE0F8",
+                shape=(136, 104, 40), plate=(104, 66, 28, 4), eyes="oval", eye_y=-2, mouth_y=27,
+                ears=None, top=None, extras=[], acc="cat", by=122),
+    "ninja": dict(head="FF4F5BBF", trim="FFB7BEF5", light="FF6FD3FF", glow="FF6FD3FF",
+                  face="FF0B0F26", eye="FFDDE3FF", mouth="FFB7BEF5",
+                  shape=(140, 108, 34), plate=(122, 32, 16, 2), eyes="slim", eye_y=2, mouth_y=34,
+                  ears=None, top=None, extras=[], acc="ninja", by=116),
+    "bow": dict(head="FFFF8FAB", trim="FFFFD1DC", light="FFFFF0F5", glow="FFFFD1DC",
+                face="FF2E0D16", eye="FFFFE3EA", mouth="FFFFE3EA",
+                shape=(136, 104, 40), plate=(104, 66, 28, 4), eyes="oval", eye_y=0, mouth_y=26,
+                ears="round", top=None, extras=[], acc="bow", by=120),
+    "tophat": dict(head="FFF2E3C6", trim="FFC9B892", light="FF7FB8FF", glow="FF7FB8FF",
+                   face="FF231C10", eye="FFFFF3DA", mouth="FFFFF3DA",
+                   shape=(140, 104, 34), plate=(108, 66, 26, 4), eyes="oval", eye_y=0, mouth_y=26,
+                   ears="rect", top=None, extras=[], acc="tophat", by=122),
+    "chef": dict(head="FF5F6675", trim="FFB4BAC6", light="FF5AB0FF", glow="FF5AB0FF",
+                 face="FF14171D", eye="FFE3E8F2", mouth="FFE3E8F2",
+                 shape=(140, 104, 34), plate=(108, 66, 26, 4), eyes="oval", eye_y=0, mouth_y=26,
+                 ears="rect", top=None, extras=[], acc="chef", by=126),
+    "hood": dict(head="FFBFE3F0", trim="FFE8F6FB", light="FFF2D16B", glow="FFF2D16B",
+                 face="FF0A1E26", eye="FFC8F2FF", mouth="FFC8F2FF",
+                 shape=(128, 100, 36), plate=(100, 62, 26, 4), eyes="oval", eye_y=0, mouth_y=25,
+                 ears=None, top=None, extras=[], acc="hood", by=108),
+    "scarf": dict(head="FF6EC1FF", trim="FFC9E8FF", light="FFE3F3FF", glow="FF9FD6FF",
+                  face="FF07192A", eye="FFD2ECFF", mouth="FFD2ECFF",
+                  shape=(140, 100, 34), plate=(108, 64, 26, 2), eyes="oval", eye_y=-2, mouth_y=23,
+                  ears="rect", top="ball", extras=[], acc="scarf", by=106),
+    "mohawk": dict(head="FF8F9BAD", trim="FFD0D6E0", light="FFFF4FA3", glow="FFFF4FA3",
+                   face="FF141820", eye="FFE6EBF2", mouth="FFE6EBF2",
+                   shape=(136, 108, 30), plate=(106, 70, 24, 4), eyes="oval", eye_y=0, mouth_y=26,
+                   ears="rect", top=None, extras=[], acc="mohawk", by=120),
+    "captain": dict(head="FF8F9DFF", trim="FFD3DAFF", light="FFF0C94A", glow="FFF0C94A",
+                    face="FF0E1236", eye="FFE0E5FF", mouth="FFE0E5FF",
+                    shape=(140, 104, 34), plate=(108, 66, 26, 6), eyes="oval", eye_y=2, mouth_y=28,
+                    ears="rect", top=None, extras=[], acc="captain", by=126),
+    "flower": dict(head="FFC9A0F2", trim="FFEBD9FF", light="FFFFD84A", glow="FFFFD84A",
+                   face="FF22103A", eye="FFF3E8FF", mouth="FFF3E8FF",
+                   shape=(140, 108, 40), plate=(108, 70, 30, 4), eyes="oval", eye_y=0, mouth_y=26,
+                   ears="round", top=None, extras=[], acc="flower", by=122),
+    "bunny": dict(head="FFFFC4A3", trim="FFFFE6D8", light="FFFF8FA8", glow="FFFFB3C6",
+                  face="FF2E1A12", eye="FFFFEDE2", mouth="FFFFEDE2",
+                  shape=(136, 100, 40), plate=(104, 62, 28, 6), eyes="oval", eye_y=2, mouth_y=26,
+                  ears=None, top=None, extras=[], acc="bunny", by=124),
+    "classic": dict(head="FFC0703F", trim="FFF0B48C", light="FFFFD9BD", glow="FFF0B48C",
+                    face="FF22120A", eye="FFFFE3CF", mouth="FFFFE3CF",
+                    shape=(140, 104, 8), plate=(104, 62, 6, 4), eyes="square", eye_y=0, mouth_y=25,
+                    ears="rect", top="square", extras=[], acc="rivets", by=124),
 }
 
 args = sys.argv[1:]
+if args == ["--list"]:   # the style names, one per line (styles.txt)
+    print("\n".join(STYLES)); sys.exit()
 if args and args[0].lstrip("-").isdigit():   # legacy form: gen.py <state>
     args = ["default"] + args
 style_name = args[0] if args else "default"
@@ -104,17 +195,150 @@ ey = S["eye_y"]
 top_y = -hh / 2   # head top, relative to the Bot node
 
 # --- eyes ---
-eye_geom = {"oval": ell(20, 26), "small": ell(16, 20), "square": rect(18, 18, 3)}[S["eyes"]]
+eye_geom = {"oval": ell(20, 26), "small": ell(16, 20), "square": rect(18, 18, 3),
+            "round": ell(20, 20), "slim": ell(22, 12)}[S["eyes"]]
 eyes_extra = ""
 if "glasses" in S["extras"]:   # round glasses move with the eyes
     eyes_extra = shape("Glasses", ell(36, 36, -24, 0, "Lens L") + ell(36, 36, 24, 0, "Lens R"),
                        stroke("FFE6FFFB", 5), 0, ey) + "\n" + shape("Bridge", rect(14, 5, 2.5), fill("FFE6FFFB"), 0, ey - 3)
+# --- accessories for the library styles (S["acc"]) ---
+# Each returns parts: over (on top of everything), front (on the head, under the
+# face), back (behind the head), eyes (moves with the eyes), glow (x, y, w, h of
+# the halo when the style has no antenna). "GLOW" in a list places the halo there.
+def rect4(w, h, tl, tr, br, bl, x=0, y=0, name="Path"):
+    return (f'<Rectangle x="{x}" y="{y}" width="{w}" height="{h}" linkCornerRadius="false" cornerRadiusTL="{tl}" '
+            f'cornerRadiusTR="{tr}" cornerRadiusBR="{br}" cornerRadiusBL="{bl}" name="{name}"/>')
+
+def rot_ell(w, h, x, y, r, name="Path"):
+    return f'<Ellipse x="{x}" y="{y}" width="{w}" height="{h}" rotation="{r}" name="{name}"/>'
+
+def accessory(kind, T):
+    P = dict(over=[], front=[], back=[], eyes="", glow=None)
+    hw2 = S["shape"][0] / 2
+    if kind == "headphones":
+        P["back"] = [shape("Band LED", ell(14, 14), fill("light"), 0, T - 17), "GLOW",
+                     shape("Band", path([(-79, 4), (-79, T - 12), (79, T - 12), (79, 4)], radius=44), stroke("trim", 9))]
+        P["front"] = [shape("Cups", rect(22, 48, 11, -79, 4, "Cup L") + rect(22, 48, 11, 79, 4, "Cup R"),
+                            fill("FF2E3340") + stroke("trim", 4))]
+        P["glow"] = (0, T - 17, 30, 30)
+    elif kind in ("fox", "cat", "bunny"):
+        P["over"] = [shape("Nose", ell(14, 10), fill("light"), 0, 14), "GLOW"]
+        P["glow"] = (0, 14, 26, 22)
+        if kind == "fox":
+            P["back"] = [shape("Inner Ears", path([(-58, T + 6), (-52, T - 22), (-34, T + 2)], True, name="L", radius=3) +
+                               path([(58, T + 6), (52, T - 22), (34, T + 2)], True, name="R", radius=3), fill("FF5A2A0E")),
+                         shape("Ears", path([(-68, T + 14), (-56, T - 36), (-22, T + 2)], True, name="L", radius=5) +
+                               path([(68, T + 14), (56, T - 36), (22, T + 2)], True, name="R", radius=5), fill("head"))]
+        elif kind == "cat":
+            P["back"] = [shape("Ears", path([(-62, T + 12), (-50, T - 26), (-26, T + 2)], True, name="L", radius=6) +
+                               path([(62, T + 12), (50, T - 26), (26, T + 2)], True, name="R", radius=6), fill("head"))]
+            whisk = "".join(path([(sx * 50, y0), (sx * 92, y1)], name=f"W{k}") for k, (sx, y0, y1) in enumerate(
+                [(-1, 10, 4), (-1, 16, 18), (1, 10, 4), (1, 16, 18)]))
+            P["over"] += [shape("Whiskers", whisk, stroke("trim", 3))]
+        else:
+            P["back"] = [shape("Inner Ears", rot_ell(10, 44, -24, T - 22, -0.15, "L") + rot_ell(10, 44, 24, T - 22, 0.15, "R"),
+                               fill("FFFF8FA8")),
+                         shape("Ears", rot_ell(24, 62, -24, T - 22, -0.15, "L") + rot_ell(24, 62, 24, T - 22, 0.15, "R"),
+                               fill("head"))]
+    elif kind == "owl":
+        P["eyes"] = shape("Discs", ell(40, 40, -24, 0, "L") + ell(40, 40, 24, 0, "R"), fill("FFF3DDB5"), 0, S["eye_y"])
+        P["over"] = [shape("Beak", path([(-8, 0), (8, 0), (0, 12)], True, radius=2), fill("light"), 0, 13), "GLOW"]
+        P["back"] = [shape("Tufts", path([(-68, T + 12), (-78, T - 24), (-36, T + 2)], True, name="L", radius=4) +
+                           path([(68, T + 12), (78, T - 24), (36, T + 2)], True, name="R", radius=4), fill("head"))]
+        P["glow"] = (0, 18, 24, 24)
+    elif kind == "sprout":
+        P["back"] = [shape("Leaf L", rot_ell(28, 13, 0, 0, -0.5), fill("light"), -13, T - 24),
+                     shape("Leaf R", rot_ell(28, 13, 0, 0, 0.5), fill("light"), 13, T - 28), "GLOW",
+                     shape("Stalk", rect(5, 26, 2.5), fill("FF4E6B1E"), 0, T - 10)]
+        P["glow"] = (0, T - 26, 46, 34)
+    elif kind == "bolt":
+        P["back"] = [shape("Bolt", path([(5, -22), (-10, 2), (0, 2), (-5, 22), (11, -4), (1, -4)], True, radius=1),
+                           fill("light"), 0, T - 30), "GLOW",
+                     shape("Stalk", rect(5, 16, 2.5), fill("trim"), 0, T - 6)]
+        P["glow"] = (0, T - 30, 26, 34)
+    elif kind == "nurse":
+        P["front"] = [shape("Cross", rect(18, 6, 1.5, name="H") + rect(6, 18, 1.5, name="V"), fill("light"), 0, T - 9), "GLOW",
+                      shape("Cap", path([(-36, T + 8), (-28, T - 24), (28, T - 24), (36, T + 8)], True, radius=5),
+                            fill("FFF7FBFF"))]
+        P["glow"] = (0, T - 9, 28, 28)
+    elif kind == "helmet":
+        P["back"] = [shape("Helmet", ell(176, 166), fill("2E9BE9FF") + stroke("FFDDF6FF", 5), 0, -8, 'opacity="0.9" ')]
+    elif kind == "fedora":
+        P["front"] = [shape("Brim", ell(150, 16), fill("FF5B4636"), 0, T + 2),
+                      shape("Hat Band", rect(92, 8, 0), fill("light"), 0, T - 5), "GLOW",
+                      shape("Crown", rect4(92, 34, 14, 14, 2, 2), fill("FF7A5F48"), 0, T - 14)]
+        P["glow"] = (0, T - 5, 84, 12)
+    elif kind == "pirate":
+        P["eyes"] = shape("Patch", ell(30, 30), fill("FF17808A"), 24, S["eye_y"])
+        P["over"] = [shape("Strap", path([(4, T + 30), (24, S["eye_y"]), (hw2 - 4, S["eye_y"] + 18)]), stroke("FF17808A", 3))]
+        P["front"] = [shape("Skull", ell(11, 11), fill("light"), -22, T + 14), "GLOW",
+                      shape("Bandana", rect4(S["shape"][0], 30, S["shape"][2], S["shape"][2], 4, 4), fill("FF17808A"), 0, T + 15),
+                      shape("Knot", path([(0, 0), (22, -12), (18, 10)], True, radius=3) + path([(0, 4), (16, 22), (4, 22)], True, name="T2", radius=3),
+                            fill("FF17808A"), hw2 - 4, T + 16)]
+        P["glow"] = (-22, T + 14, 24, 24)
+    elif kind == "wizard":
+        P["front"] = [shape("Star", '<Star width="20" height="20" points="5" innerRadius="0.45" name="Path"/>', fill("light"), -2, T - 16), "GLOW",
+                      shape("Brim", ell(124, 16), fill("FF5650C8"), 0, T + 4),
+                      shape("Cone", path([(-44, 6), (4, -52), (44, 6)], True, radius=6), fill("FF433DA6"), 0, T)]
+        P["glow"] = (-2, T - 16, 30, 30)
+    elif kind == "ninja":
+        P["front"] = [shape("Emblem", ell(12, 12), fill("light"), 0, T + 16), "GLOW",
+                      shape("Headband", rect(S["shape"][0], 14, 0), fill("FFE6ECFF"), 0, T + 16)]
+        P["back"] = [shape("Tails", path([(66, T + 16), (92, T + 4)], name="T1") + path([(66, T + 16), (90, T + 26)], name="T2"),
+                           stroke("FFE6ECFF", 6))]
+        P["glow"] = (0, T + 16, 24, 24)
+    elif kind == "bow":
+        P["front"] = [shape("Knot", ell(13, 13), fill("light"), 36, T - 4), "GLOW",
+                      shape("Bow", path([(-3, 0), (-30, -17), (-30, 17)], True, name="L", radius=5) +
+                            path([(3, 0), (30, -17), (30, 17)], True, name="R", radius=5), fill("FF5B4BDB"), 36, T - 4, 'rotation="0.3" ')]
+        P["glow"] = (36, T - 4, 26, 26)
+    elif kind == "tophat":
+        P["front"] = [shape("Hat Band", rect(70, 9, 0), fill("light"), 0, T - 9), "GLOW",
+                      shape("Brim", rect(106, 10, 5), fill("FF34384A") + stroke("FF6B7290", 3), 0, T - 2),
+                      shape("Crown", rect(70, 50, 5), fill("FF34384A") + stroke("FF6B7290", 3), 0, T - 26)]
+        P["glow"] = (0, T - 9, 66, 13)
+    elif kind == "chef":
+        P["front"] = [shape("Badge", ell(11, 11), fill("light"), 0, T - 8), "GLOW",
+                      shape("Toque", ell(40, 40, -24, -18, "L") + ell(44, 44, 0, -26, "M") + ell(40, 40, 24, -18, "R") +
+                            rect(74, 22, 4, 0, 0, "Band"), fill("FFF8F9FB"), 0, T - 6)]
+        P["glow"] = (0, T - 8, 24, 24)
+    elif kind == "hood":
+        P["back"] = [shape("Clasp", ell(14, 14), fill("light"), 0, S["shape"][1] / 2 + 6), "GLOW",
+                     shape("Hood", rect(170, S["shape"][1] + 36, 62), fill("FF2F7A55"), 0, -6)]
+        P["glow"] = (0, S["shape"][1] / 2 + 6, 28, 28)
+    elif kind == "scarf":
+        b = S["shape"][1] / 2
+        P["front"] = [shape("Scarf", rect(124, 18, 9, 0, b + 2, "Wrap") + rect(18, 30, 8, 34, b + 16, "Tail"), fill("FFFF7F66"))]
+    elif kind == "mohawk":
+        crest = [(-34, 6), (-28, -14), (-16, 0), (-8, -26), (4, -2), (14, -24), (24, 0), (34, -12), (38, 6)]
+        P["back"] = [shape("Crest", path(crest, True, radius=2), fill("light"), 0, T), "GLOW"]
+        P["glow"] = (0, T - 6, 56, 18)
+    elif kind == "captain":
+        P["front"] = [shape("Badge", ell(14, 14), fill("light"), 0, T - 12), "GLOW",
+                      shape("Visor", ell(112, 14), fill("FF1C2030"), 0, T + 4),
+                      shape("Cap Band", rect(118, 8, 0), fill("FF26305C"), 0, T - 1),
+                      shape("Cap", rect(118, 26, 10, 0, -8, "Base") + ell(134, 30, 0, -20, "Top"), fill("FFF4F6FB"), 0, T)]
+        P["glow"] = (0, T - 12, 28, 28)
+    elif kind == "flower":
+        petals = "".join(rot_ell(12, 22, 13 * __import__("math").sin(a), -13 * __import__("math").cos(a), a, f"P{k}")
+                         for k, a in enumerate(i * 1.0471976 for i in range(6)))
+        P["front"] = [shape("Centre", ell(14, 14), fill("light"), -38, T - 6), "GLOW",
+                      shape("Petals", petals, fill("FFFFFFFF"), -38, T - 6)]
+        P["glow"] = (-38, T - 6, 26, 26)
+    elif kind == "rivets":
+        w2, h2 = S["shape"][0] / 2 - 10, S["shape"][1] / 2 - 10
+        P["front"] = [shape("Rivets", "".join(ell(7, 7, sx * w2, sy * h2, f"R{k}") for k, (sx, sy) in
+                                              enumerate([(-1, -1), (1, -1), (-1, 1), (1, 1)])), fill("FF7A3E1C"))]
+    return P
+
+ACC = accessory(S.get("acc"), top_y)
+eyes_extra += ACC["eyes"]
 happy = "".join(path([(-10, 4), (0, -6), (10, 4)], x=sx, name=f"Happy {n}", radius=5) for sx, n in ((-24, "L"), (24, "R")))
 
 art = [
     shape("ScanBar", rect(8, ph - 16, 4), fill(S["eye"]), 0, py, 'opacity="0" ', "0:30"),
     shape("Mouth", rect(22, 5, 2.5), fill(S["mouth"]), 0, S["mouth_y"], 'opacity="0.7" ', "0:32"),
-    shape("Happy Eyes", happy, stroke(S["eye"], 6), 0, ey, 'opacity="0" ', "0:51"),
+    shape("Happy Eyes", happy, stroke(S.get("happy", S["eye"]), 6), 0, ey, 'opacity="0" ', "0:51"),
     f'''<Node name="Eyes" id="0:34">
 {eyes_extra}
 {shape("Eye L", eye_geom, fill(S["eye"]), -24, ey, id_="0:35")}
@@ -122,6 +346,7 @@ art = [
 </Node>''',
     shape("Face", rect(pw, ph, pr), fill(S["face"]), 0, py),
 ]
+art = ACC["over"] + art + ACC["front"]
 if "flap" in S["extras"]:   # envelope flap: a V folded over the forehead (drawn on the head)
     art.append(shape("Flap", path([(-hw / 2 + 8, top_y + 6), (0, py - ph / 2 - 3), (hw / 2 - 8, top_y + 6)], radius=6),
                      stroke("trim", 6)))
@@ -147,6 +372,9 @@ if "bowtie" in S["extras"]:
                      fill("trim"), 0, by_))
 
 top = S["top"]
+stem = None
+if top is None:   # the accessory carries the light
+    gx, gy, gw, gh = ACC["glow"] or (0, 0, 1, 1)
 if top in ("ball", "square"):
     stem = shape("Antenna Stem", rect(5, 26, 2.5), fill("trim"), 0, top_y - 10)
 if top == "ball":
@@ -173,11 +401,14 @@ elif top == "crown":   # three points; the centre jewel is the light, no stem
     stem = None
     crown = [(-34, 3), (-34, -27), (-17, -10), (0, -36), (17, -10), (34, -27), (34, 3)]
     art += [shape("Crown Jewel", ell(14, 14), fill("light"), gx, gy)]
-art.append(shape("Antenna Glow", ell(gw, gh), fill("glow"), gx, gy, 'opacity="0.35" ', "0:47"))
+glow = shape("Antenna Glow", ell(gw, gh), fill("glow"), gx, gy, 'opacity="0.35" ', "0:47")
+if "GLOW" not in art + ACC["back"]:
+    art.append(glow)
 if top == "crown":   # the halo sits on the crown, not behind it
     art.append(shape("Crown", path(crown, True, radius=3), fill("trim"), 0, top_y))
 if stem:
     art.append(stem)
+art = [glow if a == "GLOW" else a for a in art + ACC["back"]]
 
 # --- animation tracks: (objectId or colour role, property) ---
 TRACKS = [("0:20", "y"), ("0:20", "scaleX"), ("0:20", "scaleY"), ("0:20", "rotation"),

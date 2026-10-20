@@ -198,7 +198,8 @@ impl Session {
         check(res).await.map(drop)
     }
 
-    async fn bots(&self) -> anyhow::Result<Vec<(String, String)>> {
+    /// Each bot's slug, name and face (its library style, else its slug).
+    async fn bots(&self) -> anyhow::Result<Vec<(String, String, String)>> {
         let list: Vec<Value> = check(self.get("/api/bots").send().await?)
             .await?
             .json()
@@ -208,7 +209,8 @@ impl Session {
             .filter(|b| b["disabled"] != true)
             .map(|b| {
                 let s = |k: &str| b[k].as_str().unwrap_or_default().to_owned();
-                (s("slug"), s("name"))
+                let face = b["face"].as_str().map_or_else(|| s("slug"), str::to_owned);
+                (s("slug"), s("name"), face)
             })
             .collect())
     }
@@ -275,8 +277,8 @@ impl Session {
                     if notify && caught_up {
                         let name = bots
                             .iter()
-                            .find(|(s, _)| *s == bot)
-                            .map_or(bot.as_str(), |(_, n)| n.as_str());
+                            .find(|(s, _, _)| *s == bot)
+                            .map_or(bot.as_str(), |(_, n, _)| n.as_str());
                         match &event {
                             ThreadEvent::DialogOpened { dialog }
                                 if told.insert(dialog.id.clone()) =>
@@ -346,12 +348,12 @@ fn card_text(kind: &DialogKind) -> String {
 }
 
 /// The bar's view: each bot's state, and every card waiting for the owner.
-fn status(bots: &[(String, String)], views: &BTreeMap<String, ThreadView>) -> Value {
+fn status(bots: &[(String, String, String)], views: &BTreeMap<String, ThreadView>) -> Value {
     let empty = ThreadView::default();
     let mut waiting = Vec::new();
     let list: Vec<Value> = bots
         .iter()
-        .map(|(slug, name)| {
+        .map(|(slug, name, face)| {
             let view = views.get(slug).unwrap_or(&empty);
             for item in &view.items {
                 if let Item::Card { dialog, outcome: None } = item {
@@ -364,7 +366,7 @@ fn status(bots: &[(String, String)], views: &BTreeMap<String, ThreadView>) -> Va
                 RunState::Queued => "queued",
                 RunState::Running { .. } => "running",
             };
-            json!({ "slug": slug, "name": name, "state": state, "waiting": view.waiting(), "reply": last_reply(view), "asked": last_said(view, Role::User) })
+            json!({ "slug": slug, "name": name, "face": face, "state": state, "waiting": view.waiting(), "reply": last_reply(view), "asked": last_said(view, Role::User) })
         })
         .collect();
     let running = list.iter().filter(|b| b["state"] == "running").count();
@@ -449,8 +451,8 @@ mod tests {
     #[test]
     fn status_counts_running_bots_and_waiting_cards() {
         let bots = vec![
-            ("coder".to_owned(), "Coder".to_owned()),
-            ("pa".to_owned(), "PA".to_owned()),
+            ("coder".to_owned(), "Coder".to_owned(), "fox".to_owned()),
+            ("pa".to_owned(), "PA".to_owned(), "pa".to_owned()),
         ];
         let mut coder = ThreadView::default();
         coder.apply(ThreadEvent::RunStarted {

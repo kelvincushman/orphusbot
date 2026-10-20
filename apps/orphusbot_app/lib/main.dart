@@ -1,6 +1,8 @@
 // OrphusBot: the Flutter app for Omarchy/Linux, macOS, Android and iOS
 // (DESIGN §12.1, D-033). It signs in by device linking and talks to the
 // server's own API; the server holds everything, so the app holds no data.
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:rive/rive.dart' show RiveNative;
 
@@ -70,7 +72,12 @@ class SignIn extends StatefulWidget {
 }
 
 class _SignInState extends State<SignIn> {
-  final server = TextEditingController(text: 'http://localhost:7480');
+  // On a phone the server is reached at its domain; on a laptop through the tunnel.
+  final server = TextEditingController(
+    text: Platform.isAndroid || Platform.isIOS
+        ? 'https://bots.kelvinlee.io'
+        : 'http://localhost:7480',
+  );
   String? code;
   String? error;
 

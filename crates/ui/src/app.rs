@@ -269,6 +269,9 @@ struct Bot {
     /// Google access (none, read, write); passed through so saving keeps it.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     google: String,
+    /// Its face from the library; passed through so saving keeps it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    face: Option<String>,
 }
 
 /// Everything the signed-in screens share: the bots, which one is open, every

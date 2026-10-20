@@ -385,7 +385,7 @@ Also: [133 mobile](rakazo-ux/133-mobile-secret-card-saved.png), [141 the stored 
 
 - Triggered by the bot's `request_secret`. A card titled with the bot's label ("Example API key"), the destination origin under it (`https://api.example.com`), a password field "API key" with an eye button, and `Save`. Only a dummy value was entered.
 - After Save the field and button disappear and a green "Saved" remains. The value never appears in the transcript.
-- The secret then shows in Bot settings → Advanced → Credentials as "example-api-key / https://api.example.com / Bearer token · Updated 10/20/2026" with `Replace value` and `Remove`; Remove asks inline "Remove example-api-key? This bot will no longer be able to use it." with `Remove` / `Cancel`.
+- The secret then shows in Bot settings → Advanced → Credentials as "example-api-key / `https://api.example.com` / Bearer token · Updated 10/20/2026" with `Replace value` and `Remove`; Remove asks inline "Remove example-api-key? This bot will no longer be able to use it." with `Remove` / `Cancel`.
 - Using it (`secret_request`) needed no further approval; the failure came back as the bot's own text ("Authenticated request failed. Check the destination and credential.").
 
 ### 3.28 Other cards bots post

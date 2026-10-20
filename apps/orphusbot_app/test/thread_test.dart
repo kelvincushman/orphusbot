@@ -81,6 +81,8 @@ void main() {
     expect((v.items[0] as Message).text, 'Half an ans');
     expect((v.items[1] as Notice).text, 'The run failed: rate limited');
     expect((v.items[1] as Notice).error, isTrue);
-    expect(v.mood, 0);
+    expect(v.mood, 5, reason: 'it blows itself up');
+    v.apply({'type': 'run_queued', 'run': 3});
+    expect(v.mood, 1, reason: 'and pulls itself together for the next go');
   });
 }

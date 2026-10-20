@@ -22,6 +22,16 @@ void main() {
         expect(c.stateMachine.name, 'Bot', reason: path);
         // ignore: deprecated_member_use
         expect(c.stateMachine.number('state'), isNotNull, reason: path);
+        // ignore: deprecated_member_use
+        expect(c.stateMachine.trigger('poke'), isNotNull, reason: path);
+        final body = rive.RiveWidgetController(
+          f,
+          artboardSelector: rive.ArtboardSelector.byName('Robot'),
+        );
+        expect(body.artboard.name, 'Robot', reason: path);
+        expect(body.stateMachine.name, 'Bot', reason: path);
+        // ignore: deprecated_member_use
+        expect(body.stateMachine.trigger('poke'), isNotNull, reason: path);
       }
       // A bot without its own style gets the default face.
       expect(await faceFile('someone-new'), isNotNull);

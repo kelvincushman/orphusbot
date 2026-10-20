@@ -458,11 +458,13 @@ class _ChatScreenState extends State<ChatScreen> {
       children: [
         // Header: who, and what it's doing.
         ListTile(
+          minTileHeight: 84,
           leading: BotAvatar(
-            key: ValueKey(chosen),
+            key: ValueKey('body-$chosen'),
             slug: faceOf(_bot, chosen),
             mood: v.mood,
-            size: 56,
+            size: 60,
+            body: true,
           ),
           title: Text(name, style: Theme.of(context).textTheme.titleMedium),
           subtitle: Text(
@@ -509,9 +511,22 @@ class _ChatScreenState extends State<ChatScreen> {
             children: [
               if (v.items.isEmpty)
                 Center(
-                  child: Text(
-                    'Say hello to $name.',
-                    style: TextStyle(color: scheme.outline),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 24),
+                      BotAvatar(
+                        key: ValueKey('stage-$chosen'),
+                        slug: faceOf(_bot, chosen),
+                        mood: v.mood,
+                        size: 180,
+                        body: true,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Say hello to $name. (Go on, poke it.)',
+                        style: TextStyle(color: scheme.outline),
+                      ),
+                    ],
                   ),
                 ),
               for (final item in v.items) _item(item, scheme, name),

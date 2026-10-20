@@ -94,6 +94,8 @@ struct NodeLink {
     quiet: bool,
     /// `provider/model` names its Orphus can use.
     models: Vec<String>,
+    /// It can give bots Google (gws set up with the owner's credentials).
+    google: bool,
 }
 
 impl NodeLink {
@@ -1028,11 +1030,14 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
     device::run_news(app, run, device::RunNews::Running).await;
     spec.mcp = connections::for_bot(app, &bot.slug).await;
     spec.instructions.push_str(bots::HOUSE_STYLE);
+    // Bots are told about Google only when the node running this has it set up.
+    let google_ready = link.google;
     if let Ok(roster) = bots::all(&app.db).await
         && let Some(note) = team::roster_note(
             &roster,
             &bot.slug,
             &connections::names_by_bot(&app.db).await,
+            google_ready,
         )
     {
         spec.instructions.push_str(&note);
@@ -1270,6 +1275,7 @@ async fn run_node(app: Shared, socket: WebSocket) {
             on_battery: false,
             quiet: false,
             models: Vec::new(),
+            google: false,
         };
         (conn, rt.nodes.insert(name.clone(), link))
     };
@@ -1349,10 +1355,16 @@ async fn on_node_message(app: &App, node: &str, msg: FromNode) {
     // Frames for an attempt that's no longer current (a fenced-off retry) are dropped.
     let current = |attempt: Attempt| lock(&app.rt).current(attempt).cloned();
     match msg {
-        FromNode::Models { models } => {
-            info!(node, count = models.len(), "node reported its models");
+        FromNode::Models { models, google } => {
+            info!(
+                node,
+                count = models.len(),
+                google,
+                "node reported its models"
+            );
             if let Some(link) = lock(&app.rt).nodes.get_mut(node) {
                 link.models = models;
+                link.google = google;
             }
         }
         FromNode::Heartbeat {

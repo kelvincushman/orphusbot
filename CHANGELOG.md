@@ -13,6 +13,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **The Gallery (M11.1):** a place to keep pictures, video, audio and documents for your bots. Add files (up to 2 GB each), tag and describe them, mark which bots should know about them, and pick them straight into a chat with 📎 → From the gallery. Files a bot makes can be saved to the gallery with one click.
 - **Bots know what their teammates can do (M10.2):** each bot now knows every teammate's model, Google access and connections, and its own limits, so it hands a job to the bot that can actually do it (for example, asks PA to add a calendar event) instead of trying and failing.
 - **Google for your bots (M10.1):** bots can look things up in your Gmail, Calendar, Tasks, Drive, Docs and Sheets through Google's `gws`; only PA can create or change anything, and it asks you each time. Each bot's Google access is set in its settings (none, look up, or change). Setup is in DEVELOPMENT.md.
 - **A team wiki as the bots' memory (M9.6):** your bots keep a shared, Karpathy-style knowledge wiki: they look things up there before researching, add what they learn, and every discussion's verdict is filed into it. It runs on the bots' own models, with no extra memory server or GPU.

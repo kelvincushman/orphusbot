@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-040: Gallery files live on disk by content hash; the database keeps the details (2026-10-20)
+
+- **Context:** Kelvin wants a gallery of context for the bots, including video. Attachments and artifacts are kept in Postgres, capped at 10 MB, which suits chat files but not video.
+- **Decision:** gallery bytes are files in one folder (on the box, the new 2 TB SSD), named by SHA-256, streamed to disk on upload (up to 2 GB) and served with ranges; `gallery_item` holds the details. A gallery item sent in a chat is fetched by the app and attached like any file, reusing the attachment path (10 MB), rather than a second way of sending files.
+- **Alternatives:** keep bytes in Postgres (simple backups, but video bloats the database and every read loads it whole); object storage such as MinIO (another service to run for one owner).
+- **Revisit if:** more than one machine needs the files directly, which is when bots fetch from the gallery themselves.
+
 ## D-039: Google through `gws` on the node, gated per command (2026-10-17)
 
 - **Context:** Kelvin keeps his documents, calendar and to-dos in Google and wants bots to use them, with everyone able to look things up and only PA able to change anything.

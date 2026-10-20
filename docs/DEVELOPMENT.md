@@ -223,3 +223,5 @@ These are known simplifications, each marked `ponytail:` in the code, with the m
 | The UI shows one bot and re-renders the whole conversation when an item changes | M3 (bots), and a keyed list when threads get long |
 
 **Google for bots (D-039).** On a node: install Google's [`gws`](https://github.com/googleworkspace/cli) (a release binary in `~/.local/bin`). Sign in once on a machine with a browser: `gws auth login -s gmail,calendar,tasks,drive,docs,sheets,people` (an OAuth Desktop client from your Google Cloud project, with yourself as a test user), then `gws auth export --unmasked > gws-credentials.json`. Copy that file to the node (`chmod 600`), and add to its `node.env`: `ORPHUSBOT_GWS=/path/to/gws` and `GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE=/path/to/gws-credentials.json`. Each bot's Google access is in its settings.
+
+**Gallery (D-040).** The server keeps gallery files in `ORPHUSBOT_GALLERY_DIR` (default `~/.local/share/orphusbot/gallery`); point it at a disk with room for video.

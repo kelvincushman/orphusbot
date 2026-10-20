@@ -17,6 +17,7 @@ mod device;
 mod discussions;
 mod e2b;
 mod fleets;
+mod gallery;
 mod gate;
 mod google;
 mod links;
@@ -283,6 +284,16 @@ fn router(app: Shared) -> Router {
             get(discussions::list).post(discussions::create),
         )
         .route("/api/discussions/{id}", get(discussions::get))
+        .route(
+            "/api/gallery",
+            get(gallery::list)
+                .post(gallery::upload)
+                .layer(axum::extract::DefaultBodyLimit::disable()),
+        )
+        .route("/api/gallery/{id}/file", get(gallery::file))
+        .route("/api/gallery/update", post(gallery::update))
+        .route("/api/gallery/delete", post(gallery::delete))
+        .route("/api/gallery/from-artifact", post(gallery::from_artifact))
         .route("/api/fleets", get(fleets::list).post(fleets::save))
         .route("/api/fleets/delete", post(fleets::delete))
         .route("/api/connections/grant", post(connections::grant))

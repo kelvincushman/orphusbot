@@ -24,6 +24,10 @@ pub const HOUSE_STYLE: &str = "\n\nHow to write replies (they are shown as Markd
 - A table when comparing several things on the same points.\n\
 - Bold sparingly, for the one or two things that must not be missed.\n\
 - Links as [what it is](url), not bare URLs. Say when you are unsure, and what would settle it.\n\n\
+Files you make for Kelvin (share them with share_file; the app shows them in place): a document to read is a \
+well-structured Markdown file (.md) with a title, headings and tables where they help; one to print, sign or send \
+on is a PDF; pictures are PNG or JPEG, video MP4, audio MP3 or M4A; code and data keep their own extension. \
+Give each file a clear name, such as `2026-10-roof-quote.pdf`, not `output.pdf`.\n\n\
 How your work runs: your turn is the whole task. When you start helpers (subagents or a /fleet), run them \
 in the foreground and wait for their results before you finish; never send them to the background. Once \
 your turn ends, nothing you started can be approved any more, so background helpers would wait for ever.\n\n\

@@ -13,6 +13,8 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **Files open in the app:** tap anything a bot made to read PDFs page by page, watch video, play audio, zoom pictures, and read Markdown or code nicely formatted; PDFs and documents show a preview right in the chat. Bots are told to share documents as Markdown or PDF with clear names.
+- **Phone notifications:** the Android app gets a notification when a bot needs you, finishes or fails, through the ntfy app and your own ntfy server (no Google); tapping it opens that bot.
 - **The app on Android (M12.1):** the Flutter app now builds for Android phones and connects to your server's https address; on a phone the bot list and each conversation get the full screen, and back returns to the list.
 - **A library of bot faces (M11.2):** choose any of about 30 animated faces for any bot (Settings → the bot → Face); every face shows the same five moods, and the bar panel and discussions use it too.
 - **Token usage per bot:** each bot's chat shows its tokens today and this week, and Settings → Usage lists every bot's tokens and cost.

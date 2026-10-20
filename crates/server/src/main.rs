@@ -228,6 +228,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let (live, _) = broadcast::channel(1024);
+    let notifier = notify::Notifier::from_env(&origin, db.clone());
     let app = Arc::new(App {
         db,
         live,
@@ -237,7 +238,7 @@ async fn main() -> anyhow::Result<()> {
         secrets,
         e2b: e2b::E2b::from_env(),
         devices: device::Devices::default(),
-        notifier: notify::Notifier::from_env(&origin),
+        notifier,
         ui_dir,
     });
     calibrate::load(&app).await;
@@ -294,6 +295,8 @@ fn router(app: Shared) -> Router {
         .route("/api/gallery/update", post(gallery::update))
         .route("/api/gallery/delete", post(gallery::delete))
         .route("/api/gallery/from-artifact", post(gallery::from_artifact))
+        .route("/api/push", post(notify::register))
+        .route("/api/push/remove", post(notify::unregister))
         .route("/api/fleets", get(fleets::list).post(fleets::save))
         .route("/api/fleets/delete", post(fleets::delete))
         .route("/api/connections/grant", post(connections::grant))

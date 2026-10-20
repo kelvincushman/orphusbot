@@ -4,6 +4,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart';
 import 'package:rive/rive.dart' show RiveNative;
 
 import 'api.dart';
@@ -12,6 +13,7 @@ import 'chat.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await RiveNative.init();
+  MediaKit.ensureInitialized();
   runApp(const OrphusBotApp());
 }
 

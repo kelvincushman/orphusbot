@@ -16,8 +16,10 @@ import 'api.dart';
 import 'avatar.dart';
 import 'discuss.dart';
 import 'gallery.dart';
+import 'push.dart';
 import 'settings.dart';
 import 'thread.dart' as t;
+import 'viewer.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key, required this.api, required this.onSignedOut});
@@ -46,6 +48,21 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _start();
+    startPush(widget.api, (bot) {
+      if (mounted) {
+        setState(() {
+          chosen = bot;
+          chatOpen = true;
+        });
+      }
+    }).then(
+      (note) {
+        if (note != null && mounted) setState(() => problem = note);
+      },
+      onError: (Object e) {
+        if (mounted) setState(() => problem = 'Notifications: ${explain(e)}');
+      },
+    );
   }
 
   // Tokens per bot today and this week (`/api/usage`), shown in the header.
@@ -593,21 +610,24 @@ class _ChatScreenState extends State<ChatScreen> {
           borderRadius: BorderRadius.circular(12),
         ),
         clipBehavior: Clip.antiAlias,
-        child: a.image
-            ? Image.network(
-                url,
-                headers: widget.api.headers,
-                fit: BoxFit.contain,
-                errorBuilder: (_, _, _) => ListTile(
-                  leading: const Icon(Icons.image_outlined),
+        child: InkWell(
+          onTap: () => openViewer(context, widget.api, a.name, url),
+          child: a.image
+              ? Image.network(
+                  url,
+                  headers: widget.api.headers,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => ListTile(
+                    leading: const Icon(Icons.image_outlined),
+                    title: Text(a.name),
+                  ),
+                )
+              : ListTile(
+                  leading: Icon(kindIconFor(a.name)),
                   title: Text(a.name),
+                  subtitle: Text('${(a.size / 1024).ceil()} KB'),
                 ),
-              )
-            : ListTile(
-                leading: const Icon(Icons.attach_file),
-                title: Text(a.name),
-                subtitle: Text('${(a.size / 1024).ceil()} KB'),
-              ),
+        ),
       ),
     );
   }
@@ -631,19 +651,31 @@ class _ChatScreenState extends State<ChatScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (a.isImage)
-              Image.network(
-                url,
-                headers: widget.api.headers,
-                fit: BoxFit.contain,
-                errorBuilder: (_, _, _) => const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Text("Couldn't load the picture"),
+              InkWell(
+                onTap: () => openViewer(context, widget.api, a.name, url),
+                child: Image.network(
+                  url,
+                  headers: widget.api.headers,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Text("Couldn't load the picture"),
+                  ),
+                ),
+              )
+            else if (Peek.shows(a.name))
+              InkWell(
+                onTap: () => openViewer(context, widget.api, a.name, url),
+                child: Peek(
+                  key: ValueKey(url),
+                  api: widget.api,
+                  name: a.name,
+                  url: url,
                 ),
               ),
             ListTile(
-              leading: Icon(
-                a.isImage ? Icons.image_outlined : Icons.description_outlined,
-              ),
+              onTap: () => openViewer(context, widget.api, a.name, url),
+              leading: Icon(kindIconFor(a.name)),
               title: Text(label),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,

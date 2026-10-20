@@ -52,15 +52,18 @@ class ThreadView {
   String? where;
   // The last run finished well and nothing has happened since.
   bool done = false;
+  // The last run failed and nothing has happened since.
+  bool failed = false;
 
   /// The avatar's state (design/bot-avatar): 0 idle, 1 thinking (queued),
-  /// 2 working, 3 needs you, 4 done.
+  /// 2 working, 3 needs you, 4 done, 5 failed (it blows itself up, then
+  /// stays dizzy).
   int get mood => waiting > 0
       ? 3
       : switch (run) {
           RunState.queued => 1,
           RunState.running => 2,
-          RunState.idle => done ? 4 : 0,
+          RunState.idle => failed ? 5 : (done ? 4 : 0),
         };
 
   int get waiting =>
@@ -84,11 +87,13 @@ class ThreadView {
       case 'run_queued':
         run = RunState.queued;
         done = false;
+        failed = false;
         where = e['waiting'] as String?;
         streaming = null;
       case 'run_started':
         run = RunState.running;
         done = false;
+        failed = false;
         final node = e['node'] as String?;
         where = node == null
             ? null
@@ -97,6 +102,7 @@ class ThreadView {
         run = RunState.idle;
         where = null;
         done = e['outcome'] == 'completed';
+        failed = e['outcome'] == 'failed';
         if (streaming != null && streaming!.isNotEmpty) {
           items.add(Message(false, streaming!));
         }

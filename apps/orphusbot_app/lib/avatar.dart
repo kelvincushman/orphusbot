@@ -1,7 +1,13 @@
 // A bot's animated face, drawn by Rive from design/bot-avatar: each house bot
 // has its own style (assets/faces/<slug>.riv), others get default.riv. Each
-// face has its own state machine whose `state` input follows the bot
-// (ThreadView.mood).
+// file has two artboards, `Avatar` (the head) and `Robot` (the whole bot on
+// legs, wheels, tracks, rotors…), each with the state machine `Bot`: a
+// `state` input that follows the bot (ThreadView.mood) and a `poke` trigger.
+// Tapping fires poke from inside the file; idle robots also fidget now and
+// then by themselves.
+import 'dart:async';
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:rive/rive.dart' as rive;
@@ -37,10 +43,14 @@ class BotAvatar extends StatefulWidget {
     required this.slug,
     required this.mood,
     this.size = 40,
+    this.body = false,
   });
   final String slug;
   final int mood;
   final double size;
+
+  /// The whole robot (`Robot`, [size] wide and 1.3 times as tall) instead of the head.
+  final bool body;
 
   @override
   State<BotAvatar> createState() => _BotAvatarState();
@@ -49,6 +59,8 @@ class BotAvatar extends StatefulWidget {
 class _BotAvatarState extends State<BotAvatar> {
   rive.RiveWidgetController? controller;
   rive.NumberInput? state;
+  rive.TriggerInput? poke;
+  Timer? fidget;
 
   @override
   void initState() {
@@ -56,11 +68,28 @@ class _BotAvatarState extends State<BotAvatar> {
     faceFile(widget.slug).then((f) {
       if (f == null || !mounted) return;
       setState(() {
-        controller = rive.RiveWidgetController(f);
+        controller = rive.RiveWidgetController(
+          f,
+          artboardSelector: widget.body
+              ? rive.ArtboardSelector.byName('Robot')
+              : const rive.ArtboardDefault(),
+        );
         // ignore: deprecated_member_use
         state = controller!.stateMachine.number('state');
+        // ignore: deprecated_member_use
+        poke = controller!.stateMachine.trigger('poke');
         state?.value = widget.mood.toDouble();
       });
+    });
+    if (widget.body) _fidgetLater();
+  }
+
+  // An idle robot gets bored: every 20–50 s it does its poke reaction.
+  void _fidgetLater() {
+    fidget = Timer(Duration(seconds: 20 + Random().nextInt(30)), () {
+      if (!mounted) return;
+      if (widget.mood == 0) poke?.fire();
+      _fidgetLater();
     });
   }
 
@@ -72,14 +101,17 @@ class _BotAvatarState extends State<BotAvatar> {
 
   @override
   void dispose() {
+    fidget?.cancel();
+    poke?.dispose();
     state?.dispose();
     controller?.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => SizedBox.square(
-    dimension: widget.size,
+  Widget build(BuildContext context) => SizedBox(
+    width: widget.size,
+    height: widget.body ? widget.size * 1.3 : widget.size,
     child: controller == null
         ? null
         : rive.RiveWidget(controller: controller!, fit: rive.Fit.contain),

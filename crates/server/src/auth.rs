@@ -471,6 +471,7 @@ pub(crate) mod tests {
             e2b: crate::e2b::E2b::off(),
             devices: Default::default(),
             notifier: crate::notify::Notifier::off(),
+            social: crate::social::Social::off(),
             ui_dir: String::new(),
         })
     }

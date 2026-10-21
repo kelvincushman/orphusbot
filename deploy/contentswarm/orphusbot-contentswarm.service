@@ -1,0 +1,13 @@
+[Unit]
+Description=ContentSwarm for OrphusBot (phone kernel and social review queue, loopback only)
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/orphusbot-contentswarm
+EnvironmentFile=%h/.config/orphusbot/contentswarm.env
+ExecStart=%h/orphusbot-contentswarm/.venv/bin/python run_server.py
+Restart=on-failure
+UMask=0077
+
+[Install]
+WantedBy=default.target

@@ -30,6 +30,7 @@ mod routines;
 mod runs;
 mod screens;
 mod secrets;
+mod social;
 mod system1;
 mod team;
 mod tickets;
@@ -174,6 +175,8 @@ struct App {
     e2b: e2b::E2b,
     devices: device::Devices,
     notifier: notify::Notifier,
+    /// ContentSwarm's owner console, for the Social screen (DESIGN §11.6).
+    social: social::Social,
     /// The built web UI (crates/ui/dist), served at `/`.
     ui_dir: String,
 }
@@ -239,6 +242,7 @@ async fn main() -> anyhow::Result<()> {
         e2b: e2b::E2b::from_env(),
         devices: device::Devices::default(),
         notifier,
+        social: social::Social::from_env(),
         ui_dir,
     });
     calibrate::load(&app).await;
@@ -247,6 +251,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(device::expire_forever(app.clone()));
     tokio::spawn(capture::mine_forever(app.clone()));
     tokio::spawn(profiles::tend_forever(app.clone()));
+    tokio::spawn(social::watch_forever(app.clone()));
 
     let router = router(app);
 
@@ -295,6 +300,10 @@ fn router(app: Shared) -> Router {
         .route("/api/gallery/update", post(gallery::update))
         .route("/api/gallery/delete", post(gallery::delete))
         .route("/api/gallery/from-artifact", post(gallery::from_artifact))
+        .route(
+            "/api/social/{*path}",
+            axum::routing::get(social::proxy).post(social::proxy),
+        )
         .route("/api/push", post(notify::register))
         .route("/api/push/remove", post(notify::unregister))
         .route("/api/fleets", get(fleets::list).post(fleets::save))

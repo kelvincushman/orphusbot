@@ -18,6 +18,7 @@ import 'discuss.dart';
 import 'gallery.dart';
 import 'push.dart';
 import 'settings.dart';
+import 'social.dart';
 import 'thread.dart' as t;
 import 'viewer.dart';
 
@@ -388,6 +389,15 @@ class _ChatScreenState extends State<ChatScreen> {
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (_) => GalleryScreen(api: widget.api, bots: bots),
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Social',
+                icon: const Icon(Icons.campaign_outlined),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => SocialScreen(api: widget.api),
                   ),
                 ),
               ),

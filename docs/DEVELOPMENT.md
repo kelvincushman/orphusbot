@@ -68,7 +68,7 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1 .venv/bin/python -m kev.serv
 export ORPHUSBOT_LAYA_URL=http://127.0.0.1:8009
 ```
 
-`CUDA_DEVICE_ORDER=PCI_BUS_ID` makes the GPU index match `nvidia-smi`. The first answer after a start takes about 30 s while it warms up (System 1 abstains on it); after that answers take tens of milliseconds.
+`CUDA_DEVICE_ORDER=PCI_BUS_ID` makes the GPU index match `nvidia-smi`. The first pass of each new size of request is slow (up to about 30 s; System 1 abstains on it), so run `python3 scripts/kev-warm.py` after starting it (the GPU box runs it as the unit's `ExecStartPost`); after that answers take tens of milliseconds.
 
 **Laya (lighter, runs on a CPU):**
 

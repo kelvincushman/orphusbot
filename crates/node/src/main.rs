@@ -624,6 +624,12 @@ impl Engine {
                 .env("ORPHUSBOT_PHONE", phone)
                 .env("ORPHUSBOT_CONTENTSWARM_TOKEN", token);
         }
+        // Media generation (DESIGN §11.7): the kie.ai key, from keys.env, goes only to
+        // engines of bots allowed it; the bridge calls kie.ai, never the computer.
+        command.env_remove("ORPHUSBOT_KIE_KEY");
+        if let (true, Ok(key)) = (bot.media, std::env::var("ORPHUSBOT_KIE_KEY")) {
+            command.env("ORPHUSBOT_KIE_KEY", key);
+        }
         if let Some(sandbox) = &bot.e2b {
             // The computer is an E2B sandbox: the bridge reaches its envd over HTTPS.
             command

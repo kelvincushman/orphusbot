@@ -11,6 +11,14 @@ Format:
 
 ---
 
+## D-046: Media generation runs on the host with the node's key, for bots allowed it (2026-10-21)
+
+**Decided:** kie.ai calls go through a `media` tool in the bridge, on the host, with `ORPHUSBOT_KIE_KEY` from a separate `keys.env`. The node passes the key only to engines of bots with **Media generation** on, and the gate refuses the tool from others. The owner's skills, which had the key written into them, are installed without it.
+
+**Why:** A key inside a bot's computer can be read by any command there, including one prompted by a web page or a file. On the host, the bot can spend credits but can't take the key. A file of its own keeps API keys apart from the node's settings and makes them easy to rotate.
+
+---
+
 ## D-045: Phone actions that could commit ask every time, past any "always" rule (2026-10-21)
 
 **Decided:** The `phone` tool's taps whose label could commit (post, reply, like, follow, send, confirm, done, …), taps by id alone, and `ENTER` skip the owner's approval rules and always ask. Looking, queueing drafts, opening apps, typing and moving about pass without asking. Bots publish by queueing a draft, which ContentSwarm posts only after the owner approves it in Social.

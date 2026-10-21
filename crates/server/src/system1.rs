@@ -753,6 +753,7 @@ pub(crate) mod tests {
             face: None,
             desktop: "debian".into(),
             phone: "none".into(),
+            media: false,
         }
     }
 

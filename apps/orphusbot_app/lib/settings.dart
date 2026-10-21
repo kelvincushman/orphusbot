@@ -670,6 +670,7 @@ class _BotEditorState extends State<BotEditor> {
     'google': 'read',
     'desktop': 'debian',
     'phone': 'none',
+    'media': false,
     ...?widget.bot,
   };
   late final name = TextEditingController(text: bot['name'] as String);
@@ -855,6 +856,15 @@ class _BotEditorState extends State<BotEditor> {
                   ),
                 ],
                 onChanged: (p) => bot['phone'] = p,
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Media generation'),
+                subtitle: const Text(
+                  'Make images and video with kie.ai (uses your credits)',
+                ),
+                value: bot['media'] as bool? ?? false,
+                onChanged: (m) => setState(() => bot['media'] = m),
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,

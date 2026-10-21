@@ -76,6 +76,9 @@ pub struct BotSpec {
     /// The owner's phone and social accounts through ContentSwarm: `draft` or `operate`; none if unset.
     #[serde(default)]
     pub phone: Option<String>,
+    /// May generate images and video with the node's media tool (kie.ai).
+    #[serde(default)]
+    pub media: bool,
 }
 
 /// An Orphus fleet blueprint the owner set up (DESIGN §11.2), written into the

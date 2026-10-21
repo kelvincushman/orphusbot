@@ -11,6 +11,12 @@ Format:
 
 ---
 
+## D-044: Social posting goes through the owner's phone and ContentSwarm, reviewed in OrphusBot (2026-10-21)
+
+**Decided:** X and LinkedIn are reached through the owner's own Android phone, plugged into the GPU box, using the real apps. ContentSwarm is the engine (phone kernel, profiles, review queue, delivery worker), running beside the server on loopback. The owner reviews everything in OrphusBot's Social screen, which the server passes through to ContentSwarm's owner console on a fixed allowlist. Every post and reply needs the owner's approval.
+**Why:** platform APIs are costly, restricted (X) or closed to individuals (LinkedIn posting and comments), and posting from the phone looks and behaves like the owner. ContentSwarm already has the hard parts: no-shell phone control, single-send delivery with uncertainty handling, voice profiles and a review queue. Rebuilding those in OrphusBot would duplicate them. One app for the owner beats two consoles. The phone lives on the always-on box so bots can work at any hour.
+**Revisit if:** a platform blocks automation from the phone, or ContentSwarm's console becomes the better place to review.
+
 ## D-043: The Omarchy desktop is Sway dressed as Omarchy, not Hyprland (2026-10-21)
 
 **Decided:** A bot can have an Omarchy desktop (`images/omarchy`): Arch Linux, Sway on wlroots' headless backend with the pixman software renderer, wayvnc, and Omarchy v3.8.4's config files (theme, gaps, borders, wallpaper, waybar, alacritty, keys). It's a per-bot setting (`desktop`: `debian` or `omarchy`); changing it replaces the bot's container and keeps its home volume.

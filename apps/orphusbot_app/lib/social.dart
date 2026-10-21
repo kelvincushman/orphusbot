@@ -49,6 +49,18 @@ String _when(num? epoch) {
   return '${days[t.weekday - 1]} ${t.day}/${t.month} $hm';
 }
 
+/// Where the owner can see a sent post or reply for himself: his X profile
+/// (its Replies tab for a reply). LinkedIn has no handle to link to.
+Uri? profileLink(Map<String, dynamic> r) {
+  final handle = (r['account'] as String? ?? '').replaceFirst('@', '');
+  if (r['platform'] != 'x' ||
+      !RegExp(r'^[A-Za-z0-9_]{1,15}$').hasMatch(handle)) {
+    return null;
+  }
+  final reply = (r['kind'] ?? 'reply') == 'reply';
+  return Uri.https('x.com', reply ? '/$handle/with_replies' : '/$handle');
+}
+
 /// The Pipeline tab's sections, in order: what needs the owner comes first.
 const pipelineSections = [
   ('Check these', {'uncertain'}),
@@ -461,6 +473,17 @@ class ReviewCard extends StatelessWidget {
                 '${_status[status] ?? status}: ${r['evidence']}',
                 style: quiet,
               ),
+            if (status == 'verified' || status == 'uncertain')
+              if (profileLink(r) case final link?)
+                InkWell(
+                  onTap: () => launchUrl(link),
+                  child: Text(
+                    status == 'verified'
+                        ? 'See it on ${platformName(r['platform'] as String?)}'
+                        : 'Check your profile',
+                    style: TextStyle(color: scheme.primary),
+                  ),
+                ),
             Wrap(
               spacing: 8,
               children: [

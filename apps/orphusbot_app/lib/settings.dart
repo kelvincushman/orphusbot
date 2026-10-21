@@ -669,6 +669,7 @@ class _BotEditorState extends State<BotEditor> {
     'computer': 'node',
     'google': 'read',
     'desktop': 'debian',
+    'phone': 'none',
     ...?widget.bot,
   };
   late final name = TextEditingController(text: bot['name'] as String);
@@ -836,6 +837,25 @@ class _BotEditorState extends State<BotEditor> {
                   ],
                   onChanged: (d) => bot['desktop'] = d,
                 ),
+              DropdownButtonFormField<String>(
+                isExpanded: true,
+                initialValue: bot['phone'] as String? ?? 'none',
+                decoration: const InputDecoration(
+                  labelText: 'Phone and social accounts',
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'none', child: Text('No access')),
+                  DropdownMenuItem(
+                    value: 'draft',
+                    child: Text('Read accounts and queue drafts for you'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'operate',
+                    child: Text('Also use the phone (posting asks you)'),
+                  ),
+                ],
+                onChanged: (p) => bot['phone'] = p,
+              ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Team bot'),

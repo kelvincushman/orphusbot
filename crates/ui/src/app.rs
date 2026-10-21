@@ -275,6 +275,9 @@ struct Bot {
     /// `debian` or `omarchy`; passed through so saving keeps it.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     desktop: String,
+    /// `none`, `draft` or `operate`; passed through so saving keeps it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    phone: String,
 }
 
 /// Everything the signed-in screens share: the bots, which one is open, every

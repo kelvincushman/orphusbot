@@ -127,6 +127,29 @@ pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Re
             crate::google::Kind::Change => {}
         }
     }
+    // The phone (DESIGN §11.6): looking, queueing drafts and getting about pass;
+    // anything that could commit asks the owner every time, whatever the rules say.
+    let mut phone_commit = false;
+    if call.tool == "phone" {
+        use crate::phone::Kind;
+        let mode = crate::phone::mode(db, call.attempt.run).await?;
+        let action = call.input["action"].as_str().unwrap_or_default();
+        match crate::phone::kind(call.input) {
+            Kind::Refused => return Ok(Verdict::Deny("That isn't a phone action.".into())),
+            _ if mode == "none" => {
+                return Ok(Verdict::Deny(
+                    "This bot can't use the phone or the social accounts.".into(),
+                ));
+            }
+            _ if mode != "operate" && crate::phone::OPERATE.contains(&action) => {
+                return Ok(Verdict::Deny(
+                    "You can read the social accounts and queue drafts, but not use the phone. Ask the phone bot.".into(),
+                ));
+            }
+            Kind::Look | Kind::Queue | Kind::Navigate => return Ok(Verdict::Allow),
+            Kind::Commit => phone_commit = true,
+        }
+    }
     if READ_ONLY.contains(&call.tool) || memory_read(call) {
         return Ok(Verdict::Allow);
     }
@@ -171,12 +194,16 @@ pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Re
         _ => {}
     }
 
-    let rule = sqlx::query_scalar!(
-        r#"select effect::text as "effect!" from approval_rule where tool = $1"#,
-        call.tool
-    )
-    .fetch_optional(db)
-    .await?;
+    let rule = if phone_commit {
+        None
+    } else {
+        sqlx::query_scalar!(
+            r#"select effect::text as "effect!" from approval_rule where tool = $1"#,
+            call.tool
+        )
+        .fetch_optional(db)
+        .await?
+    };
     match rule.as_deref() {
         Some("allow") => {
             record(db, call, "approved", Some("rule")).await?;
@@ -522,6 +549,60 @@ mod tests {
             super::decide(&db, &unsure, &in_computer("c4", "edit"))
                 .await
                 .unwrap(),
+            Verdict::Ask { uncertain: false }
+        );
+    }
+
+    #[sqlx::test]
+    async fn the_phone_asks_before_anything_that_could_post_whatever_the_rules(db: PgPool) {
+        let (_, a) = run_with_attempts(&db).await;
+        let set = |mode: &'static str| {
+            let db = db.clone();
+            async move {
+                sqlx::query!(
+                    "update bot set phone = $1 where id = (select bot_id from thread where id = 1)",
+                    mode
+                )
+                .execute(&db)
+                .await
+                .unwrap();
+            }
+        };
+        let look = json!({"action": "look"});
+        let draft = json!({"action": "draft", "account": "x1", "text": "hi"});
+        let search = json!({"action": "tap", "text": "Search"});
+        let post = json!({"action": "tap", "text": "Post"});
+        // No phone for this bot: nothing.
+        assert!(matches!(
+            decide(&db, &call(a, "p0", "phone", &draft)).await.unwrap(),
+            Verdict::Deny(_)
+        ));
+        // Drafts only: the queue, not the phone.
+        set("draft").await;
+        assert_eq!(
+            decide(&db, &call(a, "p1", "phone", &draft)).await.unwrap(),
+            Verdict::Allow
+        );
+        assert!(matches!(
+            decide(&db, &call(a, "p2", "phone", &look)).await.unwrap(),
+            Verdict::Deny(_)
+        ));
+        // Operating: looking and getting about pass; posting asks, even after "always".
+        set("operate").await;
+        sqlx::query!("insert into approval_rule (tool, effect) values ('phone', 'allow')")
+            .execute(&db)
+            .await
+            .unwrap();
+        assert_eq!(
+            decide(&db, &call(a, "p3", "phone", &look)).await.unwrap(),
+            Verdict::Allow
+        );
+        assert_eq!(
+            decide(&db, &call(a, "p4", "phone", &search)).await.unwrap(),
+            Verdict::Allow
+        );
+        assert_eq!(
+            decide(&db, &call(a, "p5", "phone", &post)).await.unwrap(),
             Verdict::Ask { uncertain: false }
         );
     }

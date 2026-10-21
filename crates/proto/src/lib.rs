@@ -73,6 +73,9 @@ pub struct BotSpec {
     /// The computer's desktop on a node: `omarchy`, or none for the node's default image.
     #[serde(default)]
     pub desktop: Option<String>,
+    /// The owner's phone and social accounts through ContentSwarm: `draft` or `operate`; none if unset.
+    #[serde(default)]
+    pub phone: Option<String>,
 }
 
 /// An Orphus fleet blueprint the owner set up (DESIGN §11.2), written into the

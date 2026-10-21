@@ -11,6 +11,12 @@ Format:
 
 ---
 
+## D-045: Phone actions that could commit ask every time, past any "always" rule (2026-10-21)
+
+**Decided:** The `phone` tool's taps whose label could commit (post, reply, like, follow, send, confirm, done, …), taps by id alone, and `ENTER` skip the owner's approval rules and always ask. Looking, queueing drafts, opening apps, typing and moving about pass without asking. Bots publish by queueing a draft, which ContentSwarm posts only after the owner approves it in Social.
+**Why:** the owner chose to approve every post and reply by hand. Approval rules are per tool, so one "Always" on a phone card would otherwise allow every later tap, including Post. Matching on visible labels is coarse but errs towards asking. Navigation has to pass freely, or reading comments would take dozens of approvals.
+**Revisit if:** the commit list asks too often in practice, or ContentSwarm gains verified adapters that make bot taps on commit buttons unnecessary.
+
 ## D-044: Social posting goes through the owner's phone and ContentSwarm, reviewed in OrphusBot (2026-10-21)
 
 **Decided:** X and LinkedIn are reached through the owner's own Android phone, plugged into the GPU box, using the real apps. ContentSwarm is the engine (phone kernel, profiles, review queue, delivery worker), running beside the server on loopback. The owner reviews everything in OrphusBot's Social screen, which the server passes through to ContentSwarm's owner console on a fixed allowlist. Every post and reply needs the owner's approval.

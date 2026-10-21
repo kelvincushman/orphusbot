@@ -8,6 +8,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- The phone tool asks for a commenter's exact @handle and exact comment text when drafting an X reply, so ContentSwarm can find the comment again and send the approved reply.
 - `ORPHUSBOT_NODE_TOKEN` is gone: enrol each node once with `orphusbot-node enrol <code>`. New node setting `ORPHUSBOT_NODE_KEY` (default `~/.config/orphusbot/node.json`).
 - `ORPHUSBOT_UI_TOKEN` is replaced by `ORPHUSBOT_SETUP_TOKEN`, which only works until the first passkey is added. New setting `ORPHUSBOT_ORIGIN` (default `http://localhost:7480`). Open the page at `localhost`, not `127.0.0.1`.
 

@@ -669,7 +669,7 @@ Orphus's answer to multi-agent work is a context-window contract: a discussion l
   Claiming, completing and recovering a delivery, and touching the phone, aren't passed on. Ids are checked segment by segment. The console token never reaches the app or a bot. Every minute the server checks the queue and pushes "N new drafts to approve" when new ones arrive. In the app (`social.dart`), the megaphone in the header opens five tabs:
   - **To approve:** posts drawn as they'll look, with the account, the time, and a count against the platform's limit. A post over the limit can't be approved.
   - **Comments:** each reply under the comment it answers. The comment is quoted as someone else's words.
-  - **Calendar:** everything decided, with its delivery status and evidence.
+  - **Pipeline:** everything past approval, grouped as Check these (uncertain), Sending now, Waiting to send (approved or scheduled), Posted, and Rejected or cancelled, with each item's evidence. An uncertain item has **Yes, it posted** (ContentSwarm `confirm`, now verified) and **No, send it again** (`retry`, back to approved) for after the owner checks the phone; the tab's label counts them. The server's watcher also pushes when something posts and when a post needs checking.
   - **Phone:** the screen, refreshed every 3 s, and the app in front.
   - **Voice:** accounts, their voice, what they know, "Draft a post now" and "Teach it something".
 

@@ -13,6 +13,8 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **Teach System 1 in the app:** Settings → Decisions lists where kev sent messages and which tool calls it judged; mark each right or wrong, and Fit tunes how sure it must be from your answers.
+- **Fixed:** the laptop app switched to the phone layout (no sidebar or message box) when its window was under 640 px wide; desktops now always keep the bot list beside the chat.
 - **System 1 is on, running kev:** the decision model that routes jobs to the right bot and lets harmless edits inside a bot's computer through without asking now runs on Kev-9B on the GPU box. Anything irreversible still always asks you.
 - **Robots with bodies:** every bot is now a whole robot on legs, wheels, tracks, rotors, a pogo spring, a jet or snake segments; poke it and it reacts, leave it idle and it fidgets, and when a job fails it blows itself up, then sits there dizzy until the next go.
 - **Files open in the app:** tap anything a bot made to read PDFs page by page, watch video, play audio, zoom pictures, and read Markdown or code nicely formatted; PDFs and documents show a preview right in the chat. Bots are told to share documents as Markdown or PDF with clear names.

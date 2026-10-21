@@ -309,6 +309,7 @@ fn router(app: Shared) -> Router {
             )),
         )
         .route("/api/attachments/{id}", get(attachments::download))
+        .route("/api/decisions/label", post(system1::label_by_owner))
         .route("/api/decisions/fit", post(calibrate::fit))
         .route("/api/decisions/apply", post(calibrate::apply))
         .route("/api/decisions/rollback", post(calibrate::rollback))

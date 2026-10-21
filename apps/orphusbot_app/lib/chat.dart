@@ -331,7 +331,10 @@ class _ChatScreenState extends State<ChatScreen> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, box) {
-            if (box.maxWidth >= 640) {
+            // Phones get the list, then one chat full screen; a desktop window
+            // keeps the bot list beside the chat however narrow it is.
+            final phone = Platform.isAndroid || Platform.isIOS;
+            if (!phone || box.maxWidth >= 640) {
               return Row(
                 children: [
                   SizedBox(width: 220, child: _botList(scheme)),

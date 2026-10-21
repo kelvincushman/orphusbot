@@ -1,0 +1,104 @@
+#!/bin/sh
+# Build stage only: turns Omarchy's config (at $1, a pinned checkout) into the files
+# this image needs under $2, with the Tokyo Night theme filled in. Hyprland's
+# settings are carried over to Sway by hand: gaps, border, colours, key bindings.
+set -eu
+src=$1 out=$2
+theme=$src/themes/tokyo-night
+mkdir -p "$out/etc/omarchy/waybar" "$out/etc/alacritty" "$out/etc/xdg/fuzzel" \
+         "$out/usr/share/fonts/omarchy"
+
+# {{ key }} and {{ key_strip }} (no '#') from the theme's colors.toml.
+render() {
+  script=$(sed -n 's/^\([a-z_0-9]*\) = "#\(.*\)"$/s|{{ \1 }}|#\2|g;s|{{ \1_strip }}|\2|g/p' "$theme/colors.toml")
+  sed "$script" "$1"
+}
+c() { sed -n "s/^$1 = \"#\(.*\)\"$/\1/p" "$theme/colors.toml"; }
+
+render "$src/default/themed/waybar.css.tpl" > "$out/etc/omarchy/waybar/theme.css"
+sed 's|@import ".*";|@import "theme.css";|' "$src/config/waybar/style.css" > "$out/etc/omarchy/waybar/style.css"
+# Hyprland modules become Sway's; modules that call Omarchy's scripts, or watch
+# hardware a container doesn't have (battery, bluetooth, audio), are left out.
+jq '.["sway/workspaces"] = (.["hyprland/workspaces"] | del(.["on-click"]))
+  | del(.["hyprland/workspaces"])
+  | .["modules-left"] = ["custom/omarchy", "sway/workspaces"]
+  | .["modules-center"] = ["clock"]
+  | .["modules-right"] = ["network", "cpu"]
+  | .["custom/omarchy"]["on-click"] = "fuzzel"
+  | .["custom/omarchy"]["on-click-right"] = "alacritty"
+  | del(.cpu["on-click"], .clock["on-click-right"], .network["on-click"])' \
+  "$src/config/waybar/config.jsonc" > "$out/etc/omarchy/waybar/config.jsonc"
+
+render "$src/default/themed/alacritty.toml.tpl" > "$out/etc/omarchy/alacritty-theme.toml"
+sed 's|^general.import = .*|general.import = [ "/etc/omarchy/alacritty-theme.toml" ]|' \
+  "$src/config/alacritty/alacritty.toml" > "$out/etc/alacritty/alacritty.toml"
+
+cp "$src/config/omarchy.ttf" "$out/usr/share/fonts/omarchy/"
+cp "$theme/backgrounds/0-swirl-buck.jpg" "$out/etc/omarchy/background.jpg"
+
+cat > "$out/etc/xdg/fuzzel/fuzzel.ini" <<EOF
+[main]
+font=JetBrainsMono Nerd Font:size=11
+terminal=alacritty -e
+[colors]
+background=$(c background)f2
+text=$(c foreground)ff
+match=$(c accent)ff
+selection=$(c accent)ff
+selection-text=$(c background)ff
+border=$(c accent)ff
+[border]
+width=2
+radius=0
+EOF
+
+# Chromium runs as the container's root: the container is the sandbox.
+mkdir -p "$out/usr/local/bin"
+cat > "$out/usr/local/bin/chromium" <<'EOF'
+#!/bin/sh
+exec /usr/bin/chromium --no-sandbox --no-first-run --ozone-platform=wayland "$@"
+EOF
+chmod 755 "$out/usr/local/bin/chromium"
+
+# Omarchy's look (default/hypr/looknfeel.conf): gaps 5/10, 2px border in the theme
+# accent, no rounding. Bindings follow default/hypr/bindings.
+cat > "$out/etc/omarchy/sway.conf" <<EOF
+output HEADLESS-1 resolution 1280x800
+xwayland disable
+swaybg_command -
+seat seat0 xcursor_theme default 24
+font pango:JetBrainsMono Nerd Font 9
+default_border pixel 2
+default_floating_border pixel 2
+titlebar_border_thickness 0
+gaps inner 5
+gaps outer 5
+client.focused          #$(c accent) #$(c accent) #$(c background) #$(c accent) #$(c accent)
+client.focused_inactive #595959 #595959 #$(c foreground) #595959 #595959
+client.unfocused        #595959 #595959 #$(c foreground) #595959 #595959
+focus_follows_mouse yes
+
+set \$mod Mod4
+bindsym \$mod+Return exec alacritty
+bindsym \$mod+space exec fuzzel
+bindsym \$mod+Shift+Return exec chromium
+bindsym \$mod+Shift+b exec chromium
+bindsym \$mod+w kill
+bindsym \$mod+f fullscreen toggle
+bindsym \$mod+t floating toggle
+bindsym \$mod+j layout toggle split
+bindsym \$mod+Left focus left
+bindsym \$mod+Right focus right
+bindsym \$mod+Up focus up
+bindsym \$mod+Down focus down
+bindsym \$mod+Shift+Left move left
+bindsym \$mod+Shift+Right move right
+bindsym \$mod+Shift+Up move up
+bindsym \$mod+Shift+Down move down
+EOF
+for n in 1 2 3 4 5 6 7 8 9; do
+  echo "bindsym \$mod+$n workspace number $n" >> "$out/etc/omarchy/sway.conf"
+  echo "bindsym \$mod+Shift+$n move container to workspace number $n" >> "$out/etc/omarchy/sway.conf"
+done
+echo "exec sh -c 'awww-daemon & until awww query >/dev/null 2>&1; do sleep 0.2; done; awww img -t none /etc/omarchy/background.jpg'" >> "$out/etc/omarchy/sway.conf"
+echo 'exec waybar -c /etc/omarchy/waybar/config.jsonc -s /etc/omarchy/waybar/style.css' >> "$out/etc/omarchy/sway.conf"

@@ -272,6 +272,9 @@ struct Bot {
     /// Its face from the library; passed through so saving keeps it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     face: Option<String>,
+    /// `debian` or `omarchy`; passed through so saving keeps it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    desktop: String,
 }
 
 /// Everything the signed-in screens share: the bots, which one is open, every

@@ -1,0 +1,60 @@
+# An Omarchy-style computer for a bot: same contract as images/desktop
+# (VNC on 127.0.0.1:5900 inside the container only, read-only root, everything
+# under /tmp), but Wayland on Arch Linux.
+#
+# NOT Hyprland. Hyprland 0.56 can't start without a GPU: aquamarine's headless
+# backend needs a GBM allocator from a DRM render node ("Cannot open backend: no
+# allocator available"), and nesting it in a software compositor fails the same
+# way ("Wayland backend cannot start: Missing protocols", no linux-dmabuf). So this
+# is Sway (wlroots, like Hyprland before aquamarine) on its headless backend with
+# the pixman software renderer, dressed in Omarchy's look: its gaps, borders,
+# Tokyo Night theme, wallpaper, waybar and alacritty config, from a pinned commit.
+#
+# Driving it from bash: /usr/local/bin/computer (grim, swaymsg, and VNC input to
+# wayvnc on the loopback port; see that script for why not ydotool or wtype).
+
+# Omarchy v3.8.4: the last release with plain .conf files and waybar (v4 moved to
+# Lua config and its own Quickshell bar). Only config files are taken.
+FROM docker.io/library/archlinux:latest AS omarchy
+ARG OMARCHY_COMMIT=8fcc9d6048af4cb0e3af8512c78049857a3b53dd
+COPY render-omarchy /render-omarchy
+RUN pacman -Sy --noconfirm --disable-sandbox jq \
+ && mkdir /src \
+ && curl -fsSL "https://codeload.github.com/basecamp/omarchy/tar.gz/$OMARCHY_COMMIT" \
+    | tar xz -C /src --strip-components=1 \
+ && sh /render-omarchy /src /out
+
+FROM docker.io/library/archlinux:latest
+# Keep docs, man pages, translations and Chromium's other locales out of the image.
+# Arch gives sway cap_sys_nice; with --cap-drop=ALL and no-new-privileges the kernel
+# won't exec a binary with file capabilities ("Operation not permitted"), so drop it.
+# The wallpaper is set with awww, not swaybg: swaybg decodes through glycin, whose
+# bubblewrap sandbox can't start here ("Loader process exited early").
+RUN printf '%s\n' '[options]' \
+      'NoExtract = usr/share/doc/* usr/share/man/* usr/share/info/* usr/share/help/*' \
+      'NoExtract = usr/share/locale/* usr/share/i18n/* usr/share/gtk-doc/*' \
+      'NoExtract = usr/lib/chromium/locales/* !usr/lib/chromium/locales/en-US.pak' \
+      > /etc/pacman.d/lean.conf \
+ && sed -i 's|^\[options\]|&\nInclude = /etc/pacman.d/lean.conf|' /etc/pacman.conf \
+ && pacman -Syu --noconfirm --disable-sandbox \
+      sway awww waybar alacritty fuzzel chromium wayvnc grim socat jq \
+      ttf-dejavu ttf-jetbrains-mono-nerd ca-certificates curl git python \
+ && find /usr/share/fonts/TTF -name 'JetBrainsMono*' \
+      ! -name 'JetBrainsMonoNerdFont-Regular.ttf' ! -name 'JetBrainsMonoNerdFont-Bold.ttf' \
+      ! -name 'JetBrainsMonoNerdFont-Italic.ttf' -delete \
+ && rm -rf /var/cache/pacman/pkg/* /var/lib/pacman/sync/* /usr/include /usr/share/gir-1.0 \
+ && setcap -r /usr/bin/sway
+
+COPY --from=omarchy /out/ /
+COPY start-screen computer /usr/local/bin/
+# The launcher's Chromium entry goes through the --no-sandbox wrapper too.
+RUN sed -i 's|^Exec=/usr/bin/chromium|Exec=chromium|' /usr/share/applications/chromium.desktop \
+ && fc-cache -f >/dev/null
+
+ENV HOME=/home/bot XDG_RUNTIME_DIR=/tmp/xdg WAYLAND_DISPLAY=wayland-1 \
+    SWAYSOCK=/tmp/xdg/sway.sock DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/xdg/bus XDG_CURRENT_DESKTOP=sway \
+    WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES=1 \
+    LIBGL_ALWAYS_SOFTWARE=1
+WORKDIR /home/bot
+ENTRYPOINT ["/usr/local/bin/start-screen"]
+CMD ["sleep", "infinity"]

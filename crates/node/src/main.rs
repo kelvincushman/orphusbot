@@ -35,6 +35,8 @@ struct Config {
     /// `None` (`ORPHUSBOT_RUNTIME=none`): tools run on this machine, not isolated.
     runtime: Option<String>,
     image: String,
+    /// For bots whose desktop is Omarchy (`ORPHUSBOT_OMARCHY_IMAGE`, built from images/omarchy).
+    omarchy_image: String,
     /// `START-END` local hours when this node takes no new work, such as `22-7`.
     quiet_hours: Option<String>,
     /// Programs this node may run as MCP servers (`ORPHUSBOT_MCP_COMMANDS=npx,uvx`); none by default.
@@ -66,6 +68,8 @@ async fn main() -> anyhow::Result<()> {
         quiet_hours: std::env::var("ORPHUSBOT_QUIET_HOURS").ok(),
         image: std::env::var("ORPHUSBOT_COMPUTER_IMAGE")
             .unwrap_or_else(|_| "docker.io/library/debian:trixie-slim".into()),
+        omarchy_image: std::env::var("ORPHUSBOT_OMARCHY_IMAGE")
+            .unwrap_or_else(|_| "localhost/orphusbot-omarchy:latest".into()),
         mcp_commands: std::env::var("ORPHUSBOT_MCP_COMMANDS")
             .unwrap_or_default()
             .split(',')
@@ -618,9 +622,13 @@ impl Engine {
                 command.env("ORPHUSBOT_E2B_TOKEN", token);
             }
         } else if let Some(runtime) = &cfg.runtime {
+            let image = match bot.desktop.as_deref() {
+                Some("omarchy") => &cfg.omarchy_image,
+                _ => &cfg.image,
+            };
             let spec = computer::Spec {
                 runtime,
-                image: &cfg.image,
+                image,
                 bot: &bot.slug,
                 team: bot.team,
             };

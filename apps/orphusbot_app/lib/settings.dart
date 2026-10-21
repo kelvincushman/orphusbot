@@ -668,6 +668,7 @@ class _BotEditorState extends State<BotEditor> {
     'disabled': false,
     'computer': 'node',
     'google': 'read',
+    'desktop': 'debian',
     ...?widget.bot,
   };
   late final name = TextEditingController(text: bot['name'] as String);
@@ -818,6 +819,23 @@ class _BotEditorState extends State<BotEditor> {
                 ],
                 onChanged: (g) => bot['google'] = g,
               ),
+              if (bot['computer'] != 'e2b')
+                DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  initialValue: bot['desktop'] as String? ?? 'debian',
+                  decoration: const InputDecoration(
+                    labelText: "Its computer's desktop",
+                    helperText: 'Changing it gives the bot a new computer; its home folder is kept',
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'debian', child: Text('Debian')),
+                    DropdownMenuItem(
+                      value: 'omarchy',
+                      child: Text('Omarchy (Arch, Wayland)'),
+                    ),
+                  ],
+                  onChanged: (d) => bot['desktop'] = d,
+                ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Team bot'),

@@ -690,6 +690,8 @@ Orphus's answer to multi-agent work is a context-window contract: a discussion l
   - verified LinkedIn delivery and reply delivery in ContentSwarm;
   - importing the owner's X archive as voice examples, then fine-tuning on the box.
 
+Every draft a bot queues goes through the [humanizer](https://github.com/blader/humanizer) skill (MIT), installed in Orphus's user skills on the node: the `phone` tool's `draft` refuses text without `"humanized": true` and tells the bot to run the skill first, and the review records `humanizer_version: humanizer-3.1.0`. The flag is the bot's word, not a check; the owner's approval remains the gate.
+
 ### 11.7 Media (images and video through kie.ai)
 
 A bot with **Media generation** on (`bot.media`, off by default; on for Media Creator) gets a `media` tool. It makes images with Nano Banana 2 (`nano-banana-2`, the default) or GPT Image 2 (`gpt-image-2`, text-to-image, or image-to-image with references), and video with Seedance 2 (`bytedance/seedance-2`, 4 to 15 seconds, optional sound). The bridge calls kie.ai on the host with the node's key, uploads any reference files it reads from the bot's computer, waits for the task (about 4 minutes for images, 12 for video) and saves the result into the computer, by default under `/shared/media/`. When a task runs longer, the tool returns its id and a `check` action collects it later.

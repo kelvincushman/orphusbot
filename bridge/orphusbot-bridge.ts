@@ -365,6 +365,8 @@ export default function (pi: ExtensionAPI) {
   if (phone) {
     const api = (process.env.ORPHUSBOT_CONTENTSWARM_URL ?? "http://127.0.0.1:5055").replace(/\/$/, "") + "/api/v1";
     const operate = phone === "operate";
+    /** The humanizer skill drafts must go through (github.com/blader/humanizer, MIT). */
+    const HUMANIZER = "humanizer-3.1.0";
     const ROOTS: Record<string, string> = {
       x: "https://x.com/", linkedin: "https://www.linkedin.com/", facebook: "https://www.facebook.com/", instagram: "https://www.instagram.com/",
     };
@@ -412,7 +414,7 @@ export default function (pi: ExtensionAPI) {
         `Kelvin's social accounts (X, LinkedIn) through ContentSwarm${operate ? ", and his Android phone with the real apps" : ""}. One action per call:\n` +
         `- {"action":"accounts"}: his accounts, with their voice ("soul").\n` +
         `- {"action":"context","account":ID_OR_HANDLE,"query":"words"}: what that account knows, and recent reviews (approved rewrites show his voice; rejected ones what to avoid).\n` +
-        `- {"action":"draft","account":…,"text":"…"}: queue a post for Kelvin to approve. For a reply to a comment add "reply_to":{"url":"https://…link to the comment or post","author":"@handle","text":"their words"}. On X, author must be their exact @handle and text their comment's exact text, copied from look; the phone finds the comment again under Notifications > Mentions by those two, so a paraphrase can't be sent. Nothing is posted until he approves it in the app; ContentSwarm then posts it from the phone.\n` +
+        `- {"action":"draft","account":…,"text":"…","humanized":true}: queue a post for Kelvin to approve. Run the humanizer skill (skills/humanizer/SKILL.md) on the text first and send only its final version, with "humanized":true. For a reply to a comment add "reply_to":{"url":"https://…link to the comment or post","author":"@handle","text":"their words"}. On X, author must be their exact @handle and text their comment's exact text, copied from look; the phone finds the comment again under Notifications > Mentions by those two, so a paraphrase can't be sent. Nothing is posted until he approves it in the app; ContentSwarm then posts it from the phone.\n` +
         `- {"action":"remember","account":…,"text":"…","source":"where you saw it","thread":"optional link"}: note something seen (kept as untrusted).\n` +
         (operate
           ? `- {"action":"look"}: the screen's elements (text, desc, id, clickable, center) and the app in front. {"action":"screenshot"}: a picture of it.\n` +
@@ -435,6 +437,7 @@ export default function (pi: ExtensionAPI) {
         source: Type.Optional(Type.String()),
         thread: Type.Optional(Type.String()),
         reply_to: Type.Optional(Type.Object({ url: Type.String(), author: Type.String(), text: Type.String() })),
+        humanized: Type.Optional(Type.Boolean({ description: "true once the text has been through the humanizer skill" })),
         phone: Type.Optional(Type.String()),
         app: Type.Optional(Type.String()),
         desc: Type.Optional(Type.String()),
@@ -463,6 +466,9 @@ export default function (pi: ExtensionAPI) {
           case "draft": {
             const a = await account(need(p.account, "account"));
             const body = need(p.text, "text");
+            if (p.humanized !== true) {
+              throw new Error('Run the humanizer skill (skills/humanizer/SKILL.md) on this text first, then call draft again with the final version and "humanized": true.');
+            }
             if (!a.phones?.length) throw new Error(`Assign a phone to ${a.handle} in Social → Voice first.`);
             const r = p.reply_to;
             const review = await json("/reviews", { method: "POST", body: {
@@ -470,7 +476,7 @@ export default function (pi: ExtensionAPI) {
               kind: r ? "reply" : "post",
               source_url: r ? r.url : ROOTS[a.platform],
               ...(r ? { author: r.author, original: r.text } : {}),
-              humanizer_version: "orphusbot",
+              humanizer_version: HUMANIZER,
             } }, signal);
             return text(`Queued for Kelvin's approval in Social (review ${review.id}). It isn't posted until he approves it.`);
           }

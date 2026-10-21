@@ -8,6 +8,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- Social drafts must go through the [humanizer](https://github.com/blader/humanizer) skill (installed on the node): the phone tool refuses a `draft` without `"humanized": true` and records the humanizer version on the review.
 - Posted X items in Social's Pipeline link to your X profile ("See it on X"), and items to check link to it too ("Check your profile").
 - Social's Calendar tab is now **Pipeline**: what needs checking, what's sending, what's waiting to send, and what's posted. Unconfirmed posts get "Yes, it posted" and "No, send it again", and you get a push when something posts or needs checking.
 - New per-bot setting **Media generation**: the bot gets a `media` tool that makes images (Nano Banana 2, GPT Image 2) and video (Seedance 2) through kie.ai and saves them in its computer. New node file `~/.config/orphusbot/keys.env` for API keys (`ORPHUSBOT_KIE_KEY`); see `deploy/keys.env.example`.

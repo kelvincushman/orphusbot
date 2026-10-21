@@ -85,6 +85,9 @@ async fn pairs(db: &PgPool, q: &Question) -> sqlx::Result<Vec<(f64, bool)>> {
                          where decision_id = d.id and label ? $2 order by id desc limit 1) l on true
            where d.catalogue = $1 and not d.abstained and d.confidence is not null
              and ($2 <> 'verdict' or d.answers -> 'verdict' ->> 'choice' = 'pass')
+             -- Only the model answering now: Laya's and kev's confidences don't mix (D-042).
+             and d.model is not distinct from
+                 (select model from decision where not abstained order by id desc limit 1)
            order by d.created_at, d.id"#,
         q.catalogue,
         q.label
@@ -336,5 +339,36 @@ mod tests {
         .execute(&db)
         .await;
         assert!(low.is_err());
+    }
+
+    #[sqlx::test]
+    async fn only_the_current_models_labels_count(db: PgPool) {
+        // A labelled Laya answer, then kev starts answering.
+        for (i, model) in [(1u8, "laya"), (2, "kev")] {
+            let id: i64 = sqlx::query_scalar!(
+                r#"insert into decision (catalogue, state_hash, answers, abstained, threshold, confidence, latency_ms, outcome, model)
+                   values ('gate', $1, '{"verdict": {"choice": "pass"}}', false, 0.95, 0.97, 5, 'x', $2) returning id"#,
+                vec![i; 32],
+                model
+            )
+            .fetch_one(&db)
+            .await
+            .unwrap();
+            if model == "laya" {
+                sqlx::query!(
+                    r#"insert into decision_label (decision_id, label, agrees, source)
+                       values ($1, '{"verdict": "pass"}', true, 'approved the card')"#,
+                    id
+                )
+                .execute(&db)
+                .await
+                .unwrap();
+            }
+        }
+        let gate = QUESTIONS.iter().find(|q| q.key == "gate.verdict").unwrap();
+        assert!(
+            pairs(&db, gate).await.unwrap().is_empty(),
+            "Laya's label isn't kev's"
+        );
     }
 }

@@ -11,6 +11,12 @@ Format:
 
 ---
 
+## D-042: kev (Kev-9B) is the System 1 model; it supersedes Laya in production (2026-10-21)
+
+**Decided:** System 1 runs on kev's Kev-9B, served by `kev.serve` on GPU 1 of the GPU box. Laya stays usable (same protocol, same setting) for machines without a big GPU. The setting keeps its name, `ORPHUSBOT_LAYA_URL` (renaming it would only break configs).
+**Why:** kev is the owner's chosen Jev-family model, speaks the `/v1/systemone` protocol System 1 already uses, scores close to Jev on sources it never trained on, and comes with tools to fine-tune and recalibrate on the owner's own labels. Measured answers take tens of milliseconds on the box. Supersedes D-003's choice of runtime; D-023's rule stands: System 1 never approves an irreversible action, whatever the model.
+**Revisit if:** latency or GPU memory gets tight (Kev-4B is the fallback), or fine-tuned checkpoints on the owner's labels beat it.
+
 ## D-041: Phone push through UnifiedPush on our own ntfy, not Firebase (2026-10-20)
 
 **Decided:** the Android app registers a UnifiedPush endpoint with the server (`/api/push`); the ntfy app is the distributor, pointed at OrphusBot's own ntfy (its own container on the box, deny-all except anonymous `up*` topics, reached through the Cloudflare tunnel). The server posts each push to every endpoint as JSON and the app shows it as its own notification; a tap opens the bot.

@@ -442,9 +442,15 @@ impl System1 {
     }
 }
 
-/// Laya's calibrated confidence in the chosen answer.
+/// The probability of the chosen answer: Laya's `answer_confidence`, or for
+/// kev (D-042) the chosen option's entry in `probabilities`. kev's own
+/// `confidence` is chance-corrected (2p − 1 for two options), not a
+/// probability, so the thresholds can't use it.
 fn confidence(answer: &Value) -> Option<f64> {
-    answer["answer_confidence"].as_f64()
+    answer["answer_confidence"].as_f64().or_else(|| {
+        let choice = answer["choice"].as_str()?;
+        answer["probabilities"][choice].as_f64()
+    })
 }
 
 async fn record(db: &PgPool, r: &Receipt<'_>, asked: &Asked) {
@@ -903,5 +909,16 @@ pub(crate) mod tests {
             .await
             .unwrap();
         assert!(abstained);
+    }
+
+    #[test]
+    fn confidence_reads_laya_and_kev() {
+        let laya = json!({ "choice": "pass", "answer_confidence": 0.97 });
+        assert_eq!(confidence(&laya), Some(0.97));
+        // kev: chance-corrected `confidence` is ignored for the option's probability.
+        let kev = json!({ "type": "choice", "choice": "pass", "confidence": 0.94,
+                          "probabilities": { "pass": 0.97, "ask": 0.03 } });
+        assert_eq!(confidence(&kev), Some(0.97));
+        assert_eq!(confidence(&json!({ "choice": "pass" })), None);
     }
 }

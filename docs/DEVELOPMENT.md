@@ -54,9 +54,23 @@ How to build, run and test OrphusBot on your own machine. This covers what is bu
    cargo run -p orphusbot-node
    ```
 
-## System 1 (Laya)
+## System 1 (kev or Laya)
 
-Optional. Run laya-serve (Apache-2.0) and point the server at it:
+Optional. System 1 speaks the `/v1/systemone` protocol, which both kev and Laya serve.
+
+**kev (production, D-042).** Kev-9B needs a CUDA GPU with about 30 GB free (Kev-4B or Kev-0.8B for smaller cards):
+
+```sh
+git clone https://github.com/kelvincushman/kev && cd kev
+uv venv .venv --python 3.12
+VIRTUAL_ENV=$PWD/.venv uv pip install --extra-index-url https://download.pytorch.org/whl/cu128 'torch==2.8.0' -e '.[serve]' 'flash-linear-attention==0.5.2'
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1 .venv/bin/python -m kev.serve --run jaredpalmer/kev-9b@v1.0 --host 127.0.0.1 --port 8009
+export ORPHUSBOT_LAYA_URL=http://127.0.0.1:8009
+```
+
+`CUDA_DEVICE_ORDER=PCI_BUS_ID` makes the GPU index match `nvidia-smi`. The first answer after a start takes about 30 s while it warms up (System 1 abstains on it); after that answers take tens of milliseconds.
+
+**Laya (lighter, runs on a CPU):**
 
 ```sh
 uv venv ~/.local/share/laya-venv --python 3.12
@@ -134,8 +148,8 @@ All settings are environment variables.
 | `ORPHUSBOT_SETUP_TOKEN` | required | Signs you in for one hour to add your first passkey. Works only while no passkey exists |
 | `ORPHUSBOT_ORIGIN` | `http://localhost:7480` | The address browsers use. Passkeys are tied to its host name, so it can't be an IP address. An `https` origin also marks cookies `Secure` |
 | `ORPHUSBOT_UI_DIR` | `crates/ui/dist` | The built web UI, served at `/` |
-| `ORPHUSBOT_LAYA_URL` | none | laya-serve for System 1, such as `http://127.0.0.1:7600`. Without it System 1 abstains: the inbox keeps its messages and every non-read tool call asks |
-| `ORPHUSBOT_LAYA_TIMEOUT_MS` | `1500` | How long to wait for Laya before abstaining |
+| `ORPHUSBOT_LAYA_URL` | none | The System 1 model's `/v1/systemone` server (kev or laya-serve), such as `http://127.0.0.1:8009`. Without it System 1 abstains: the inbox keeps its messages and every non-read tool call asks |
+| `ORPHUSBOT_LAYA_TIMEOUT_MS` | `1500` | How long to wait for System 1 before abstaining |
 | `ORPHUSBOT_ROUTE_THRESHOLD` | `0.85` | Confidence Laya needs to move an inbox message to another bot |
 | `ORPHUSBOT_GATE_THRESHOLD` | `0.95` | Confidence Laya needs to let a file change inside a bot's computer through (never below 0.9) |
 | `ORPHUSBOT_ROUTINE_RUNS_PER_DAY` | `20` | How many runs routines may start per day, across all routines (PRD Q3) |

@@ -11,6 +11,8 @@ Widget _card(Map<String, dynamic> r, List<String> taps) => MaterialApp(
       onSchedule: () => taps.add('schedule'),
       onReject: () => taps.add('reject'),
       onCancel: () => taps.add('cancel'),
+      onConfirm: () => taps.add('confirm'),
+      onRetry: () => taps.add('retry'),
     ),
   ),
 );
@@ -78,8 +80,38 @@ void main() {
         'evidence': 'seen in the feed',
       }, []),
     );
-    expect(find.textContaining('Posted (seen on the phone)'), findsWidgets);
+    expect(find.textContaining('Posted'), findsWidgets);
     expect(find.text('Approve'), findsNothing);
     expect(find.text('Edit'), findsNothing);
+  });
+
+  testWidgets('an unconfirmed post asks the owner whether it went out', (
+    t,
+  ) async {
+    final taps = <String>[];
+    await t.pumpWidget(
+      _card({
+        'id': 'r9',
+        'revision': 6,
+        'status': 'uncertain',
+        'kind': 'post',
+        'platform': 'x',
+        'account': '@kelvin',
+        'reply': 'Bots on my phone today.',
+        'evidence': 'Worker ended without verified delivery.',
+      }, taps),
+    );
+    expect(find.textContaining('Not confirmed'), findsWidgets);
+    expect(find.text('Approve'), findsNothing);
+    await t.tap(find.text('Yes, it posted'));
+    await t.tap(find.text('No, send it again'));
+    expect(taps, ['confirm', 'retry']);
+  });
+
+  test('the pipeline puts what needs the owner first', () {
+    expect(pipelineSections.first.$2, {'uncertain'});
+    final all = {for (final (_, s) in pipelineSections) ...s};
+    expect(all.containsAll(['approved', 'executing', 'verified']), isTrue);
+    expect(all.contains('pending'), isFalse);
   });
 }

@@ -12,7 +12,7 @@
 //!
 //! New drafts waiting for approval raise a push.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::time::Duration;
 
 use axum::body::{Body, Bytes};
@@ -49,6 +49,8 @@ const ALLOWED: &[(&str, &str)] = &[
     ("POST", "reviews/*/edit"),
     ("POST", "reviews/*/schedule"),
     ("POST", "reviews/*/cancel"),
+    ("POST", "reviews/*/confirm"),
+    ("POST", "reviews/*/retry"),
     ("GET", "social/accounts"),
     ("POST", "social/accounts"),
     ("GET", "social/accounts/*/memory"),
@@ -243,7 +245,8 @@ pub async fn proxy(
 }
 
 /// The ids of reviews waiting for the owner.
-async fn pending(app: &Shared) -> anyhow::Result<HashSet<String>> {
+/// Each review's id and status, with its platform for messages.
+async fn statuses(app: &Shared) -> anyhow::Result<HashMap<String, (String, String)>> {
     let res = app.social.call(Method::GET, "reviews", None, None).await?;
     anyhow::ensure!(res.status().is_success(), "{}", res.status());
     let all: Value = res.json().await?;
@@ -251,33 +254,82 @@ async fn pending(app: &Shared) -> anyhow::Result<HashSet<String>> {
         .as_array()
         .into_iter()
         .flatten()
-        .filter(|r| r["status"] == "pending")
-        .filter_map(|r| r["id"].as_str().map(str::to_owned))
+        .filter_map(|r| {
+            let id = r["id"].as_str()?.to_owned();
+            let status = r["status"].as_str()?.to_owned();
+            let platform = match r["platform"].as_str() {
+                Some("x") => "X",
+                Some("linkedin") => "LinkedIn",
+                Some(other) => other,
+                None => "social",
+            };
+            Some((id, (status, platform.to_owned())))
+        })
         .collect())
 }
 
-/// Every minute: a push when drafts arrive that weren't waiting before.
+/// What changed between two looks at the queue that the owner should hear about.
+fn news(
+    before: &HashMap<String, (String, String)>,
+    now: &HashMap<String, (String, String)>,
+) -> Vec<crate::notify::Push<'static>> {
+    let became = |status: &str| -> Vec<&String> {
+        now.iter()
+            .filter(|(id, (s, _))| {
+                s == status && before.get(*id).map(|b| b.0.as_str()) != Some(status)
+            })
+            .map(|(_, (_, platform))| platform)
+            .collect()
+    };
+    let mut pushes = Vec::new();
+    let drafts = became("pending").len();
+    if drafts > 0 {
+        let waiting = now.values().filter(|(s, _)| s == "pending").count();
+        pushes.push(crate::notify::Push {
+            title: format!(
+                "{drafts} new draft{} to approve",
+                if drafts == 1 { "" } else { "s" }
+            ),
+            body: format!("{waiting} waiting in Social altogether."),
+            priority: 3,
+            tags: "memo",
+            bot: None,
+        });
+    }
+    for platform in became("verified") {
+        pushes.push(crate::notify::Push {
+            title: format!("Posted on {platform}"),
+            body: "Seen on the phone. It's under Posted in Social.".into(),
+            priority: 2,
+            tags: "white_check_mark",
+            bot: None,
+        });
+    }
+    for platform in became("uncertain") {
+        pushes.push(crate::notify::Push {
+            title: format!("Check your {platform} post"),
+            body: "The phone couldn't confirm it went out. Look in Social → Pipeline and say whether it posted.".into(),
+            priority: 4,
+            tags: "warning",
+            bot: None,
+        });
+    }
+    pushes
+}
+
+/// Every minute: a push when drafts arrive, when something posts, and when a
+/// post needs the owner to check it.
 pub async fn watch_forever(app: Shared) {
     if !app.social.enabled() {
         return;
     }
-    let mut seen: Option<HashSet<String>> = None;
+    let mut seen: Option<HashMap<String, (String, String)>> = None;
     loop {
-        match pending(&app).await {
+        match statuses(&app).await {
             Ok(now) => {
                 if let Some(before) = &seen {
-                    let new = now.difference(before).count();
-                    if new > 0 {
-                        app.notifier.send(crate::notify::Push {
-                            title: format!(
-                                "{new} new draft{} to approve",
-                                if new == 1 { "" } else { "s" }
-                            ),
-                            body: format!("{} waiting in Social altogether.", now.len()),
-                            priority: 3,
-                            tags: "memo",
-                            bot: None,
-                        });
+                    for push in news(before, &now) {
+                        app.notifier.send(push);
                     }
                 }
                 seen = Some(now);
@@ -297,11 +349,35 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[test]
+    fn the_owner_hears_about_new_drafts_posts_and_doubts() {
+        let q = |items: &[(&str, &str)]| -> HashMap<String, (String, String)> {
+            items
+                .iter()
+                .map(|(id, s)| (id.to_string(), (s.to_string(), "X".to_string())))
+                .collect()
+        };
+        let before = q(&[("a", "pending"), ("b", "executing"), ("c", "executing")]);
+        let now = q(&[
+            ("a", "approved"),
+            ("b", "verified"),
+            ("c", "uncertain"),
+            ("d", "pending"),
+        ]);
+        let titles: Vec<String> = news(&before, &now).into_iter().map(|p| p.title).collect();
+        assert_eq!(
+            titles,
+            ["1 new draft to approve", "Posted on X", "Check your X post"]
+        );
+        assert!(news(&now, &now).is_empty());
+    }
+
+    #[test]
     fn only_the_owners_own_actions_pass() {
         let get = Method::GET;
         let post = Method::POST;
         assert!(allowed(&get, "reviews"));
         assert!(allowed(&post, "reviews/r-1a2b/approve"));
+        assert!(allowed(&post, "reviews/r-1a2b/confirm") && allowed(&post, "reviews/r-1a2b/retry"));
         assert!(allowed(&get, "phones/note10/screenshot"));
         assert!(allowed(&post, "social/accounts/abc/memory"));
         // The worker's and the phone bot's jobs, not the owner's screen.

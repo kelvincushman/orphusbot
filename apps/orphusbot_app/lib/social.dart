@@ -49,6 +49,15 @@ String _when(num? epoch) {
   return '${days[t.weekday - 1]} ${t.day}/${t.month} $hm';
 }
 
+/// The Pipeline tab's sections, in order: what needs the owner comes first.
+const pipelineSections = [
+  ('Check these', {'uncertain'}),
+  ('Sending now', {'executing'}),
+  ('Waiting to send', {'approved'}),
+  ('Posted', {'verified'}),
+  ('Rejected or cancelled', {'rejected', 'cancelled'}),
+];
+
 class SocialScreen extends StatefulWidget {
   const SocialScreen({super.key, required this.api});
   final Api api;
@@ -184,7 +193,46 @@ class _SocialScreenState extends State<SocialScreen> {
       if (r['status'] == 'pending' && (r['kind'] ?? 'reply') == kind) r,
   ];
 
-  Widget _list(List<Map<String, dynamic>> items, String empty) {
+  Widget _card(Map<String, dynamic> r) => ReviewCard(
+    review: r,
+    onApprove: () => act(r, 'approve'),
+    onEdit: () => _edit(r),
+    onSchedule: () => _schedule(r),
+    onReject: () => _reject(r),
+    onCancel: () => act(r, 'cancel'),
+    onConfirm: () => act(r, 'confirm'),
+    onRetry: () => act(r, 'retry'),
+  );
+
+  /// Everything past approval, by where it is: what needs the owner first.
+  Widget _pipeline() {
+    final sections = [
+      for (final (title, statuses) in pipelineSections)
+        (
+          title,
+          [
+            for (final r in reviews)
+              if (statuses.contains(r['status'])) r,
+          ],
+        ),
+    ];
+    return _list(
+      const [],
+      'Nothing approved yet. Approved posts and replies show here until '
+      'they are posted.',
+      sections: [
+        for (final (title, items) in sections)
+          if (items.isNotEmpty) (title, items),
+      ],
+    );
+  }
+
+  Widget _list(
+    List<Map<String, dynamic>> items,
+    String empty, {
+    List<(String, List<Map<String, dynamic>>)>? sections,
+  }) {
+    final groups = sections ?? [('', items)];
     if (!loaded) {
       return Center(
         child: note == null
@@ -194,7 +242,7 @@ class _SocialScreenState extends State<SocialScreen> {
     }
     return RefreshIndicator(
       onRefresh: _load,
-      child: items.isEmpty
+      child: groups.every((g) => g.$2.isEmpty)
           ? ListView(
               children: [
                 Padding(
@@ -206,15 +254,17 @@ class _SocialScreenState extends State<SocialScreen> {
           : ListView(
               padding: const EdgeInsets.symmetric(vertical: 8),
               children: [
-                for (final r in items)
-                  ReviewCard(
-                    review: r,
-                    onApprove: () => act(r, 'approve'),
-                    onEdit: () => _edit(r),
-                    onSchedule: () => _schedule(r),
-                    onReject: () => _reject(r),
-                    onCancel: () => act(r, 'cancel'),
-                  ),
+                for (final (title, rows) in groups) ...[
+                  if (title.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: Text(
+                        '$title (${rows.length})',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    ),
+                  for (final r in rows) _card(r),
+                ],
               ],
             ),
     );
@@ -224,10 +274,7 @@ class _SocialScreenState extends State<SocialScreen> {
   Widget build(BuildContext context) {
     final posts = _waiting('post');
     final replies = _waiting('reply');
-    final later = [
-      for (final r in reviews)
-        if (r['status'] != 'pending') r,
-    ];
+    final toCheck = reviews.where((r) => r['status'] == 'uncertain').length;
     return DefaultTabController(
       length: 5,
       child: Scaffold(
@@ -246,7 +293,9 @@ class _SocialScreenState extends State<SocialScreen> {
             tabs: [
               Tab(text: 'To approve (${posts.length})'),
               Tab(text: 'Comments (${replies.length})'),
-              const Tab(text: 'Calendar'),
+              Tab(
+                text: toCheck > 0 ? 'Pipeline ($toCheck to check)' : 'Pipeline',
+              ),
               const Tab(text: 'Phone'),
               const Tab(text: 'Voice'),
             ],
@@ -273,7 +322,7 @@ class _SocialScreenState extends State<SocialScreen> {
                     'set a schedule under Voice.',
                   ),
                   _list(replies, 'No replies waiting.'),
-                  _list(later, 'Nothing scheduled or sent yet.'),
+                  _pipeline(),
                   PhoneTab(api: widget.api),
                   VoiceTab(api: widget.api, accounts: accounts, reload: _load),
                 ],
@@ -296,17 +345,22 @@ class ReviewCard extends StatelessWidget {
     required this.onSchedule,
     required this.onReject,
     required this.onCancel,
+    this.onConfirm,
+    this.onRetry,
   });
   final Map<String, dynamic> review;
   final VoidCallback onApprove, onEdit, onSchedule, onReject, onCancel;
+
+  /// For an uncertain delivery, after the owner checked the phone.
+  final VoidCallback? onConfirm, onRetry;
 
   static const _status = {
     'pending': 'Waiting for you',
     'rejected': 'Rejected',
     'approved': 'Approved',
     'executing': 'Posting now',
-    'verified': 'Posted (seen on the phone)',
-    'uncertain': 'Unsure it posted: check the phone',
+    'verified': 'Posted',
+    'uncertain': 'Not confirmed: check the phone',
     'cancelled': 'Cancelled',
   };
 
@@ -440,6 +494,18 @@ class ReviewCard extends StatelessWidget {
                   ),
                 if (status == 'approved' || status == 'rejected')
                   TextButton(onPressed: onCancel, child: const Text('Cancel')),
+                if (status == 'uncertain' && onConfirm != null) ...[
+                  FilledButton.icon(
+                    onPressed: onConfirm,
+                    icon: const Icon(Icons.check),
+                    label: const Text('Yes, it posted'),
+                  ),
+                  TextButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.replay),
+                    label: const Text('No, send it again'),
+                  ),
+                ],
               ],
             ),
           ],

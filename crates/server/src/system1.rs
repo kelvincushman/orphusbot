@@ -13,6 +13,8 @@ use std::time::{Duration, Instant};
 
 use axum::Json;
 use axum::extract::State;
+use axum::http::StatusCode;
+use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
@@ -621,7 +623,7 @@ pub async fn health(State(app): State<Shared>) -> Result<Json<Value>, ApiError> 
 /// Recent receipts, newest first, for the Decisions view.
 pub async fn list(State(app): State<Shared>) -> Result<Json<Value>, ApiError> {
     let rows = sqlx::query!(
-        r#"select d.id, d.catalogue, d.state, d.abstained, d.threshold, d.confidence, d.model, d.latency_ms,
+        r#"select d.id, d.catalogue, d.state, d.answers, d.abstained, d.threshold, d.confidence, d.model, d.latency_ms,
                   d.outcome, d.created_at::text as "created_at!",
                   l.label as "label?", l.agrees as "agrees?", l.source as "label_source?"
            from decision d left join lateral (select label, agrees, source from decision_label
@@ -635,7 +637,8 @@ pub async fn list(State(app): State<Shared>) -> Result<Json<Value>, ApiError> {
         .into_iter()
         .map(|r| {
             json!({
-                "id": r.id, "catalogue": r.catalogue, "state": r.state, "abstained": r.abstained,
+                "id": r.id, "catalogue": r.catalogue, "state": r.state, "answers": r.answers,
+                "abstained": r.abstained,
                 "threshold": r.threshold, "confidence": r.confidence, "model": r.model,
                 "latency_ms": r.latency_ms, "outcome": r.outcome, "created_at": r.created_at,
                 "label": r.label, "agrees": r.agrees, "label_source": r.label_source,
@@ -643,6 +646,62 @@ pub async fn list(State(app): State<Shared>) -> Result<Json<Value>, ApiError> {
         })
         .collect();
     Ok(Json(json!(list)))
+}
+
+#[derive(Deserialize)]
+pub struct OwnerLabel {
+    id: i64,
+    /// For a routing decision: the bot that should have had the message.
+    bot: Option<String>,
+    /// For a gate decision: `pass` (it could have gone ahead) or `ask`.
+    verdict: Option<String>,
+}
+
+/// The owner marks a decision right or wrong in the app (DESIGN §7.5): the
+/// answer it should have given, which calibration then learns from.
+pub async fn label_by_owner(
+    State(app): State<Shared>,
+    Json(l): Json<OwnerLabel>,
+) -> Result<StatusCode, ApiError> {
+    let d = sqlx::query!(
+        "select catalogue, answers from decision where id = $1",
+        l.id
+    )
+    .fetch_optional(&app.db)
+    .await
+    .map_err(|e| internal("reading the decision", e))?
+    .ok_or((StatusCode::NOT_FOUND, "No such decision"))?;
+    let chose = |key: &str| {
+        d.answers
+            .as_ref()
+            .and_then(|a| a[key]["choice"].as_str().map(str::to_owned))
+    };
+    let (should, agrees) = match (d.catalogue.as_str(), l.bot, l.verdict.as_deref()) {
+        ("triage", Some(bot), None) => {
+            let known =
+                sqlx::query_scalar!("select exists(select 1 from bot where slug = $1)", bot)
+                    .fetch_one(&app.db)
+                    .await
+                    .map_err(|e| internal("checking the bot", e))?;
+            if known != Some(true) {
+                return Err((StatusCode::UNPROCESSABLE_ENTITY, "No such bot"));
+            }
+            let agrees = chose("bot").as_deref() == Some(bot.as_str());
+            (json!({ "bot": bot }), agrees)
+        }
+        ("gate", None, Some(v @ ("pass" | "ask"))) => (
+            json!({ "verdict": v }),
+            chose("verdict").as_deref() == Some(v),
+        ),
+        _ => {
+            return Err((
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Label routing with a bot and the gate with pass or ask",
+            ));
+        }
+    };
+    label(&app.db, l.id, should, agrees, "marked in the app").await;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[cfg(test)]
@@ -920,5 +979,67 @@ pub(crate) mod tests {
                           "probabilities": { "pass": 0.97, "ask": 0.03 } });
         assert_eq!(confidence(&kev), Some(0.97));
         assert_eq!(confidence(&json!({ "choice": "pass" })), None);
+    }
+
+    #[sqlx::test]
+    async fn the_owner_marks_routing_and_gate_answers(db: PgPool) {
+        let app = crate::auth::tests::app(db.clone());
+        let mut ids = vec![];
+        for (catalogue, answers) in [
+            ("triage", json!({ "bot": { "choice": "orchestrator" } })),
+            ("gate", json!({ "verdict": { "choice": "pass" } })),
+        ] {
+            ids.push(
+                sqlx::query_scalar!(
+                    r#"insert into decision (catalogue, state_hash, answers, abstained, threshold, latency_ms, outcome)
+                       values ($1, $2, $3, false, 0.85, 5, 'x') returning id"#,
+                    catalogue,
+                    vec![ids.len() as u8; 32],
+                    answers
+                )
+                .fetch_one(&db)
+                .await
+                .unwrap(),
+            );
+        }
+        let mark = |id, bot: Option<&str>, verdict: Option<&str>| {
+            label_by_owner(
+                State(app.clone()),
+                Json(OwnerLabel {
+                    id,
+                    bot: bot.map(str::to_owned),
+                    verdict: verdict.map(str::to_owned),
+                }),
+            )
+        };
+        // Routing: right bot, then wrong; an unknown bot is refused.
+        assert!(mark(ids[0], Some("orchestrator"), None).await.is_ok());
+        assert!(mark(ids[0], Some("inbox"), None).await.is_ok());
+        assert_eq!(
+            mark(ids[0], Some("nobody"), None).await.unwrap_err().0,
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
+        // The gate: it should have asked.
+        assert!(mark(ids[1], None, Some("ask")).await.is_ok());
+        assert_eq!(
+            mark(ids[1], Some("coder"), None).await.unwrap_err().0,
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
+        let got = sqlx::query!("select decision_id, label, agrees from decision_label order by id")
+            .fetch_all(&db)
+            .await
+            .unwrap();
+        let got: Vec<_> = got
+            .iter()
+            .map(|r| (r.decision_id, r.label.clone(), r.agrees))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                (ids[0], json!({ "bot": "orchestrator" }), true),
+                (ids[0], json!({ "bot": "inbox" }), false),
+                (ids[1], json!({ "verdict": "ask" }), false),
+            ]
+        );
     }
 }

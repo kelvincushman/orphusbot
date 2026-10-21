@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'api.dart';
 import 'avatar.dart';
+import 'decisions.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
@@ -355,6 +356,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: Text('${b['bot']}'),
                   subtitle: Text(_botUsage(b as Map<String, dynamic>)),
                 ),
+              heading(
+                'Decisions',
+                'What System 1 (kev) decided, and your verdict on each: '
+                    'this is how it learns your judgement.',
+              ),
+              _buttons([
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          DecisionsScreen(api: widget.api, bots: bots),
+                    ),
+                  ),
+                  icon: const Icon(Icons.rule),
+                  label: const Text('Review decisions'),
+                ),
+              ]),
               heading(
                 'Passkeys',
                 'Add passkeys from the web page in a browser; this app signs '

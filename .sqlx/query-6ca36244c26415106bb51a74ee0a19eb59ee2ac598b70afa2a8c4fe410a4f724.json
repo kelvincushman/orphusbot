@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select d.id, d.catalogue, d.state, d.abstained, d.threshold, d.confidence, d.model, d.latency_ms,\n                  d.outcome, d.created_at::text as \"created_at!\",\n                  l.label as \"label?\", l.agrees as \"agrees?\", l.source as \"label_source?\"\n           from decision d left join lateral (select label, agrees, source from decision_label\n                                              where decision_id = d.id order by id desc limit 1) l on true\n           order by d.id desc limit 100",
+  "query": "select d.id, d.catalogue, d.state, d.answers, d.abstained, d.threshold, d.confidence, d.model, d.latency_ms,\n                  d.outcome, d.created_at::text as \"created_at!\",\n                  l.label as \"label?\", l.agrees as \"agrees?\", l.source as \"label_source?\"\n           from decision d left join lateral (select label, agrees, source from decision_label\n                                              where decision_id = d.id order by id desc limit 1) l on true\n           order by d.id desc limit 100",
   "describe": {
     "columns": [
       {
@@ -38,6 +38,17 @@
       },
       {
         "ordinal": 3,
+        "name": "answers",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "decision",
+            "name": "answers"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
         "name": "abstained",
         "type_info": "Bool",
         "origin": {
@@ -48,7 +59,7 @@
         }
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "threshold",
         "type_info": "Float4",
         "origin": {
@@ -59,7 +70,7 @@
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "confidence",
         "type_info": "Float4",
         "origin": {
@@ -70,7 +81,7 @@
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "model",
         "type_info": "Text",
         "origin": {
@@ -81,7 +92,7 @@
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "latency_ms",
         "type_info": "Int4",
         "origin": {
@@ -92,7 +103,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "outcome",
         "type_info": "Text",
         "origin": {
@@ -103,13 +114,13 @@
         }
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "created_at!",
         "type_info": "Text",
         "origin": "Expression"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "label?",
         "type_info": "Jsonb",
         "origin": {
@@ -120,7 +131,7 @@
         }
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "agrees?",
         "type_info": "Bool",
         "origin": {
@@ -131,7 +142,7 @@
         }
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "label_source?",
         "type_info": "Text",
         "origin": {
@@ -149,6 +160,7 @@
       false,
       false,
       true,
+      true,
       false,
       false,
       true,
@@ -161,5 +173,5 @@
       false
     ]
   },
-  "hash": "1fe67a4a145099b511d8ddc3d349812402ce0c8e98614abb5038ae7a7f830b29"
+  "hash": "6ca36244c26415106bb51a74ee0a19eb59ee2ac598b70afa2a8c4fe410a4f724"
 }

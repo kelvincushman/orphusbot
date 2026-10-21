@@ -114,4 +114,22 @@ void main() {
     expect(all.containsAll(['approved', 'executing', 'verified']), isTrue);
     expect(all.contains('pending'), isFalse);
   });
+
+  test('a sent X post links to the profile it went out on', () {
+    Map<String, dynamic> r(String kind, String platform, String account) => {
+      'kind': kind,
+      'platform': platform,
+      'account': account,
+    };
+    expect(
+      profileLink(r('post', 'x', '@UKKelvinLee')).toString(),
+      'https://x.com/UKKelvinLee',
+    );
+    expect(
+      profileLink(r('reply', 'x', '@UKKelvinLee')).toString(),
+      'https://x.com/UKKelvinLee/with_replies',
+    );
+    expect(profileLink(r('post', 'linkedin', 'Kelvin Lee')), isNull);
+    expect(profileLink(r('post', 'x', '@bad/handle')), isNull);
+  });
 }

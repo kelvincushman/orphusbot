@@ -364,6 +364,7 @@ mod tests {
             google: "read".into(),
             face: None,
             desktop: "debian".into(),
+            phone: "none".into(),
         };
         let roster = [
             b("inbox", false),

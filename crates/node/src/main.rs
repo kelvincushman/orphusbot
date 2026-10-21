@@ -612,6 +612,18 @@ impl Engine {
         if let Some(google) = &bot.google {
             command.env("ORPHUSBOT_GOOGLE", google);
         }
+        // The phone and social accounts: ContentSwarm on this machine (DESIGN §11.6).
+        // Its agent token goes only to engines of bots allowed it, never into a computer.
+        command
+            .env_remove("ORPHUSBOT_CONTENTSWARM_TOKEN")
+            .env_remove("ORPHUSBOT_PHONE");
+        if let (Some(phone), Ok(token)) =
+            (&bot.phone, std::env::var("ORPHUSBOT_CONTENTSWARM_TOKEN"))
+        {
+            command
+                .env("ORPHUSBOT_PHONE", phone)
+                .env("ORPHUSBOT_CONTENTSWARM_TOKEN", token);
+        }
         if let Some(sandbox) = &bot.e2b {
             // The computer is an E2B sandbox: the bridge reaches its envd over HTTPS.
             command

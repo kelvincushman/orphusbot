@@ -62,6 +62,13 @@ pub struct Bot {
     /// Its computer's desktop on a node: `debian` or `omarchy` (images/omarchy).
     #[serde(default = "debian")]
     pub desktop: String,
+    /// The owner's phone and social accounts (DESIGN §11.6): none, draft or operate.
+    #[serde(default = "no_phone")]
+    pub phone: String,
+}
+
+fn no_phone() -> String {
+    "none".into()
 }
 
 /// Told to bots with the Omarchy desktop (images/omarchy).
@@ -103,6 +110,7 @@ impl Bot {
             name: None,
             google: (self.google != "none").then(|| self.google.clone()),
             desktop: (self.desktop != "debian").then(|| self.desktop.clone()),
+            phone: (self.phone != "none").then(|| self.phone.clone()),
         }
     }
 
@@ -166,6 +174,9 @@ impl Bot {
             _ if self.desktop == "omarchy" && self.computer == "e2b" => {
                 Err("The Omarchy desktop runs on a node, not in E2B")
             }
+            _ if !["none", "draft", "operate"].contains(&self.phone.as_str()) => {
+                Err("Phone is none, draft or operate")
+            }
             _ => Ok(self),
         }
     }
@@ -203,7 +214,7 @@ fn slugify(name: &str) -> String {
 pub async fn all(db: &PgPool) -> sqlx::Result<Vec<Bot>> {
     sqlx::query_as!(
         Bot,
-        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop
+        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone
          from bot order by disabled, slug <> 'orchestrator', slug <> 'inbox', name"
     )
     .fetch_all(db)
@@ -213,7 +224,7 @@ pub async fn all(db: &PgPool) -> sqlx::Result<Vec<Bot>> {
 pub async fn get(db: &PgPool, slug: &str) -> sqlx::Result<Option<Bot>> {
     sqlx::query_as!(
         Bot,
-        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop
+        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone
          from bot where slug = $1",
         slug
     )
@@ -250,6 +261,8 @@ pub struct NewBot {
     face: Option<String>,
     #[serde(default = "debian")]
     desktop: String,
+    #[serde(default = "no_phone")]
+    phone: String,
 }
 
 fn private() -> String {
@@ -274,6 +287,7 @@ pub async fn create(
         google: new.google,
         face: new.face,
         desktop: new.desktop,
+        phone: new.phone,
     }
     .check()
     .map_err(|why| (StatusCode::UNPROCESSABLE_ENTITY, why))?;
@@ -300,8 +314,8 @@ pub async fn create(
         .find(|s| !taken.contains(s))
         .unwrap_or_default();
     let id = sqlx::query_scalar!(
-        "insert into bot (slug, name, remit, instructions, model, thinking, exclude_tools, scope, computer, google, face, desktop)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) returning id",
+        "insert into bot (slug, name, remit, instructions, model, thinking, exclude_tools, scope, computer, google, face, desktop, phone)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) returning id",
         slug,
         bot.name,
         bot.remit,
@@ -313,7 +327,8 @@ pub async fn create(
         bot.computer,
         bot.google,
         bot.face,
-        bot.desktop
+        bot.desktop,
+        bot.phone
     )
     .fetch_one(&mut *tx)
     .await
@@ -346,7 +361,7 @@ pub async fn update(
     let done = sqlx::query!(
         "update bot set name = $2, remit = $3, instructions = $4, model = $5, thinking = $6,
                 exclude_tools = $7, scope = $8, disabled = $9, computer = $10, google = $11, face = $12,
-                desktop = $13
+                desktop = $13, phone = $14
          where slug = $1",
         bot.slug,
         bot.name,
@@ -360,7 +375,8 @@ pub async fn update(
         bot.computer,
         bot.google,
         bot.face,
-        bot.desktop
+        bot.desktop,
+        bot.phone
     )
     .execute(&app.db)
     .await
@@ -402,6 +418,7 @@ mod tests {
             google: "read".into(),
             face: None,
             desktop: "debian".into(),
+            phone: "none".into(),
         };
         let ok = bot(" Researcher ", Some("high")).check().unwrap();
         assert_eq!((ok.name.as_str(), ok.model), ("Researcher", None));
@@ -434,6 +451,19 @@ mod tests {
         );
         assert_eq!(desktop("debian", "node").unwrap().spec().desktop, None);
         assert!(desktop("hyprland", "node").is_err() && desktop("omarchy", "e2b").is_err());
+        let phone = |p: &str| {
+            Bot {
+                phone: p.into(),
+                ..bot("R", None)
+            }
+            .check()
+        };
+        assert_eq!(
+            phone("operate").unwrap().spec().phone.as_deref(),
+            Some("operate")
+        );
+        assert_eq!(phone("none").unwrap().spec().phone, None);
+        assert!(phone("everything").is_err());
     }
 
     #[sqlx::test]

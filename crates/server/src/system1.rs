@@ -752,6 +752,7 @@ pub(crate) mod tests {
             google: "read".into(),
             face: None,
             desktop: "debian".into(),
+            phone: "none".into(),
         }
     }
 

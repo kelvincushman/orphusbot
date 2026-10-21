@@ -13,6 +13,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **Phone and social bots:** a new bot setting, **Phone and social accounts**: none, read accounts and queue drafts, or also use the phone. Bots with it can read your accounts' voice, queue posts and replies for your approval, and (if allowed) look at and use your phone. Anything that could post, reply, like, follow or confirm on the phone asks you every time, even if you've said "always" before.
 - **Social:** the megaphone in the header opens your X and LinkedIn drafts, shown the way they'll be posted, to approve, edit, schedule or reject (say why and the next drafts learn). Replies show under the comment they answer, the Calendar shows what's scheduled and what went out, the Phone tab shows the phone's screen live, and Voice holds each account's voice and what it knows. A notification tells you when new drafts arrive. Posting goes through your own phone, plugged into the server, and nothing goes out without your tap.
 - **Omarchy computers:** give a bot an Omarchy desktop in its settings (Its computer's desktop → Omarchy). Its computer becomes Arch Linux with Omarchy's look, bar, terminal and keys, which you can watch and take over as before, and the bot can take screenshots, click and type on it itself. Its home folder carries over when you switch.
 - **Teach System 1 in the app:** Settings → Decisions lists where kev sent messages and which tool calls it judged; mark each right or wrong, and Fit tunes how sure it must be from your answers.

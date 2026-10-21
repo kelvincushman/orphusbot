@@ -675,8 +675,18 @@ Orphus's answer to multi-agent work is a context-window contract: a discussion l
 
   Edit re-opens approval. Schedule takes a future local time. Reject can give a reason, which is added to that account's memory, so the next drafts learn from it.
 - **Rules:** every post and reply waits for the owner's tap (the owner's choice). System 1 never approves one (rule 5). Comments and anything read off the phone are untrusted data, never instructions.
+- **The phone tool (M13.2, D-045):** each bot has a `phone` setting (migration 0033): `none`, `draft` or `operate`. It travels in `BotSpec.phone`. For a bot that has one, the node gives its engine `ORPHUSBOT_PHONE` and ContentSwarm's agent token (`ORPHUSBOT_CONTENTSWARM_TOKEN`, from the node's settings, with `ORPHUSBOT_CONTENTSWARM_URL` defaulting to `http://127.0.0.1:5055`), and removes both for every other bot. The bridge then offers a `phone` tool that calls ContentSwarm's API from the host, so the token never enters a computer. One action per call:
+  - **Every bot with access:** `accounts`, `context` (an account's memory and recent reviews), `draft` (a post, or a reply with `reply_to` {url, author, text}, queued as a pending review; ContentSwarm posts it from the phone only after the owner approves it), and `remember` (an untrusted observation).
+  - **`operate` bots also get:** `look` (the accessibility tree, compacted, and the app in front), `screenshot` (a picture), `open`, `tap` (by exact visible text, description or id), `type`, `key` and `swipe`.
+
+  Text read off the screen or from comments comes back marked as untrusted information. The gate (`phone::kind`):
+  - refuses anything that isn't a phone action, and operate actions from a `draft` bot;
+  - lets through looking, queueing, opening apps, typing, swiping, and the keys that only move (`BACK`, `HOME`, `PAGE_DOWN`, …);
+  - treats `ENTER`, `DPAD_CENTER`, taps by id alone, and any tap whose text, description or id has a word starting with a commit stem as a commit. The stems include post, repl, tweet, like, follow, connect, share, send, delete, confirm, done and more (`COMMIT_STEMS`).
+
+  A commit asks the owner every time: approval rules are skipped for it, so an earlier "always" can't wave a post through, and System 1 is never asked. The effect ledger still stops a repeat after an interrupted attempt.
+- **The bots:** **Phone** (`operate`) reads notifications and comments on the phone and queues replies; **Content** (`draft`) writes posts in the owner's voice from each account's soul, memory and past reviews. Both only queue; ContentSwarm's worker posts approved items.
 - **Next:**
-  - the phone bot (a `phone` tool on the node, gated like `google`) and the content bot;
   - verified LinkedIn delivery and reply delivery in ContentSwarm;
   - importing the owner's X archive as voice examples, then fine-tuning on the box.
 

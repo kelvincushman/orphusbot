@@ -163,6 +163,8 @@ All settings are environment variables.
 | `ORPHUSBOT_NTFY_TOKEN` | none | ntfy access token, if the topic needs one |
 | `ORPHUSBOT_CONTENTSWARM_URL` | none | ContentSwarm on loopback, such as `http://127.0.0.1:5055`, for the Social screen (DESIGN §11.6) |
 | `ORPHUSBOT_CONTENTSWARM_CONSOLE_TOKEN` | none | ContentSwarm's `CONTENTSWARM_CONSOLE_TOKEN`; Social is off without both |
+| `ORPHUSBOT_CONTENTSWARM_TOKEN` (node) | none | ContentSwarm's agent token (`CONTENTSWARM_API_TOKEN`); bots with a `phone` setting get the `phone` tool only when it's set |
+| `ORPHUSBOT_CONTENTSWARM_URL` (node) | `http://127.0.0.1:5055` | Where the bridge reaches ContentSwarm |
 | `ORPHUSBOT_DAILY_TOKEN_BUDGET` | none | Input + output tokens a day; crossing it warns on the wrist and by push, once a day |
 | `ORPHUSBOT_MIN_BATTERY` (node) | `30` | An unplugged laptop node takes work only with at least this much charge (percent); `101` never works unplugged |
 | `ORPHUSBOT_MCP_COMMANDS` (node) | none | Programs this node may run as MCP servers, comma-separated, such as `npx,uvx`. A connection whose command isn't listed is left out on this node |

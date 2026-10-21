@@ -70,6 +70,9 @@ pub struct BotSpec {
     /// Google through the node's `gog` (DESIGN §11.5): `read` or `write`; none if unset.
     #[serde(default)]
     pub google: Option<String>,
+    /// The computer's desktop on a node: `omarchy`, or none for the node's default image.
+    #[serde(default)]
+    pub desktop: Option<String>,
 }
 
 /// An Orphus fleet blueprint the owner set up (DESIGN §11.2), written into the

@@ -59,6 +59,19 @@ pub struct Bot {
     /// Its face from the library; none keeps its own style or the default.
     #[serde(default)]
     pub face: Option<String>,
+    /// Its computer's desktop on a node: `debian` or `omarchy` (images/omarchy).
+    #[serde(default = "debian")]
+    pub desktop: String,
+}
+
+/// Told to bots with the Omarchy desktop (images/omarchy).
+const OMARCHY: &str = "Your computer has a screen: Omarchy (Arch Linux, Sway), 1280x800, with Chromium, \
+alacritty and a launcher. Drive it from bash with `computer`: `computer screenshot shot.png` (then read \
+the picture), `computer click X Y`, `computer type TEXT`, `computer key ctrl+l`, `computer open browser URL`. \
+Run `computer` alone for the full usage. Look before you click, and check with a screenshot after.";
+
+fn debian() -> String {
+    "debian".into()
 }
 
 fn on_node() -> String {
@@ -73,7 +86,11 @@ impl Bot {
     pub fn spec(&self) -> BotSpec {
         BotSpec {
             slug: self.slug.clone(),
-            instructions: self.instructions.clone(),
+            instructions: if self.desktop == "omarchy" {
+                format!("{}\n\n{OMARCHY}", self.instructions)
+            } else {
+                self.instructions.clone()
+            },
             model: self.model.clone(),
             thinking: self.thinking.clone(),
             exclude_tools: self.exclude_tools.clone(),
@@ -85,6 +102,7 @@ impl Bot {
             session: None,
             name: None,
             google: (self.google != "none").then(|| self.google.clone()),
+            desktop: (self.desktop != "debian").then(|| self.desktop.clone()),
         }
     }
 
@@ -142,6 +160,12 @@ impl Bot {
             {
                 Err("A face is a style name from the library")
             }
+            _ if !["debian", "omarchy"].contains(&self.desktop.as_str()) => {
+                Err("The desktop is Debian or Omarchy")
+            }
+            _ if self.desktop == "omarchy" && self.computer == "e2b" => {
+                Err("The Omarchy desktop runs on a node, not in E2B")
+            }
             _ => Ok(self),
         }
     }
@@ -179,7 +203,7 @@ fn slugify(name: &str) -> String {
 pub async fn all(db: &PgPool) -> sqlx::Result<Vec<Bot>> {
     sqlx::query_as!(
         Bot,
-        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face
+        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop
          from bot order by disabled, slug <> 'orchestrator', slug <> 'inbox', name"
     )
     .fetch_all(db)
@@ -189,7 +213,7 @@ pub async fn all(db: &PgPool) -> sqlx::Result<Vec<Bot>> {
 pub async fn get(db: &PgPool, slug: &str) -> sqlx::Result<Option<Bot>> {
     sqlx::query_as!(
         Bot,
-        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face
+        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop
          from bot where slug = $1",
         slug
     )
@@ -224,6 +248,8 @@ pub struct NewBot {
     google: String,
     #[serde(default)]
     face: Option<String>,
+    #[serde(default = "debian")]
+    desktop: String,
 }
 
 fn private() -> String {
@@ -247,6 +273,7 @@ pub async fn create(
         computer: new.computer,
         google: new.google,
         face: new.face,
+        desktop: new.desktop,
     }
     .check()
     .map_err(|why| (StatusCode::UNPROCESSABLE_ENTITY, why))?;
@@ -273,8 +300,8 @@ pub async fn create(
         .find(|s| !taken.contains(s))
         .unwrap_or_default();
     let id = sqlx::query_scalar!(
-        "insert into bot (slug, name, remit, instructions, model, thinking, exclude_tools, scope, computer, google, face)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) returning id",
+        "insert into bot (slug, name, remit, instructions, model, thinking, exclude_tools, scope, computer, google, face, desktop)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) returning id",
         slug,
         bot.name,
         bot.remit,
@@ -285,7 +312,8 @@ pub async fn create(
         bot.scope,
         bot.computer,
         bot.google,
-        bot.face
+        bot.face,
+        bot.desktop
     )
     .fetch_one(&mut *tx)
     .await
@@ -317,7 +345,8 @@ pub async fn update(
     }
     let done = sqlx::query!(
         "update bot set name = $2, remit = $3, instructions = $4, model = $5, thinking = $6,
-                exclude_tools = $7, scope = $8, disabled = $9, computer = $10, google = $11, face = $12
+                exclude_tools = $7, scope = $8, disabled = $9, computer = $10, google = $11, face = $12,
+                desktop = $13
          where slug = $1",
         bot.slug,
         bot.name,
@@ -330,7 +359,8 @@ pub async fn update(
         bot.disabled,
         bot.computer,
         bot.google,
-        bot.face
+        bot.face,
+        bot.desktop
     )
     .execute(&app.db)
     .await
@@ -371,6 +401,7 @@ mod tests {
             computer: "node".into(),
             google: "read".into(),
             face: None,
+            desktop: "debian".into(),
         };
         let ok = bot(" Researcher ", Some("high")).check().unwrap();
         assert_eq!((ok.name.as_str(), ok.model), ("Researcher", None));
@@ -385,6 +416,24 @@ mod tests {
         };
         assert!(face("fox").is_ok() && face("cat-ears").is_ok());
         assert!(face("../x").is_err() && face("Fox").is_err() && face("").is_err());
+        let desktop = |d: &str, computer: &str| {
+            Bot {
+                desktop: d.into(),
+                computer: computer.into(),
+                ..bot("R", None)
+            }
+            .check()
+        };
+        assert_eq!(
+            desktop("omarchy", "node")
+                .unwrap()
+                .spec()
+                .desktop
+                .as_deref(),
+            Some("omarchy")
+        );
+        assert_eq!(desktop("debian", "node").unwrap().spec().desktop, None);
+        assert!(desktop("hyprland", "node").is_err() && desktop("omarchy", "e2b").is_err());
     }
 
     #[sqlx::test]

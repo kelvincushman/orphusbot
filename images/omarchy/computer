@@ -1,0 +1,136 @@
+#!/usr/bin/python3
+"""Use the screen from bash. Coordinates are screen pixels (1280x800).
+
+  computer screenshot <file.png>
+  computer click <x> <y> [left|right|middle]
+  computer type <text>
+  computer key <combo>          e.g. Return, ctrl+l, super+Return, ctrl+shift+t
+  computer open <app> [args]    terminal | browser [url] | launcher | any command
+  computer windows              the window tree (swaymsg; this image is Sway)
+
+Mouse and keyboard go in as a VNC client of this computer's own screen (wayvnc on
+the loopback port). Headless Sway has no pointer device, a rootless container has
+no /dev/uinput (so no ydotool), and wtype's made-up keymap loses punctuation in
+Chromium; wayvnc's virtual pointer and keyboard (a real US keymap) have neither
+problem.
+"""
+import json, shlex, socket, struct, subprocess, sys, time
+
+KEYS = {  # X keysyms for named keys; single characters use their code point.
+    "return": 0xFF0D, "enter": 0xFF0D, "tab": 0xFF09, "escape": 0xFF1B, "esc": 0xFF1B,
+    "backspace": 0xFF08, "delete": 0xFFFF, "insert": 0xFF63, "home": 0xFF50,
+    "end": 0xFF57, "left": 0xFF51, "up": 0xFF52, "right": 0xFF53, "down": 0xFF54,
+    "pageup": 0xFF55, "page_up": 0xFF55, "pagedown": 0xFF56, "page_down": 0xFF56,
+    "space": 0x20, "print": 0xFF61,
+    **{f"f{n}": 0xFFBD + n for n in range(1, 13)},
+}
+MODS = {"shift": 0xFFE1, "ctrl": 0xFFE3, "control": 0xFFE3, "alt": 0xFFE9,
+        "super": 0xFFEB, "win": 0xFFEB, "logo": 0xFFEB, "meta": 0xFFEB, "mod4": 0xFFEB}
+
+
+def usage(msg=None):
+    sys.exit(f"computer: {msg}" if msg else __doc__.split("\n\n")[1])
+
+
+def keysym(ch):
+    return ord(ch) if ord(ch) < 0x100 else 0x01000000 + ord(ch)
+
+
+class Screen:
+    """Just enough RFB (3.8, no authentication) to send input."""
+
+    def __init__(self):
+        self.s = socket.create_connection(("127.0.0.1", 5900), timeout=5)
+        self.read(12)
+        self.s.sendall(b"RFB 003.008\n")
+        if 1 not in self.read(self.read(1)[0]):
+            usage("the screen wants a password")
+        self.s.sendall(b"\x01")
+        if self.read(4) != b"\0\0\0\0":
+            usage("the screen refused the connection")
+        self.s.sendall(b"\x01")  # shared: viewers stay connected
+        self.read(20)
+        self.read(struct.unpack(">I", self.read(4))[0])
+        # wayvnc makes a new virtual keyboard and pointer for each client; input
+        # sent before the compositor has taken them in is lost.
+        time.sleep(0.3)
+
+    def read(self, n):
+        b = b""
+        while len(b) < n:
+            c = self.s.recv(n - len(b))
+            if not c:
+                usage("the screen closed the connection")
+            b += c
+        return b
+
+    def pointer(self, buttons, x, y, pause):
+        self.s.sendall(struct.pack(">BBHH", 5, buttons, x, y))
+        time.sleep(pause)
+
+    def key(self, sym, down):
+        self.s.sendall(struct.pack(">BBxxI", 4, int(down), sym))
+        time.sleep(0.01)
+
+    def done(self):
+        time.sleep(0.2)  # let wayvnc deliver everything before it drops our devices
+        self.s.close()
+
+
+def main(cmd=None, *args):
+    if cmd == "screenshot" and len(args) == 1:
+        subprocess.run(["grim", "-o", "HEADLESS-1", args[0]], check=True)
+    elif cmd == "click" and len(args) in (2, 3):
+        button = {"left": 1, "middle": 2, "right": 4}.get(args[2] if len(args) == 3 else "left")
+        if button is None:
+            usage(f"unknown button: {args[2]}")
+        x, y = int(args[0]), int(args[1])
+        s = Screen()
+        s.pointer(0, x, y, 0.15)
+        s.pointer(button, x, y, 0.08)
+        s.pointer(0, x, y, 0.15)
+        s.done()
+    elif cmd == "type" and args:
+        s = Screen()
+        for ch in " ".join(args):
+            sym = 0xFF0D if ch == "\n" else 0xFF09 if ch == "\t" else keysym(ch)
+            s.key(sym, True)
+            s.key(sym, False)
+        s.done()
+    elif cmd == "key" and len(args) == 1:
+        *mods, name = args[0].split("+")
+        try:
+            mods = [MODS[m.lower()] for m in mods]
+        except KeyError as e:
+            usage(f"unknown modifier: {e.args[0]}")
+        sym = KEYS.get(name.lower()) or (keysym(name) if len(name) == 1 else None)
+        if sym is None:
+            usage(f"unknown key: {name}")
+        s = Screen()
+        for m in mods:
+            s.key(m, True)
+        s.key(sym, True)
+        s.key(sym, False)
+        for m in reversed(mods):
+            s.key(m, False)
+        s.done()
+    elif cmd == "open" and args:
+        app = {"terminal": "alacritty", "browser": "chromium", "launcher": "fuzzel"}.get(args[0], args[0])
+        # Started by Sway, so it lands on the screen and isn't a child of this shell.
+        subprocess.run(["swaymsg", "-q", "exec " + shlex.join([app, *args[1:]])], check=True)
+    elif cmd == "windows" and not args:
+        tree = json.loads(subprocess.run(["swaymsg", "-t", "get_tree"], check=True,
+                                         capture_output=True, text=True).stdout)
+        out, todo = [], [tree]
+        while todo:
+            n = todo.pop()
+            if n.get("pid"):
+                out.append({k: n.get(k) for k in ("id", "app_id", "name", "focused", "rect")})
+            todo += n.get("nodes", []) + n.get("floating_nodes", [])
+        print(json.dumps(out, indent=2))
+    else:
+        usage()
+
+
+if __name__ == "__main__":
+    main(*sys.argv[1:])

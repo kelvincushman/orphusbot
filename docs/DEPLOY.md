@@ -65,7 +65,7 @@ Everything except HTTPS can run today without the domain or Caddy. This is how t
 - **Database:** its own container, loopback only: `docker run -d --name orphusbot-postgres --restart unless-stopped -p 127.0.0.1:5433:5432 --env-file ~/.config/orphusbot/pg.env -v orphusbot-pg:/var/lib/postgresql/data postgres:16-alpine`.
 - **Settings:** `~/.config/orphusbot/server.env` and `node.env`, mode `0600` (the database URL, `ORPHUSBOT_SETUP_TOKEN`, `ORPHUSBOT_BIND=127.0.0.1:7480`, `ORPHUSBOT_ORIGIN=http://localhost:7480`, `ORPHUSBOT_SECRET_KEY_FILE`; the node's `ORPHUSBOT_SERVER=ws://127.0.0.1:7480/node`, `ORPHUS_BIN`, `ORPHUSBOT_COMPUTER_IMAGE`).
 - **Services:** systemd user units `orphusbot-server` and `orphusbot-node` with `EnvironmentFile=`, and `loginctl enable-linger` so they start at boot.
-- **Computers:** rootless Podman (`apt install podman uidmap passt nftables`) and `podman build -t localhost/orphusbot-desktop images/desktop`.
+- **Computers:** rootless Podman (`apt install podman uidmap passt nftables`) and `podman build -t localhost/orphusbot-desktop images/desktop` (plus `podman build -t localhost/orphusbot-omarchy images/omarchy` for Omarchy desktops).
 - **Two things Ubuntu needs, or computers won't start (they fail closed):**
   - the node's `PATH` must include `/usr/sbin`, where `nft` is;
   - the `nft_reject_inet`, `nft_reject_ipv4` and `nft_reject_ipv6` kernel modules must be loaded (`modprobe`, and list them in `/etc/modules-load.d/orphusbot.conf`), because a rootless container can't load them itself.

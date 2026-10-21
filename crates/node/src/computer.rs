@@ -72,15 +72,16 @@ impl Spec<'_> {
                 "container",
                 "inspect",
                 "-f",
-                "{{.State.Running}} {{index .Config.Labels \"orphusbot.team\"}}",
+                "{{.State.Running}} {{.ImageName}} {{index .Config.Labels \"orphusbot.team\"}}",
                 &name,
             ])
             .await
             .ok();
-        // A bot that moved between team and private needs its mounts changed, which
-        // means a new container; its home volume carries over.
+        // A bot that moved between team and private needs its mounts changed, and one
+        // whose desktop changed needs another image; either means a new container, and
+        // its home volume carries over.
         let state = match state {
-            Some(s) if !s.ends_with(team) => {
+            Some(s) if !s.ends_with(team) || s.split_whitespace().nth(1) != Some(self.image) => {
                 self.podman(&["rm", "-f", "-t", "0", &name]).await?;
                 None
             }

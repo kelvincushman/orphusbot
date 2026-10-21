@@ -1,0 +1,13 @@
+#!/bin/sh
+# Starts the screen, then runs the container's command (normally `sleep infinity`).
+# The root filesystem is read-only, so everything Wayland needs goes under /tmp.
+set -e
+mkdir -p -m 700 "$XDG_RUNTIME_DIR"
+# waybar (GTK) exits without a session bus; there is no machine-id to autolaunch one.
+dbus-daemon --session --address="$DBUS_SESSION_BUS_ADDRESS" --fork --nopidfile
+sway -c /etc/omarchy/sway.conf >/tmp/sway.log 2>&1 &
+for _ in $(seq 50); do [ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ] && break; sleep 0.1; done
+# No authentication: it listens only inside the container, and the node reaches it
+# through `podman exec … socat`.
+wayvnc --max-fps=15 127.0.0.1 5900 >/tmp/wayvnc.log 2>&1 &
+exec "$@"

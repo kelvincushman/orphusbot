@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face\n         from bot where slug = $1",
+  "query": "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop\n         from bot order by disabled, slug <> 'orchestrator', slug <> 'inbox', name",
   "describe": {
     "columns": [
       {
@@ -134,12 +134,21 @@
             "name": "face"
           }
         }
+      },
+      {
+        "ordinal": 12,
+        "name": "desktop",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "desktop"
+          }
+        }
       }
     ],
     "parameters": {
-      "Left": [
-        "Text"
-      ]
+      "Left": []
     },
     "nullable": [
       false,
@@ -153,8 +162,9 @@
       false,
       false,
       false,
-      true
+      true,
+      false
     ]
   },
-  "hash": "fc9bb53295eb77956096f325c56b1c676aaa0291c10c17cb83002ee954da5989"
+  "hash": "f500af716ee8d0c4130419753fd65351cbe499c6a1fc37d073a5a424d417dc45"
 }

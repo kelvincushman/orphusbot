@@ -79,6 +79,7 @@ orphusbot/
     desktop/                 Tauri 2 shell (Linux first); the same crate builds the Android app (gen/android)
   bridge/                    orphusbot-bridge Orphus extension (TypeScript)
   images/desktop/            bot desktop container image (Containerfile)
+  images/omarchy/            Omarchy-style desktop image: Arch, Sway, wayvnc, and the `computer` command (D-043)
   wearable/                  the wearable: firmware/, app/, hardware/, server-contract/, docs/ (own README)
   deploy/                    systemd units, Postgres setup, NetBird ACL notes, ntfy config
   docs/                      PRD.md, DESIGN.md, ADRs
@@ -204,6 +205,7 @@ Fences are checked on every node message: a message carrying an old fence is dro
 
 - **Built (M2.1):** `node::computer` drives the `podman` CLI (no daemon socket, no client library). One container per bot, `orphusbot-<bot>`, running `sleep infinity`, created on the engine's first turn and reused after; home is the named volume `orphusbot-home-<bot>` at `/home/bot`. The `ComputerProvider` trait arrives when E2B gives it a second implementation (M4).
 - **Images:** stock `debian:trixie-slim` for code-only bots, or `images/desktop` (built, M2.2): Debian slim with TigerVNC Xvnc on `:1` (1280×800, listening on 127.0.0.1:5900 *inside* the container only, no authentication because nothing outside can reach it), openbox, Chromium (`--no-sandbox`: the container is the sandbox), `socat`, `xdotool`. Its entrypoint starts the display with everything under `/tmp`, so it works with a read-only root. Chosen with `ORPHUSBOT_COMPUTER_IMAGE`.
+- **Omarchy desktop (D-043):** a bot whose `desktop` is `omarchy` gets `images/omarchy` (`ORPHUSBOT_OMARCHY_IMAGE`, default `localhost/orphusbot-omarchy:latest`) instead: Arch Linux with Sway headless (pixman), Omarchy v3.8.4's look, waybar, alacritty, fuzzel and Chromium, and wayvnc on the same loopback port 5900, so screens and takeover work unchanged. Same security flags and firewall. Inside it, `computer screenshot|click|type|key|open` lets the bot drive the screen from bash (grim and swaymsg, and input through wayvnc on the loopback port). The node replaces a computer whose image no longer matches its bot's setting, keeping its home volume. Not offered for E2B computers.
 - **Isolation:**
   - rootless, default seccomp, `--cap-drop=ALL`, read-only root with a writable home volume;
   - `pids`, CPU and memory limits from the bot spec;

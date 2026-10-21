@@ -97,6 +97,12 @@ podman build -t localhost/orphusbot-desktop images/desktop
 export ORPHUSBOT_COMPUTER_IMAGE=localhost/orphusbot-desktop
 ```
 
+For bots set to the Omarchy desktop (Settings → the bot → Its computer's desktop):
+
+```sh
+podman build -t localhost/orphusbot-omarchy images/omarchy
+```
+
 **The same screen in E2B.** Build the image as an E2B template once (needs `E2B_API_KEY` in your shell):
 
 ```sh
@@ -173,6 +179,7 @@ All settings are environment variables.
 | `ORPHUSBOT_QUIET_HOURS` | none | Local hours when this node takes no new work, such as `22-7` |
 | `ORPHUSBOT_RUNTIME` | `podman` | The container runtime for bots' computers, or `none` to run tools on this machine (not isolated) |
 | `ORPHUSBOT_COMPUTER_IMAGE` | `docker.io/library/debian:trixie-slim` | Image for a bot's computer |
+| `ORPHUSBOT_OMARCHY_IMAGE` | `localhost/orphusbot-omarchy:latest` | Image for bots whose desktop is Omarchy |
 | `ORPHUSBOT_NODE_KEY` | `~/.config/orphusbot/node.json` | The node's name and private key, written by `enrol` |
 | `ORPHUSBOT_SERVER` | `ws://127.0.0.1:7480/node` | The server's node endpoint; `wss://` when the server is behind HTTPS ([DEPLOY.md](DEPLOY.md)) |
 | `ORPHUSBOT_NODE_NAME` | the host name | The name to enrol under (letters, digits, `.`, `_`, `-`). After enrolling, the name comes from the key file |
@@ -222,6 +229,7 @@ Queries are checked at compile time. CI builds with `SQLX_OFFLINE=true` against 
 | `crates/device` | The wearable's wire constants and cue table, tested against its firmware and app |
 | `crates/ui/novnc` | noVNC 1.7.0, vendored unmodified (MPL-2.0), for the screen panel |
 | `images/desktop` | The bot computer image with a screen (VNC, openbox, Chromium) |
+| `images/omarchy` | The Omarchy-style computer image (Arch, Sway, wayvnc, Chromium, `computer`) |
 | `crates/node` | The node daemon: server link and the Orphus engine |
 
 ## What M0 deliberately leaves out

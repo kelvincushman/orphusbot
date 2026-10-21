@@ -11,6 +11,12 @@ Format:
 
 ---
 
+## D-043: The Omarchy desktop is Sway dressed as Omarchy, not Hyprland (2026-10-21)
+
+**Decided:** A bot can have an Omarchy desktop (`images/omarchy`): Arch Linux, Sway on wlroots' headless backend with the pixman software renderer, wayvnc, and Omarchy v3.8.4's config files (theme, gaps, borders, wallpaper, waybar, alacritty, keys). It's a per-bot setting (`desktop`: `debian` or `omarchy`); changing it replaces the bot's container and keeps its home volume.
+**Why:** Hyprland 0.56 can't start without a GPU: aquamarine's headless backend needs a GBM allocator from a DRM render node, and nesting it in a software compositor fails for lack of linux-dmabuf. Passing a render node into every bot's container would weaken its isolation and compete with the models for the box's GPUs. Sway gives the same look and keys with no device, at about 50 MiB idle. v3.8.4 is the last Omarchy release with plain config files and waybar; v4 moved to Lua and Quickshell.
+**Revisit if:** Hyprland gains a software or headless renderer that needs no DRM device, or a node has a GPU to spare for bot screens.
+
 ## D-042: kev (Kev-9B) is the System 1 model; it supersedes Laya in production (2026-10-21)
 
 **Decided:** System 1 runs on kev's Kev-9B, served by `kev.serve` on GPU 1 of the GPU box. Laya stays usable (same protocol, same setting) for machines without a big GPU. The setting keeps its name, `ORPHUSBOT_LAYA_URL` (renaming it would only break configs).

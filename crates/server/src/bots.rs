@@ -65,6 +65,9 @@ pub struct Bot {
     /// The owner's phone and social accounts (DESIGN §11.6): none, draft or operate.
     #[serde(default = "no_phone")]
     pub phone: String,
+    /// May generate images and video with the node's media tool (DESIGN §11.7).
+    #[serde(default)]
+    pub media: bool,
 }
 
 fn no_phone() -> String {
@@ -111,6 +114,7 @@ impl Bot {
             google: (self.google != "none").then(|| self.google.clone()),
             desktop: (self.desktop != "debian").then(|| self.desktop.clone()),
             phone: (self.phone != "none").then(|| self.phone.clone()),
+            media: self.media,
         }
     }
 
@@ -214,7 +218,7 @@ fn slugify(name: &str) -> String {
 pub async fn all(db: &PgPool) -> sqlx::Result<Vec<Bot>> {
     sqlx::query_as!(
         Bot,
-        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone
+        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media
          from bot order by disabled, slug <> 'orchestrator', slug <> 'inbox', name"
     )
     .fetch_all(db)
@@ -224,7 +228,7 @@ pub async fn all(db: &PgPool) -> sqlx::Result<Vec<Bot>> {
 pub async fn get(db: &PgPool, slug: &str) -> sqlx::Result<Option<Bot>> {
     sqlx::query_as!(
         Bot,
-        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone
+        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media
          from bot where slug = $1",
         slug
     )
@@ -263,6 +267,8 @@ pub struct NewBot {
     desktop: String,
     #[serde(default = "no_phone")]
     phone: String,
+    #[serde(default)]
+    media: bool,
 }
 
 fn private() -> String {
@@ -288,6 +294,7 @@ pub async fn create(
         face: new.face,
         desktop: new.desktop,
         phone: new.phone,
+        media: new.media,
     }
     .check()
     .map_err(|why| (StatusCode::UNPROCESSABLE_ENTITY, why))?;
@@ -314,8 +321,8 @@ pub async fn create(
         .find(|s| !taken.contains(s))
         .unwrap_or_default();
     let id = sqlx::query_scalar!(
-        "insert into bot (slug, name, remit, instructions, model, thinking, exclude_tools, scope, computer, google, face, desktop, phone)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) returning id",
+        "insert into bot (slug, name, remit, instructions, model, thinking, exclude_tools, scope, computer, google, face, desktop, phone, media)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) returning id",
         slug,
         bot.name,
         bot.remit,
@@ -328,7 +335,8 @@ pub async fn create(
         bot.google,
         bot.face,
         bot.desktop,
-        bot.phone
+        bot.phone,
+        bot.media
     )
     .fetch_one(&mut *tx)
     .await
@@ -361,7 +369,7 @@ pub async fn update(
     let done = sqlx::query!(
         "update bot set name = $2, remit = $3, instructions = $4, model = $5, thinking = $6,
                 exclude_tools = $7, scope = $8, disabled = $9, computer = $10, google = $11, face = $12,
-                desktop = $13, phone = $14
+                desktop = $13, phone = $14, media = $15
          where slug = $1",
         bot.slug,
         bot.name,
@@ -376,7 +384,8 @@ pub async fn update(
         bot.google,
         bot.face,
         bot.desktop,
-        bot.phone
+        bot.phone,
+        bot.media
     )
     .execute(&app.db)
     .await
@@ -419,6 +428,7 @@ mod tests {
             face: None,
             desktop: "debian".into(),
             phone: "none".into(),
+            media: false,
         };
         let ok = bot(" Researcher ", Some("high")).check().unwrap();
         assert_eq!((ok.name.as_str(), ok.model), ("Researcher", None));

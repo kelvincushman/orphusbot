@@ -278,6 +278,9 @@ struct Bot {
     /// `none`, `draft` or `operate`; passed through so saving keeps it.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     phone: String,
+    /// Passed through so saving keeps it.
+    #[serde(default)]
+    media: bool,
 }
 
 /// Everything the signed-in screens share: the bots, which one is open, every

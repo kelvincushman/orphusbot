@@ -22,9 +22,9 @@
 // in RPC mode under orphusbot-node, so in any other mode it blocks everything.
 
 import { spawn } from "node:child_process";
-import { access, readFile, realpath } from "node:fs/promises";
+import { access, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import { Type } from "typebox";
 import type { ExtensionAPI } from "@orphus/coding-agent";
 import {
@@ -50,6 +50,8 @@ const computer = process.env.ORPHUSBOT_COMPUTER;
 const google = process.env.ORPHUSBOT_GWS && process.env.ORPHUSBOT_GOOGLE ? process.env.ORPHUSBOT_GWS : undefined;
 /** The owner's phone and social accounts through ContentSwarm on this node: `draft` or `operate` (DESIGN §11.6). */
 const phone = process.env.ORPHUSBOT_CONTENTSWARM_TOKEN ? process.env.ORPHUSBOT_PHONE : undefined;
+/** The kie.ai key for media generation, when this bot may generate media (DESIGN §11.7). */
+const kieKey = process.env.ORPHUSBOT_KIE_KEY || undefined;
 const runtime = process.env.ORPHUSBOT_RUNTIME ?? "podman";
 const home = process.env.ORPHUSBOT_COMPUTER_HOME ?? "/home/bot";
 /**
@@ -79,6 +81,8 @@ const COMPUTER_TOOLS = [
   // The phone and social accounts, through ContentSwarm's API on the host with
   // its agent token, which never enters the computer; the gate decides each call.
   ...(phone ? ["phone"] : []),
+  // Media generation through kie.ai, with the node's key on the host (DESIGN §11.7).
+  ...(kieKey ? ["media"] : []),
 ];
 const IMAGES: Record<string, string> = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
@@ -512,6 +516,136 @@ export default function (pi: ExtensionAPI) {
           }
         }
         throw new Error(`Unknown phone action "${p.action}".`);
+      },
+    });
+  }
+
+  // Media (DESIGN §11.7): images and video through kie.ai, called from here with
+  // the node's key, so the key never enters the computer. Results are saved into
+  // the computer (by default /shared/media) and references are read from it.
+  if (kieKey) {
+    const KIE = "https://api.kie.ai/api/v1/jobs";
+    const text = (t: string) => ({ content: [{ type: "text" as const, text: t }], details: {} });
+    const auth = { Authorization: `Bearer ${kieKey}` };
+    const MAX_REF = 30 * 1024 * 1024;
+    const load = (p: string): Promise<Buffer> => {
+      const path = resolve(cwd, p);
+      if (!computer) return readFile(path);
+      return e2bUrl ? e2bFile(inside(path)) : inComputer(`head -c ${MAX_REF + 1} -- "$1"`, [inside(path)]);
+    };
+    const save = async (p: string, data: Buffer) => {
+      const path = resolve(cwd, p);
+      if (!computer) {
+        await mkdir(dirname(path), { recursive: true });
+        return writeFile(path, data);
+      }
+      if (e2bUrl) return void (await e2bFile(inside(path), data));
+      await inComputer('mkdir -p -- "$(dirname -- "$1")" && cat > "$1"', [inside(path)], data);
+    };
+    const kie = async (url: string, init: RequestInit, signal?: AbortSignal) => {
+      const res = await fetch(url, { ...init, headers: { ...auth, ...(init.headers ?? {}) }, signal });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || (body.code !== undefined && body.code !== 200)) {
+        throw new Error(`kie.ai: ${body.msg ?? body.message ?? res.status}`);
+      }
+      return body.data;
+    };
+    const upload = async (p: string, signal?: AbortSignal): Promise<string> => {
+      const data = await load(p);
+      if (data.length > MAX_REF) throw new Error(`${p} is over 30 MB.`);
+      const form = new FormData();
+      const name = basename(p);
+      form.append("file", new Blob([data]), name);
+      form.append("fileName", name);
+      form.append("uploadPath", "orphusbot");
+      const up = await kie("https://kieai.redpandaai.co/api/file-stream-upload", { method: "POST", body: form }, signal);
+      if (!up?.downloadUrl) throw new Error(`kie.ai didn't take ${name}.`);
+      return up.downloadUrl;
+    };
+    const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "media";
+    /** Waits for a task, then saves its first result; on timeout says how to check later. */
+    const finish = async (task: string, saveAs: string, minutes: number, signal?: AbortSignal) => {
+      const until = Date.now() + minutes * 60_000;
+      for (;;) {
+        const info = await kie(`${KIE}/recordInfo?taskId=${encodeURIComponent(task)}`, {}, signal);
+        if (info?.state === "success") {
+          const urls: string[] = JSON.parse(info.resultJson || "{}").resultUrls ?? [];
+          if (!urls.length) throw new Error("kie.ai finished without a result.");
+          const res = await fetch(urls[0], { signal });
+          if (!res.ok) throw new Error(`Downloading the result failed (${res.status}).`);
+          const data = Buffer.from(await res.arrayBuffer());
+          const ext = extname(new URL(urls[0]).pathname) || "";
+          const path = extname(saveAs) ? saveAs : saveAs + (ext || ".bin");
+          await save(path, data);
+          return text(`Saved ${path} (${Math.round(data.length / 1024)} KB). Read it to check it, then share_file it.`);
+        }
+        if (info?.state === "fail") throw new Error(`kie.ai couldn't make it: ${info.failMsg || "no reason given"}.`);
+        if (Date.now() > until) {
+          return text(`Still generating (task ${task}). Call {"action":"check","task":"${task}","save_as":"${saveAs}"} in a few minutes.`);
+        }
+        await new Promise((r) => setTimeout(r, 6000));
+        if (signal?.aborted) throw new Error("Stopped.");
+      }
+    };
+    pi.registerTool({
+      name: "media",
+      label: "Make images and video",
+      description:
+        "Generate images and video through kie.ai (spends Kelvin's credits, so make what was asked, not variations). One action per call:\n" +
+        `- {"action":"image","prompt":"…","model":"nano-banana-2"|"gpt-image-2","aspect_ratio":"1:1|3:2|2:3|16:9|9:16|4:3|auto","resolution":"1K|2K" (nano-banana-2 only),"references":["paths of images in your computer"],"save_as":"/shared/media/name.png"}. ` +
+        "nano-banana-2 (default) is fast and good for most images; gpt-image-2 follows precise instructions and renders text well. References keep a person, product or style consistent.\n" +
+        `- {"action":"video","prompt":"… refer to references as @Image1, @Image2 …","references":["up to 5 images"],"duration":4-15,"resolution":"480p|720p|1080p","aspect_ratio":"16:9|9:16|1:1|4:3|3:4|21:9","audio":true,"save_as":"/shared/media/name.mp4"}. Seedance 2; 720p and 5 seconds is the usual balance. Takes minutes.\n` +
+        `- {"action":"check","task":"…","save_as":"…"}: collect a result that was still generating.\n` +
+        "Results are saved into your computer; references are read from it. Your media skills have prompt advice.",
+      promptSnippet: "Generate images and video (kie.ai)",
+      parameters: Type.Object({
+        action: Type.String({ description: "image, video or check" }),
+        prompt: Type.Optional(Type.String()),
+        model: Type.Optional(Type.String()),
+        aspect_ratio: Type.Optional(Type.String()),
+        resolution: Type.Optional(Type.String()),
+        references: Type.Optional(Type.Array(Type.String())),
+        duration: Type.Optional(Type.Number()),
+        audio: Type.Optional(Type.Boolean()),
+        task: Type.Optional(Type.String()),
+        save_as: Type.Optional(Type.String()),
+      }),
+      async execute(_id, p, signal) {
+        const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
+        if (p.action === "check") {
+          if (!p.task || !p.save_as) throw new Error('Give "task" and "save_as".');
+          return finish(p.task, p.save_as, 1, signal);
+        }
+        if (!p.prompt?.trim()) throw new Error('Give "prompt".');
+        const refs = p.references ?? [];
+        if (refs.length > 5) throw new Error("At most 5 references.");
+        const urls = await Promise.all(refs.map((r) => upload(r, signal)));
+        const saveAs = p.save_as ?? `/shared/media/${stamp}-${slug(p.prompt)}`;
+        let model: string;
+        let input: Record<string, unknown>;
+        if (p.action === "image") {
+          const ratio = p.aspect_ratio ?? "auto";
+          if ((p.model ?? "nano-banana-2") === "nano-banana-2") {
+            model = "nano-banana-2";
+            input = { prompt: p.prompt, image_input: urls, aspect_ratio: ratio, resolution: p.resolution ?? "1K", output_format: "png" };
+          } else if (p.model === "gpt-image-2") {
+            model = urls.length ? "gpt-image-2-image-to-image" : "gpt-image-2-text-to-image";
+            input = { prompt: p.prompt, aspect_ratio: ratio, ...(urls.length ? { input_urls: urls } : {}) };
+          } else throw new Error('model is "nano-banana-2" or "gpt-image-2".');
+        } else if (p.action === "video") {
+          const duration = Math.round(p.duration ?? 5);
+          if (duration < 4 || duration > 15) throw new Error("duration is 4 to 15 seconds.");
+          model = "bytedance/seedance-2";
+          input = {
+            prompt: p.prompt, reference_image_urls: urls, reference_video_urls: [], reference_audio_urls: [],
+            generate_audio: p.audio ?? true, resolution: p.resolution ?? "720p", aspect_ratio: p.aspect_ratio ?? "16:9", duration,
+          };
+        } else throw new Error(`Unknown media action "${p.action}".`);
+        const created = await kie(`${KIE}/createTask`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model, input }),
+        }, signal);
+        if (!created?.taskId) throw new Error("kie.ai didn't start the task.");
+        return finish(created.taskId, saveAs, p.action === "video" ? 12 : 4, signal);
       },
     });
   }

@@ -690,6 +690,12 @@ Orphus's answer to multi-agent work is a context-window contract: a discussion l
   - verified LinkedIn delivery and reply delivery in ContentSwarm;
   - importing the owner's X archive as voice examples, then fine-tuning on the box.
 
+### 11.7 Media (images and video through kie.ai)
+
+A bot with **Media generation** on (`bot.media`, off by default; on for Media Creator) gets a `media` tool. It makes images with Nano Banana 2 (`nano-banana-2`, the default) or GPT Image 2 (`gpt-image-2`, text-to-image, or image-to-image with references), and video with Seedance 2 (`bytedance/seedance-2`, 4 to 15 seconds, optional sound). The bridge calls kie.ai on the host with the node's key, uploads any reference files it reads from the bot's computer, waits for the task (about 4 minutes for images, 12 for video) and saves the result into the computer, by default under `/shared/media/`. When a task runs longer, the tool returns its id and a `check` action collects it later.
+
+The key is `ORPHUSBOT_KIE_KEY` in `~/.config/orphusbot/keys.env` (`deploy/keys.env.example`), which the node unit loads next to `node.env`. The node removes it from every engine's environment and hands it back only to bots with media on, so it never enters a computer, where any command could read it (D-046). The gate allows `media` calls from those bots without asking, since the owner agreed to spend credits there, and refuses them from any other bot. The prompt advice from the owner's kie.ai skills is installed as Orphus skills on the node (`nano-banana-2-image-generator`, `gpt-image-2-text-to-image`, `seedance-2-video-generator`), rewritten to use the tool, with no key in them.
+
 ## 12. Clients
 
 - **Flutter app (M7.1, D-033, `apps/orphusbot_app`):** one Flutter app for Linux (Omarchy) and, from the same code, macOS, Android and iOS. It signs in by device linking (Linux has no platform passkeys in a native app) and keeps the session in its support folder (0600). It reads `/api/events` (reconnecting from the last id) and folds each bot's events with a Dart copy of the server's reducer (`thread.dart`, unit-tested against the same cases). Bots are listed on the left with "needs you" and "working" marks; the right shows the whole conversation: Markdown replies, pictures the bot shared inline and other files as tiles, approval, question and takeover cards answered in place, a Stop button and where the run is. The composer is at the bottom (Enter sends). The Omarchy panel's **Open chat** starts it. Next: model switching, search, voice notes.

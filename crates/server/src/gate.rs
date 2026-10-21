@@ -150,6 +150,21 @@ pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Re
             Kind::Commit => phone_commit = true,
         }
     }
+    // Media (DESIGN §11.7): only bots the owner allowed; generating spends his
+    // kie.ai credits, which he agreed to for those bots, so it doesn't ask.
+    if call.tool == "media" {
+        let allowed = sqlx::query_scalar!(
+            "select b.media from run r join thread t on t.id = r.thread_id join bot b on b.id = t.bot_id where r.id = $1",
+            call.attempt.run
+        )
+        .fetch_one(db)
+        .await?;
+        return Ok(if allowed {
+            Verdict::Allow
+        } else {
+            Verdict::Deny("This bot can't generate media. Ask the media creator.".into())
+        });
+    }
     if READ_ONLY.contains(&call.tool) || memory_read(call) {
         return Ok(Verdict::Allow);
     }
@@ -550,6 +565,26 @@ mod tests {
                 .await
                 .unwrap(),
             Verdict::Ask { uncertain: false }
+        );
+    }
+
+    #[sqlx::test]
+    async fn only_bots_allowed_media_can_generate_it(db: PgPool) {
+        let (_, a) = run_with_attempts(&db).await;
+        let image = json!({"action": "image", "prompt": "a kettle"});
+        assert!(matches!(
+            decide(&db, &call(a, "m0", "media", &image)).await.unwrap(),
+            Verdict::Deny(_)
+        ));
+        sqlx::query!(
+            "update bot set media = true where id = (select bot_id from thread where id = 1)"
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        assert_eq!(
+            decide(&db, &call(a, "m1", "media", &image)).await.unwrap(),
+            Verdict::Allow
         );
     }
 

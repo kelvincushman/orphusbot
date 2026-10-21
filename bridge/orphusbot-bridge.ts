@@ -408,7 +408,7 @@ export default function (pi: ExtensionAPI) {
         `Kelvin's social accounts (X, LinkedIn) through ContentSwarm${operate ? ", and his Android phone with the real apps" : ""}. One action per call:\n` +
         `- {"action":"accounts"}: his accounts, with their voice ("soul").\n` +
         `- {"action":"context","account":ID_OR_HANDLE,"query":"words"}: what that account knows, and recent reviews (approved rewrites show his voice; rejected ones what to avoid).\n` +
-        `- {"action":"draft","account":…,"text":"…"}: queue a post for Kelvin to approve. For a reply to a comment add "reply_to":{"url":"https://…link to the comment or post","author":"@name","text":"their words"}. Nothing is posted until he approves it in the app; ContentSwarm then posts it from the phone.\n` +
+        `- {"action":"draft","account":…,"text":"…"}: queue a post for Kelvin to approve. For a reply to a comment add "reply_to":{"url":"https://…link to the comment or post","author":"@handle","text":"their words"}. On X, author must be their exact @handle and text their comment's exact text, copied from look; the phone finds the comment again under Notifications > Mentions by those two, so a paraphrase can't be sent. Nothing is posted until he approves it in the app; ContentSwarm then posts it from the phone.\n` +
         `- {"action":"remember","account":…,"text":"…","source":"where you saw it","thread":"optional link"}: note something seen (kept as untrusted).\n` +
         (operate
           ? `- {"action":"look"}: the screen's elements (text, desc, id, clickable, center) and the app in front. {"action":"screenshot"}: a picture of it.\n` +

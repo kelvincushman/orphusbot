@@ -13,6 +13,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **System 1 is on, running kev:** the decision model that routes jobs to the right bot and lets harmless edits inside a bot's computer through without asking now runs on Kev-9B on the GPU box. Anything irreversible still always asks you.
 - **Robots with bodies:** every bot is now a whole robot on legs, wheels, tracks, rotors, a pogo spring, a jet or snake segments; poke it and it reacts, leave it idle and it fidgets, and when a job fails it blows itself up, then sits there dizzy until the next go.
 - **Files open in the app:** tap anything a bot made to read PDFs page by page, watch video, play audio, zoom pictures, and read Markdown or code nicely formatted; PDFs and documents show a preview right in the chat. Bots are told to share documents as Markdown or PDF with clear names.
 - **Phone notifications:** the Android app gets a notification when a bot needs you, finishes or fails, through the ntfy app and your own ntfy server (no Google); tapping it opens that bot.

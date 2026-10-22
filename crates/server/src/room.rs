@@ -36,6 +36,16 @@ and carry on talking; tell him when results come in. When he says he's done, or 
 write an idea brief (the idea, who it's for, what's known, open questions, next steps) into the \
 team wiki under wiki/ideas/ and offer tickets for the next steps.)";
 
+/// A room turn is a conversation, so it runs on a quick model with thinking
+/// off (`ORPHUSBOT_ROOM_MODEL`); the Orchestrator's own model and its deep
+/// thinking stay for the main chat. Same bot, instructions, wiki and team.
+pub fn quick(spec: &mut orphusbot_proto::BotSpec) {
+    spec.model = Some(
+        env("ORPHUSBOT_ROOM_MODEL").unwrap_or_else(|| "claude-bridge/claude-sonnet-5-5".into()),
+    );
+    spec.thinking = Some("off".into());
+}
+
 fn env(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|v| !v.trim().is_empty())
 }

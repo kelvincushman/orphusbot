@@ -20,6 +20,27 @@ import 'thread.dart' as t;
 
 enum Phase { idle, listening, writing, thinking, speaking }
 
+/// The finished sentences in [text] after [from], joined into chunks of at
+/// least [min] characters so the voice doesn't stutter, and where the next
+/// look should start. A sentence ends at . ! ? or a new line followed by space.
+(List<String>, int) sentencesAfter(String text, int from, {int min = 40}) {
+  final out = <String>[];
+  var start = from;
+  var buffer = StringBuffer();
+  final end = RegExp(r'[.!?\n]+(\s+)');
+  for (final m in end.allMatches(text, from)) {
+    // Keep the space after it, so joined sentences read naturally.
+    buffer.write(text.substring(start, m.end));
+    start = m.end;
+    if (buffer.toString().trim().length >= min) {
+      out.add(buffer.toString().trim());
+      buffer = StringBuffer();
+      from = start;
+    }
+  }
+  return (out, from);
+}
+
 /// A microphone level in dBFS (about -60 quiet to 0 loud) as 0 to 1.
 double levelOf(double dbfs) => ((dbfs + 55) / 50).clamp(0.0, 1.0);
 
@@ -51,6 +72,14 @@ class _IdeasRoomState extends State<IdeasRoom>
   String? note;
   // Replies before this count were already there when we asked.
   int? waitingFrom;
+  // Speaking while it writes: how far into the reply has been sent to the
+  // voice, the clips waiting to play in order, and whether the run has ended.
+  int spokenTo = 0;
+  final clips = <Uint8List>[];
+  Future<void> voicing = Future.value();
+  int voicesPending = 0;
+  bool playing = false;
+  bool ended = true;
 
   @override
   void initState() {
@@ -59,13 +88,16 @@ class _IdeasRoomState extends State<IdeasRoom>
       if (e['bot'] != widget.bot) return;
       setState(() => view.apply(e));
       if (waitingFrom == null) return;
-      if (view.streaming != null) setState(() => reply = view.streaming!);
+      if (view.streaming != null) {
+        setState(() => reply = view.streaming!);
+        _speakFinished(view.streaming!);
+      }
       if (e['type'] == 'run_ended') _replied();
     }, onError: (_) {});
     player.stream.completed.listen((done) {
-      if (done && phase == Phase.speaking && mounted) {
-        setState(() => phase = Phase.idle);
-      }
+      if (!done || !mounted) return;
+      playing = false;
+      _playNext();
     });
   }
 
@@ -81,7 +113,7 @@ class _IdeasRoomState extends State<IdeasRoom>
   }
 
   Future<void> _listen() async {
-    if (phase == Phase.speaking) await player.stop();
+    if (phase == Phase.speaking) await _hush();
     if (!await recorder.hasPermission()) {
       setState(() => note = 'Allow the microphone to talk in the room.');
       return;
@@ -137,6 +169,8 @@ class _IdeasRoomState extends State<IdeasRoom>
       reply = '';
       phase = Phase.thinking;
       waitingFrom = view.items.length;
+      spokenTo = 0;
+      ended = false;
     });
     try {
       await widget.api.send(widget.bot, heard, room: true);
@@ -149,33 +183,77 @@ class _IdeasRoomState extends State<IdeasRoom>
     }
   }
 
-  /// The run ended: read the newest reply aloud, if it's new.
+  /// Sends each finished sentence to the voice as soon as it's written.
+  void _speakFinished(String text) {
+    final (chunks, to) = sentencesAfter(text, spokenTo);
+    spokenTo = to;
+    chunks.forEach(_voice);
+  }
+
+  /// Voices [text] in order with the rest, then queues it to play.
+  void _voice(String text) {
+    voicesPending++;
+    voicing = voicing.then((_) async {
+      try {
+        final audio = await widget.api.speak(text);
+        clips.add(Uint8List.fromList(audio));
+        _playNext();
+      } catch (e) {
+        if (mounted) setState(() => note = 'Voice: ${explain(e)}');
+      } finally {
+        voicesPending--;
+        _maybeDone();
+      }
+    });
+  }
+
+  Future<void> _playNext() async {
+    if (playing || !mounted) return;
+    if (clips.isEmpty) return _maybeDone();
+    playing = true;
+    setState(() => phase = Phase.speaking);
+    await player.open(await Media.memory(clips.removeAt(0)));
+  }
+
+  /// Back to idle once the run has ended and every clip has played.
+  void _maybeDone() {
+    if (ended && !playing && clips.isEmpty && voicesPending == 0 && mounted) {
+      setState(() {
+        if (phase == Phase.speaking || phase == Phase.thinking) {
+          phase = Phase.idle;
+        }
+      });
+    }
+  }
+
+  /// The run ended: voice whatever the stream hadn't finished yet.
   Future<void> _replied() async {
     final from = waitingFrom;
     if (from == null) return;
+    waitingFrom = null;
     final fresh = view.items
         .skip(from)
         .whereType<t.Message>()
         .where((m) => !m.mine);
-    waitingFrom = null;
-    if (fresh.isEmpty) {
-      setState(() => phase = Phase.idle);
-      return;
+    if (fresh.isNotEmpty) {
+      final text = fresh.last.text;
+      setState(() => reply = text);
+      // The rest after what's been voiced (or all of it if nothing streamed).
+      final rest = spokenTo <= text.length
+          ? text.substring(spokenTo).trim()
+          : '';
+      if (rest.isNotEmpty) _voice(rest);
     }
-    final text = fresh.last.text;
-    setState(() => reply = text);
-    try {
-      final audio = await widget.api.speak(text);
-      if (!mounted) return;
-      setState(() => phase = Phase.speaking);
-      await player.open(await Media.memory(Uint8List.fromList(audio)));
-    } catch (e) {
-      // The words are on screen even if the voice fails.
-      setState(() {
-        phase = Phase.idle;
-        note = 'Voice: ${explain(e)}';
-      });
-    }
+    ended = true;
+    _maybeDone();
+  }
+
+  /// Stops the voice and drops what was still to come.
+  Future<void> _hush() async {
+    clips.clear();
+    await player.stop();
+    playing = false;
+    setState(() => phase = Phase.idle);
   }
 
   void _mic() {
@@ -207,12 +285,7 @@ class _IdeasRoomState extends State<IdeasRoom>
               Expanded(
                 child: GestureDetector(
                   // Tapping the orb while it talks stops it.
-                  onTap: phase == Phase.speaking
-                      ? () async {
-                          await player.stop();
-                          setState(() => phase = Phase.idle);
-                        }
-                      : null,
+                  onTap: phase == Phase.speaking ? _hush : null,
                   child: AnimatedBuilder(
                     animation: spin,
                     builder: (_, _) => CustomPaint(

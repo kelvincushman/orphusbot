@@ -11,6 +11,14 @@ Format:
 
 ---
 
+## D-054: Kelvin's Obsidian vault and the bots' team folder are one, synced over WebDAV (2026-10-22)
+
+**Decided:** The team folder on the box is the Obsidian vault. The server serves it over WebDAV at `/vault/` with its own password, and Obsidian on the laptop and the phone syncs to it with the Remotely Save plugin through the public Cloudflare address.
+
+**Why:** Memory the owner can read and fix by hand is worth more here than a vector or graph memory service (Mem0, Zep/Graphiti, Letta), each of which adds a store he can't open. The bots' wiki was already Markdown. Syncthing over NetBird was the first idea, but NetBird times out for him; WebDAV over the public HTTPS address works from anywhere, and Remotely Save runs on desktop and mobile Obsidian without a paid sync plan. Revisit a temporal graph (Graphiti) if facts that change over time become the problem.
+
+---
+
 ## D-053: The Ideas Room is Grok only (2026-10-22)
 
 **Decided:** The Orchestrator-voice path (box speech recognition, ElevenLabs sentence by sentence) and its toggle are removed; the room is Grok's realtime voice with the Orchestrator behind it as a tool. The server's `/api/room/transcribe` and `/api/room/speak` went with it.

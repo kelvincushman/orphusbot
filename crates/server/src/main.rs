@@ -372,9 +372,23 @@ fn router(app: Shared) -> Router {
             get(device::hands_free).post(device::set_hands_free),
         )
         .route("/node", get(node_link))
+        // Public: the newest app builds (`latest.json`, `orphusbot.apk`), so a
+        // phone can update itself from the browser (DESIGN §12.3). They hold no
+        // secrets: the server address and sign-in are entered in the app.
+        .nest_service("/app", ServeDir::new(app_builds_dir()))
         .merge(api)
         .fallback_service(ServeDir::new(&app.ui_dir))
         .with_state(app)
+}
+
+/// Where `scripts/publish-app.sh` puts the newest app builds.
+fn app_builds_dir() -> String {
+    std::env::var("ORPHUSBOT_APP_DIR").unwrap_or_else(|_| {
+        format!(
+            "{}/.local/share/orphusbot/app",
+            std::env::var("HOME").unwrap_or_default()
+        )
+    })
 }
 
 fn token_from_env(name: &str) -> anyhow::Result<String> {

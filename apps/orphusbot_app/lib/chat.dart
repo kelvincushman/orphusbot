@@ -17,6 +17,8 @@ import 'avatar.dart';
 import 'discuss.dart';
 import 'gallery.dart';
 import 'push.dart';
+import 'schedules.dart';
+import 'update.dart';
 import 'settings.dart';
 import 'social.dart';
 import 'thread.dart' as t;
@@ -330,41 +332,48 @@ class _ChatScreenState extends State<ChatScreen> {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, box) {
-            // Phones get the list, then one chat full screen; a desktop window
-            // keeps the bot list beside the chat however narrow it is.
-            final phone = Platform.isAndroid || Platform.isIOS;
-            if (!phone || box.maxWidth >= 640) {
-              return Row(
-                children: [
-                  SizedBox(width: 220, child: _botList(scheme)),
-                  VerticalDivider(width: 1, color: scheme.outlineVariant),
-                  Expanded(child: _conversation(scheme)),
-                ],
-              );
-            }
-            if (!chatOpen) return _botList(scheme);
-            return PopScope(
-              canPop: false,
-              onPopInvokedWithResult: (didPop, _) {
-                if (!didPop) setState(() => chatOpen = false);
-              },
-              child: Column(
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: IconButton(
-                      tooltip: 'All bots',
-                      icon: const Icon(Icons.arrow_back),
-                      onPressed: () => setState(() => chatOpen = false),
+        child: Column(
+          children: [
+            UpdateBanner(api: widget.api),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, box) {
+                  // Phones get the list, then one chat full screen; a desktop window
+                  // keeps the bot list beside the chat however narrow it is.
+                  final phone = Platform.isAndroid || Platform.isIOS;
+                  if (!phone || box.maxWidth >= 640) {
+                    return Row(
+                      children: [
+                        SizedBox(width: 220, child: _botList(scheme)),
+                        VerticalDivider(width: 1, color: scheme.outlineVariant),
+                        Expanded(child: _conversation(scheme)),
+                      ],
+                    );
+                  }
+                  if (!chatOpen) return _botList(scheme);
+                  return PopScope(
+                    canPop: false,
+                    onPopInvokedWithResult: (didPop, _) {
+                      if (!didPop) setState(() => chatOpen = false);
+                    },
+                    child: Column(
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: IconButton(
+                            tooltip: 'All bots',
+                            icon: const Icon(Icons.arrow_back),
+                            onPressed: () => setState(() => chatOpen = false),
+                          ),
+                        ),
+                        Expanded(child: _conversation(scheme)),
+                      ],
                     ),
-                  ),
-                  Expanded(child: _conversation(scheme)),
-                ],
+                  );
+                },
               ),
-            );
-          },
+            ),
+          ],
         ),
       ),
     );
@@ -389,6 +398,16 @@ class _ChatScreenState extends State<ChatScreen> {
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (_) => GalleryScreen(api: widget.api, bots: bots),
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Schedules',
+                icon: const Icon(Icons.schedule),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        SchedulesScreen(api: widget.api, bots: bots),
                   ),
                 ),
               ),

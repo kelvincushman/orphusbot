@@ -8,6 +8,8 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- **Schedules** in the app (the clock icon): have a bot do something on its own every day, on weekdays, weekly, every few hours, once, by cron or by webhook, with Run now, pause and edit.
+- Every copy of the app now knows its build. `scripts/publish-app.sh` publishes the newest Android build on the server at `/app`, and an older app shows **Update**. `scripts/macos-setup.sh` now builds the same Flutter app for the Mac, replacing the Tauri wrapper. New server setting `ORPHUSBOT_APP_DIR` (default `~/.local/share/orphusbot/app`).
 - Social drafts must go through the [humanizer](https://github.com/blader/humanizer) skill (installed on the node): the phone tool refuses a `draft` without `"humanized": true` and records the humanizer version on the review.
 - Posted X items in Social's Pipeline link to your X profile ("See it on X"), and items to check link to it too ("Check your profile").
 - Social's Calendar tab is now **Pipeline**: what needs checking, what's sending, what's waiting to send, and what's posted. Unconfirmed posts get "Yes, it posted" and "No, send it again", and you get a push when something posts or needs checking.

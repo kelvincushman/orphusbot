@@ -130,7 +130,9 @@ The bot faces come from `design/bot-avatar` and are built with the [Rive CLI](ht
 
 On Omarchy, copy the bundle to `~/.local/share/orphusbot-app`, link `orphusbot-app` into `~/.local/bin`, and the bar panel's **Open chat** starts it.
 
-**macOS app.** It has to be built on a Mac. With Xcode's command line tools, Rust and Node.js installed, and the Mac's SSH key on the GPU box, run `sh scripts/macos-setup.sh <user>@<gpu-box>` from a clone: it builds the app, installs `/Applications/OrphusBot.app`, and adds a launchd agent that keeps the tunnel to the server open at `http://localhost:7480` (see DEPLOY.md, "Before the domain").
+**macOS app.** It has to be built on a Mac, and it's the same Flutter app as on Linux and Android. With Xcode installed (opened once, licence accepted), paste `curl -fsSL https://raw.githubusercontent.com/kelvincushman/orphusbot/main/scripts/macos-setup.sh | sh` into Terminal: it installs CocoaPods and a pinned Flutter if needed, builds the app stamped with its commit, and installs `/Applications/OrphusBot.app`. Run it again to update. Sign in with the server's address and "Sign in with another device".
+
+**Publishing the app.** `scripts/publish-app.sh <user>@<server-host>` builds Android and Linux from the current commit, puts the APK and `latest.json` in the server's `ORPHUSBOT_APP_DIR` (served at `/app`), and updates this machine's Linux copy. Phones on an older build show **Update**. Run it from the machine whose debug key signed the installed APK.
 
 **Android app.** The same crate builds an APK. You need the Android SDK (platform-tools, a platform, build-tools, the NDK) and JDK 17 or newer, the Rust Android targets (`rustup target add x86_64-linux-android aarch64-linux-android`), and these set:
 
@@ -154,6 +156,7 @@ All settings are environment variables.
 | `ORPHUSBOT_SETUP_TOKEN` | required | Signs you in for one hour to add your first passkey. Works only while no passkey exists |
 | `ORPHUSBOT_ORIGIN` | `http://localhost:7480` | The address browsers use. Passkeys are tied to its host name, so it can't be an IP address. An `https` origin also marks cookies `Secure` |
 | `ORPHUSBOT_UI_DIR` | `crates/ui/dist` | The built web UI, served at `/` |
+| `ORPHUSBOT_APP_DIR` | `~/.local/share/orphusbot/app` | Published app builds (`latest.json`, `orphusbot.apk`), served publicly at `/app` (DESIGN §12.3) |
 | `ORPHUSBOT_LAYA_URL` | none | The System 1 model's `/v1/systemone` server (kev or laya-serve), such as `http://127.0.0.1:8009`. Without it System 1 abstains: the inbox keeps its messages and every non-read tool call asks |
 | `ORPHUSBOT_LAYA_TIMEOUT_MS` | `1500` | How long to wait for System 1 before abstaining |
 | `ORPHUSBOT_ROUTE_THRESHOLD` | `0.85` | Confidence Laya needs to move an inbox message to another bot |

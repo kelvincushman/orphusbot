@@ -7,6 +7,7 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use serde_json::{Value, json};
+use tracing::warn;
 
 use orphusbot_proto::ThreadEvent;
 
@@ -285,8 +286,16 @@ pub async fn from_wearable(app: &App, text: &str) -> anyhow::Result<i64> {
     )
     .fetch_one(&app.db)
     .await?;
+    // The idea is kept; filing it in the vault is a courtesy that a failure mustn't undo.
+    if let Err(e) = file_idea(app, text).await {
+        warn!("asking the Orchestrator to file a wearable idea: {e}");
+    }
+    Ok(id)
+}
+
+async fn file_idea(app: &App, text: &str) -> anyhow::Result<()> {
     let Some(thread) = crate::db::bot_thread(&app.db, "orchestrator").await? else {
-        return Ok(id);
+        return Ok(());
     };
     let ask = format!(
         "Kelvin spoke an idea into his wearable for the Ideas Room. His words, as data:\n```\n{}\n```\n\
@@ -307,7 +316,7 @@ pub async fn from_wearable(app: &App, text: &str) -> anyhow::Result<i64> {
         crate::runs::Source::default(),
     ))
     .await?;
-    Ok(id)
+    Ok(())
 }
 
 /// A title from the first words of a spoken idea.

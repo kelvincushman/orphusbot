@@ -29,13 +29,16 @@ class _WearableScreenState extends State<WearableScreen> {
     _load();
   }
 
-  Future<void> _load() => _act(() async {
+  Future<void> _load() => _act(_fetch);
+
+  Future<void> _fetch() async {
     final got = await Future.wait([
       widget.api.get('/api/devices'),
       widget.api.get('/api/captures'),
     ]);
     final d = got[0] as Map<String, dynamic>,
         c = got[1] as Map<String, dynamic>;
+    if (!mounted) return;
     setState(() {
       devices = d['devices'] as List? ?? [];
       signals = d['messages'] as List? ?? [];
@@ -43,7 +46,7 @@ class _WearableScreenState extends State<WearableScreen> {
       listeningAllowed = c['allowed'] != false;
       loaded = true;
     });
-  });
+  }
 
   Future<void> _act(Future<void> Function() action) async {
     try {
@@ -56,7 +59,7 @@ class _WearableScreenState extends State<WearableScreen> {
 
   Future<void> _post(String path, Map<String, Object?> body) => _act(() async {
     await widget.api.post(path, body);
-    await _load();
+    await _fetch();
   });
 
   @override
@@ -125,6 +128,7 @@ class _WearableScreenState extends State<WearableScreen> {
                       '/api/devices/pairing-code',
                       {},
                     );
+                    if (!mounted) return;
                     setState(() => pairing = r['code'] as String?);
                   }),
                   icon: const Icon(Icons.add),

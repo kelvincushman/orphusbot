@@ -322,6 +322,20 @@ pub async fn text(
         };
         return Json(json!({ "ok": true, "chatId": chat_id, "filed": filed })).into_response();
     }
+    // Where it goes is read before the press is used up, so a failed lookup can be resent.
+    let to_room = match sqlx::query_scalar!(
+        r#"select captures_to = 'room' as "room!" from device where id = $1"#,
+        device
+    )
+    .fetch_one(&app.db)
+    .await
+    {
+        Ok(room) => room,
+        Err(e) => {
+            warn!("reading where captures go: {e}");
+            return error(StatusCode::INTERNAL_SERVER_ERROR, "server error");
+        }
+    };
     lock(&app.devices.intent).remove(&device);
     // A tap on a question opened the mic: this is its answer, if the question is still open.
     let answering = lock(&app.devices.answering).remove(&device);
@@ -343,15 +357,6 @@ pub async fn text(
                 .into_response();
         }
     }
-    let to_room = sqlx::query_scalar!(
-        "select captures_to = 'room' from device where id = $1",
-        device
-    )
-    .fetch_one(&app.db)
-    .await
-    .ok()
-    .flatten()
-    .unwrap_or(false);
     if to_room {
         return match crate::room::from_wearable(&app, &text).await {
             Ok(id) => {

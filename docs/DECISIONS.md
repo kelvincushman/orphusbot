@@ -11,6 +11,14 @@ Format:
 
 ---
 
+## D-051: Bots ask the owner to install a skill, every time (2026-10-22)
+
+**Decided:** Bots get an `install_skill` tool that carries the whole SKILL.md. The gate always asks the owner, whatever the approval rules say, and the card shows the full text without an "always allow" button. Only on Allow does the bridge write it into the node's user skills folder.
+
+**Why:** A skill is read by every bot on every run, so it changes their behaviour across the team. It can't come from a bot unseen, but the owner wanted a way for bots to propose them instead of the dead end of a read-only folder. Sending the text in the call means the owner approves exactly what gets written, not a path that could change afterwards.
+
+---
+
 ## D-050: The Ideas Room keeps the Orchestrator as the brain, with box speech recognition and ElevenLabs (2026-10-22)
 
 **Decided:** The voice room sends speech to the box's qwen-stt, gives the text to the Orchestrator as a room message, and speaks the reply with ElevenLabs. A realtime speech-to-speech model (Grok Voice Agent) was not used as the brain.

@@ -209,7 +209,10 @@ pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Re
         _ => {}
     }
 
-    let rule = if phone_commit {
+    // Installing a skill changes what every bot is told, so the owner sees and
+    // approves each one; no "always" rule waves it through (D-051).
+    let always_ask = phone_commit || call.tool == "install_skill";
+    let rule = if always_ask {
         None
     } else {
         sqlx::query_scalar!(
@@ -566,6 +569,22 @@ mod tests {
                 .unwrap(),
             Verdict::Ask { uncertain: false }
         );
+    }
+
+    #[sqlx::test]
+    async fn installing_a_skill_always_asks_whatever_the_rules(db: PgPool) {
+        let (_, a) = run_with_attempts(&db).await;
+        sqlx::query!("insert into approval_rule (tool, effect) values ('install_skill', 'allow')")
+            .execute(&db)
+            .await
+            .unwrap();
+        let skill = json!({"name": "notes", "skill": "---\nname: notes\ndescription: x\n---\n"});
+        assert!(matches!(
+            decide(&db, &call(a, "s1", "install_skill", &skill))
+                .await
+                .unwrap(),
+            Verdict::Ask { .. }
+        ));
     }
 
     #[sqlx::test]

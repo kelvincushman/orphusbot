@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into approval_rule (tool, effect) values ('install_skill', 'allow')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "457338113c0f4e70b17431c2910cf0fcee32ff4d1a8df22509a3921434e2addb"
+}

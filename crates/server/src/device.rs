@@ -259,6 +259,9 @@ pub async fn event(
         Ok(d) => d,
         Err((status, why)) => return error(status, why),
     };
+    if ev.kind == "button" {
+        info!(%device, code = ev.code.as_deref().unwrap_or(""), "badge button");
+    }
     match (ev.kind.as_str(), ev.code.as_deref()) {
         ("heartbeat", _) => return Json(json!({ "ok": true, "at": ev.at })).into_response(),
         ("button", Some("AGENT_REQUEST" | "NOTE" | "REPLY")) => {
@@ -350,6 +353,7 @@ pub async fn text(
                 "ignored"
             }
         };
+        info!(%device, filed, overheard = body.overheard, pressed, chars = text.chars().count(), "badge text");
         return Json(json!({ "ok": true, "chatId": chat_id, "filed": filed })).into_response();
     }
     // Where it goes is read before the press is used up, so a failed lookup can be resent.
@@ -366,6 +370,7 @@ pub async fn text(
             return error(StatusCode::INTERNAL_SERVER_ERROR, "server error");
         }
     };
+    info!(%device, to_room, chars = text.chars().count(), "badge text: deliberate");
     lock(&app.devices.intent).remove(&device);
     // A tap on a question opened the mic: this is its answer, if the question is still open.
     let answering = lock(&app.devices.answering).remove(&device);

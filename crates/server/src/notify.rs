@@ -176,6 +176,13 @@ pub async fn register(
             "A push endpoint must be an https address",
         ));
     }
+    let hosts = std::env::var("ORPHUSBOT_PUSH_HOSTS").unwrap_or_default();
+    if !push_host_allowed(url, &hosts) {
+        return Err((
+            axum::http::StatusCode::UNPROCESSABLE_ENTITY,
+            "Pushes must go through your own ntfy server. In the ntfy app, set Settings, Default server to your push address, then open OrphusBot again",
+        ));
+    }
     sqlx::query!(
         "insert into push_endpoint (url) values ($1) on conflict do nothing",
         url
@@ -184,6 +191,23 @@ pub async fn register(
     .await
     .map_err(|e| crate::internal("saving the push endpoint", e))?;
     Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
+/// Whether an endpoint is on one of the owner's push servers
+/// (`ORPHUSBOT_PUSH_HOSTS`, comma-separated host names). Unset allows any
+/// https host; set, a phone whose ntfy app still points at a public server
+/// (ntfy.sh) is refused, so pushes never pass through someone else's server.
+fn push_host_allowed(url: &str, hosts: &str) -> bool {
+    let allowed: Vec<&str> = hosts
+        .split(',')
+        .map(str::trim)
+        .filter(|h| !h.is_empty())
+        .collect();
+    allowed.is_empty()
+        || reqwest::Url::parse(url)
+            .ok()
+            .and_then(|u| u.host_str().map(str::to_ascii_lowercase))
+            .is_some_and(|h| allowed.iter().any(|a| a.eq_ignore_ascii_case(&h)))
 }
 
 /// The app stops pushes to this phone (signing out, or the distributor dropped it).
@@ -204,6 +228,26 @@ pub async fn unregister(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pushes_only_go_through_the_owners_servers_when_set() {
+        let mine = "push.example.com";
+        assert!(push_host_allowed(
+            "https://push.example.com/upAbC?up=1",
+            mine
+        ));
+        assert!(push_host_allowed("https://PUSH.example.com/up1", mine));
+        assert!(!push_host_allowed("https://ntfy.sh/upAbC?up=1", mine));
+        assert!(!push_host_allowed(
+            "https://push.example.com.evil.io/up",
+            mine
+        ));
+        assert!(push_host_allowed("https://ntfy.sh/upAbC", ""));
+        assert!(push_host_allowed(
+            "https://b.example/x",
+            " a.example , b.example "
+        ));
+    }
     use axum::http::HeaderMap;
     use std::sync::{Arc, Mutex};
 

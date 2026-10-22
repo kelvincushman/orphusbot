@@ -458,8 +458,7 @@ fn take_token(app: &App, device: &str) -> bool {
     true
 }
 
-/// The wearer's spoken task becomes a ticket; System 1 decides whether to start
-/// it, otherwise the wrist asks "should I start?".
+/// The wearer's spoken task becomes a ticket, routed by System 1 and started.
 async fn wearable_task(app: &App, device: &str, text: &str) -> anyhow::Result<()> {
     let title: String = text.chars().take(80).collect();
     let id = sqlx::query_scalar!(
@@ -489,13 +488,19 @@ async fn wearable_task(app: &App, device: &str, text: &str) -> anyhow::Result<()
         .execute(&app.db)
         .await?;
     }
-    let subject = format!("ticket:{id}");
-    if triage.act_now && triage.bot.is_some() {
-        if tickets::start(app, id).await.is_err() {
-            ask(app, device, "awaiting_input", &subject, "start").await?;
-        }
-    } else {
-        ask(app, device, "awaiting_input", &subject, "start").await?;
+    // The press was the owner's go-ahead (D-056), so the bot starts now; the
+    // gate still asks about anything irreversible. If it can't start (its bot
+    // is busy, say), the wrist asks "should I start?" instead.
+    if let Err(e) = tickets::start(app, id).await {
+        warn!("starting a wearable ticket: {e:?}");
+        ask(
+            app,
+            device,
+            "awaiting_input",
+            &format!("ticket:{id}"),
+            "start",
+        )
+        .await?;
     }
     Ok(())
 }
@@ -956,6 +961,10 @@ mod tests {
         let (_, r) = device(&app, "/api/device/text", me, None, say("book the dentist")).await;
         assert_eq!(r["filed"], "duplicate");
 
+        // The press started that one, so its bot is busy: the next asks "should I start?".
+        device(&app, "/api/device/event", me, None, press("CAPTURE_TOGGLE")).await;
+        let (_, r) = device(&app, "/api/device/text", me, None, say("order a sander")).await;
+        assert_eq!(r["filed"], "task");
         // With "should I start?" on the wearable, a tap answers it and opens nothing.
         device(&app, "/api/device/event", me, None, press("CAPTURE_TOGGLE")).await;
         let answered: Option<String> =
@@ -1038,47 +1047,28 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn button_tasks_ask_one_at_a_time(db: PgPool) {
+    async fn a_press_starts_the_task_and_a_busy_bot_asks(db: PgPool) {
         let app = app(db.clone());
         let token = paired(&app, &db).await;
         let me = ("wrist-1", token.as_str());
         let say = |text: &'static str| json!({ "text": text, "overheard": false });
+        let press = |code: &'static str| json!({ "kind": "button", "code": code });
 
         // No button press first: it's ambient, and not kept.
         let (_, r) = device(&app, "/api/device/text", me, None, say("buy milk")).await;
         assert_eq!(r["filed"], "ignored");
 
-        for task in ["compare e-bike batteries", "book the dentist"] {
-            device(
-                &app,
-                "/api/device/event",
-                me,
-                None,
-                json!({ "kind": "button", "code": "AGENT_REQUEST" }),
-            )
-            .await;
-            let (_, r) = device(&app, "/api/device/text", me, None, say(task)).await;
-            assert_eq!(r["filed"], "task");
-        }
-        // Both became tickets; only the first ask is on the wrist.
-        let states: Vec<String> =
-            sqlx::query_scalar!("select state from habitat_message order by id")
-                .fetch_all(&db)
-                .await
-                .unwrap();
-        assert_eq!(states, ["sent", "queued"]);
-        let (_, poll) = device(&app, "/api/device/command/poll", me, None, json!({})).await;
-        assert_eq!(cues(&poll), ["awaiting_input"]);
-
-        // Tap: start the first ticket. Its run carries the device; the second ask goes out.
-        device(
+        // A press is the go-ahead: the ticket starts, its run carries the device.
+        device(&app, "/api/device/event", me, None, press("AGENT_REQUEST")).await;
+        let (_, r) = device(
             &app,
-            "/api/device/event",
+            "/api/device/text",
             me,
             None,
-            json!({ "kind": "button", "code": "SINGLE" }),
+            say("compare e-bike batteries"),
         )
         .await;
+        assert_eq!(r["filed"], "task");
         let run_device: Option<String> = sqlx::query_scalar!("select device_id from run")
             .fetch_one(&db)
             .await
@@ -1087,42 +1077,29 @@ mod tests {
         let (_, poll) = device(&app, "/api/device/command/poll", me, None, json!({})).await;
         let got = cues(&poll);
         assert!(
-            got.contains(&"ack".to_owned()) && got.contains(&"awaiting_input".to_owned()),
-            "{got:?}"
+            got.contains(&"led_pattern".to_owned()),
+            "task_queued: {got:?}"
         );
         assert!(
-            got.contains(&"led_pattern".to_owned()),
-            "task_queued for the started run: {got:?}"
+            !got.contains(&"awaiting_input".to_owned()),
+            "no start ask: {got:?}"
         );
 
-        // Double tap: the second stays a ticket.
-        device(
-            &app,
-            "/api/device/event",
-            me,
-            None,
-            json!({ "kind": "button", "code": "DOUBLE" }),
-        )
-        .await;
-        let outcomes: Vec<(String, Option<String>)> = sqlx::query!(
-            "select state, outcome from habitat_message where kind = 'ask' order by id"
-        )
-        .fetch_all(&db)
-        .await
-        .unwrap()
-        .into_iter()
-        .map(|r| (r.state, r.outcome))
-        .collect();
-        assert_eq!(
-            outcomes,
-            [
-                ("answered".to_owned(), Some("started".to_owned())),
-                (
-                    "dismissed".to_owned(),
-                    Some("not started; it stays a ticket".to_owned())
-                ),
-            ]
-        );
+        // The bot is busy, so the next one can't start: the wrist asks instead.
+        device(&app, "/api/device/event", me, None, press("AGENT_REQUEST")).await;
+        let (_, r) = device(&app, "/api/device/text", me, None, say("book the dentist")).await;
+        assert_eq!(r["filed"], "task");
+        let (_, poll) = device(&app, "/api/device/command/poll", me, None, json!({})).await;
+        assert_eq!(cues(&poll), ["awaiting_input"]);
+
+        // Double tap: it stays a ticket.
+        device(&app, "/api/device/event", me, None, press("DOUBLE")).await;
+        let outcome: Option<String> =
+            sqlx::query_scalar!("select outcome from habitat_message where kind = 'ask'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(outcome.as_deref(), Some("not started; it stays a ticket"));
         let statuses: Vec<String> =
             sqlx::query_scalar!(r#"select status::text as "s!" from ticket order by id"#)
                 .fetch_all(&db)

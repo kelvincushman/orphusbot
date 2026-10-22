@@ -1565,6 +1565,8 @@ async fn run_ended(
 ) {
     expire_dialogs(app, run).await;
     tickets::run_ended(&app.db, run, outcome).await;
+    // Boxed: starting the next ticket can lead back here when its run ends.
+    Box::pin(device::start_waiting(app, &thread.bot)).await;
     team::answered(app, run, outcome, error.as_deref()).await;
     let news = match outcome {
         RunOutcome::Completed => device::RunNews::Done,

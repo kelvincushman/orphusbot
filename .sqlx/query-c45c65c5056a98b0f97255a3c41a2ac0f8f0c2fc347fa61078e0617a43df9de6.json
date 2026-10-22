@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select t.id from ticket t join bot b on b.id = t.bot_id\n         where b.slug = $1 and t.status = 'todo' and t.device_id is not null\n           and t.created_at > now() - interval '1 day'\n           and not exists (select 1 from habitat_message m where m.kind = 'ask' and m.subject = 'ticket:' || t.id\n                           and m.state in ('queued', 'sent', 'delivered', 'dismissed'))\n         order by t.id limit 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ticket",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c45c65c5056a98b0f97255a3c41a2ac0f8f0c2fc347fa61078e0617a43df9de6"
+}

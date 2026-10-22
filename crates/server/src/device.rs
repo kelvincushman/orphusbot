@@ -489,20 +489,50 @@ async fn wearable_task(app: &App, device: &str, text: &str) -> anyhow::Result<()
         .await?;
     }
     // The press was the owner's go-ahead (D-056), so the bot starts now; the
-    // gate still asks about anything irreversible. If it can't start (its bot
-    // is busy, say), the wrist asks "should I start?" instead.
-    if let Err(e) = tickets::start(app, id).await {
-        warn!("starting a wearable ticket: {e:?}");
-        ask(
-            app,
-            device,
-            "awaiting_input",
-            &format!("ticket:{id}"),
-            "start",
-        )
-        .await?;
+    // gate still asks about anything irreversible. A busy bot takes it next
+    // (`start_waiting`); anything else that stops it, the wrist asks.
+    match tickets::start(app, id).await {
+        Ok(()) => {}
+        Err((_, tickets::BUSY)) => {
+            inform(app, device, "task_queued", &format!("ticket:{id}")).await?
+        }
+        Err(e) => {
+            warn!("starting a wearable ticket: {e:?}");
+            ask(
+                app,
+                device,
+                "awaiting_input",
+                &format!("ticket:{id}"),
+                "start",
+            )
+            .await?;
+        }
     }
     Ok(())
+}
+
+/// When `bot` finishes a run, starts the oldest wearable capture that was
+/// waiting for it (D-056), unless the owner said no to it or is still being asked.
+pub async fn start_waiting(app: &App, bot: &str) {
+    let next = sqlx::query_scalar!(
+        "select t.id from ticket t join bot b on b.id = t.bot_id
+         where b.slug = $1 and t.status = 'todo' and t.device_id is not null
+           and t.created_at > now() - interval '1 day'
+           and not exists (select 1 from habitat_message m where m.kind = 'ask' and m.subject = 'ticket:' || t.id
+                           and m.state in ('queued', 'sent', 'delivered', 'dismissed'))
+         order by t.id limit 1",
+        bot
+    )
+    .fetch_optional(&app.db)
+    .await;
+    match next {
+        Ok(Some(id)) => match tickets::start(app, id).await {
+            Ok(()) | Err((_, tickets::BUSY)) => {}
+            Err(e) => warn!("starting a waiting wearable ticket: {e:?}"),
+        },
+        Ok(None) => {}
+        Err(e) => warn!("finding a waiting wearable ticket: {e}"),
+    }
 }
 
 /// `POST /api/device/command/poll`: the commands waiting for this wrist.
@@ -808,29 +838,61 @@ pub async fn dialog_settled(app: &App, dialog: &str) {
     }
 }
 
+/// What an unanswered ask was about, and the bot a tap on its push opens.
+async fn expired_push(app: &App, subject: &str) -> (String, Option<String>) {
+    let unanswered = "It wasn't answered on the wearable.".to_owned();
+    match subject.split_once(':') {
+        Some(("ticket", id)) => {
+            let ticket = match id.parse() {
+                Ok(id) => tickets::get(&app.db, id).await.ok().flatten(),
+                Err(_) => None,
+            };
+            match ticket {
+                Some(t) => {
+                    let name = match &t.bot {
+                        Some(slug) => crate::bot_name(app, slug).await,
+                        None => "a bot".to_owned(),
+                    };
+                    (
+                        format!("“{}” is waiting to start. Ask {name} in its chat.", t.title),
+                        t.bot,
+                    )
+                }
+                None => (unanswered, None),
+            }
+        }
+        Some(("dialog", id)) => {
+            let bot = lock(&app.rt).dialogs.get(id).map(|p| p.thread.bot.clone());
+            ("It's waiting for you in the bot's chat.".to_owned(), bot)
+        }
+        _ => (unanswered, None),
+    }
+}
+
 /// Expires asks nobody answered, so the wrist never nags forever (§9.3.4).
 pub async fn expire_forever(app: Shared) {
     let mut tick = tokio::time::interval(Duration::from_secs(15));
     loop {
         tick.tick().await;
-        let expired = sqlx::query_scalar!(
+        let expired = sqlx::query!(
             "update habitat_message set state = 'expired', closed_at = now(), outcome = 'not answered; on the phone'
              where kind = 'ask' and state in ('sent', 'delivered') and sent_at + escalate_after < now()
-             returning device_id"
+             returning device_id, subject"
         )
         .fetch_all(&app.db)
         .await;
         match expired {
-            Ok(devices) => {
-                for device in devices {
+            Ok(rows) => {
+                for row in rows {
+                    let (body, bot) = expired_push(&app, &row.subject).await;
                     app.notifier.send(crate::notify::Push {
                         title: "Your wearable asked something".into(),
-                        body: "It wasn't answered on the wrist, so it's waiting in OrphusBot."
-                            .into(),
+                        body,
                         priority: 4,
                         tags: "watch",
-                        bot: None,
+                        bot: bot.as_deref(),
                     });
+                    let device = row.device_id;
                     enqueue(&app, &device, None, "ack");
                     if let Err(e) = send_next_ask(&app, &device).await {
                         warn!("sending the next ask: {e}");
@@ -961,11 +1023,14 @@ mod tests {
         let (_, r) = device(&app, "/api/device/text", me, None, say("book the dentist")).await;
         assert_eq!(r["filed"], "duplicate");
 
-        // The press started that one, so its bot is busy: the next asks "should I start?".
-        device(&app, "/api/device/event", me, None, press("CAPTURE_TOGGLE")).await;
-        let (_, r) = device(&app, "/api/device/text", me, None, say("order a sander")).await;
-        assert_eq!(r["filed"], "task");
-        // With "should I start?" on the wearable, a tap answers it and opens nothing.
+        // With a question on the wearable, a tap answers it and opens nothing.
+        sqlx::query!(
+            "insert into habitat_message (device_id, kind, cue, subject, tap, state)
+             values ('wrist-1', 'ask', 'awaiting_input', 'ticket:1', 'start', 'sent')"
+        )
+        .execute(&db)
+        .await
+        .unwrap();
         device(&app, "/api/device/event", me, None, press("CAPTURE_TOGGLE")).await;
         let answered: Option<String> =
             sqlx::query_scalar!("select outcome from habitat_message where kind = 'ask'")
@@ -1047,7 +1112,7 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn a_press_starts_the_task_and_a_busy_bot_asks(db: PgPool) {
+    async fn a_press_starts_the_task_and_a_busy_bot_takes_it_next(db: PgPool) {
         let app = app(db.clone());
         let token = paired(&app, &db).await;
         let me = ("wrist-1", token.as_str());
@@ -1085,26 +1150,46 @@ mod tests {
             "no start ask: {got:?}"
         );
 
-        // The bot is busy, so the next one can't start: the wrist asks instead.
+        // The bot is busy, so the next one waits, with no question anywhere.
         device(&app, "/api/device/event", me, None, press("AGENT_REQUEST")).await;
         let (_, r) = device(&app, "/api/device/text", me, None, say("book the dentist")).await;
         assert_eq!(r["filed"], "task");
         let (_, poll) = device(&app, "/api/device/command/poll", me, None, json!({})).await;
-        assert_eq!(cues(&poll), ["awaiting_input"]);
+        let got = cues(&poll);
+        assert!(
+            !got.contains(&"awaiting_input".to_owned()),
+            "no start ask: {got:?}"
+        );
+        let asks = sqlx::query_scalar!(
+            r#"select count(*) as "n!" from habitat_message where kind = 'ask'"#
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(asks, 0);
 
-        // Double tap: it stays a ticket.
-        device(&app, "/api/device/event", me, None, press("DOUBLE")).await;
-        let outcome: Option<String> =
-            sqlx::query_scalar!("select outcome from habitat_message where kind = 'ask'")
-                .fetch_one(&db)
-                .await
-                .unwrap();
-        assert_eq!(outcome.as_deref(), Some("not started; it stays a ticket"));
+        // When the bot finishes, the waiting one starts by itself.
+        sqlx::query!("update run set status = 'completed'")
+            .execute(&db)
+            .await
+            .unwrap();
+        start_waiting(&app, "inbox").await;
         let statuses: Vec<String> =
             sqlx::query_scalar!(r#"select status::text as "s!" from ticket order by id"#)
                 .fetch_all(&db)
                 .await
                 .unwrap();
-        assert_eq!(statuses, ["doing", "todo"]);
+        assert_eq!(statuses, ["doing", "doing"]);
+        let runs =
+            sqlx::query_scalar!(r#"select count(*) as "n!" from run where device_id = 'wrist-1'"#)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(runs, 2);
+
+        // An unanswered question about a ticket says what it was and opens its bot.
+        let (body, bot) = expired_push(&app, "ticket:2").await;
+        assert!(body.contains("book the dentist"), "{body}");
+        assert_eq!(bot.as_deref(), Some("inbox"));
     }
 }

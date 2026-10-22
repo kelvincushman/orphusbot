@@ -13,7 +13,7 @@ Format:
 
 ## D-056: A wearable press starts the task (2026-10-22)
 
-**Decided:** A deliberate capture (a press, then words) becomes a ticket that System 1 routes to a bot and that starts at once. The wrist asks "should I start?" only when the ticket can't start, such as when its bot is busy. Act-now from triage still decides tickets made elsewhere.
+**Decided:** A deliberate capture (a press, then words) becomes a ticket that System 1 routes to a bot and that starts at once. Nothing asks "should I start?": if its bot is busy, the ticket waits and starts when the bot finishes its run. Act-now from triage still decides tickets made elsewhere.
 
 **Why:** The owner only presses the button when he wants something done, so a second "should I start?" was a step he had to answer for every capture; left alone, it expired to the phone after 10 minutes and the work waited. Safety doesn't rest on that question: the gate still asks the owner before any irreversible tool call (rule 5). **Alternatives:** keep the ask unless triage says act-now (the old behaviour, which held back even "tell me my schedule"). **Revisit if:** captures are often misheard or routed wrong, so work starts that he didn't mean.
 

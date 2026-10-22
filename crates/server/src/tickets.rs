@@ -78,7 +78,7 @@ impl Ticket {
     }
 }
 
-async fn get(db: &PgPool, id: i64) -> sqlx::Result<Option<Ticket>> {
+pub(crate) async fn get(db: &PgPool, id: i64) -> sqlx::Result<Option<Ticket>> {
     sqlx::query_as!(
         Ticket,
         r#"select t.id, t.title, t.body, t.status::text as "status!", t.urgency, b.slug as "bot?", t.act_now
@@ -213,6 +213,9 @@ pub async fn start_now(
     Ok(StatusCode::ACCEPTED)
 }
 
+/// Why [start] refused: the bot already has a run.
+pub(crate) const BUSY: &str = "That bot is busy; start the ticket when it's free";
+
 /// Hands the ticket to its bot (B-TKT-01).
 pub(crate) async fn start(app: &App, id: i64) -> Result<(), ApiError> {
     let ticket = get(&app.db, id)
@@ -231,10 +234,7 @@ pub(crate) async fn start(app: &App, id: i64) -> Result<(), ApiError> {
         .await
         .map_err(|e| internal("checking the bot", e))?
     {
-        return Err((
-            StatusCode::CONFLICT,
-            "That bot is busy; start the ticket when it's free",
-        ));
+        return Err((StatusCode::CONFLICT, BUSY));
     }
     let doing = Ticket {
         status: "doing".into(),

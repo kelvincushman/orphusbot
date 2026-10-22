@@ -7,7 +7,18 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       tigervnc-standalone-server openbox chromium socat xdotool x11-utils websockify \
       fonts-dejavu-core ca-certificates curl git python3 \
+      libegl1 libgles2 libwayland-client0 libwayland-egl1 libxkbcommon0 \
  && rm -rf /var/lib/apt/lists/*
+
+# The Rive CLI (rive.app/docs/cli), for bots that build animations: it turns a
+# scene.rml into a .riv with no account. Installed at build time, since bots'
+# computers are offline; the installer checks the download's SHA-256.
+ARG RIVE_VERSION=1.7.0
+RUN curl -fsSL https://releases.rive.app/cli/install.sh -o /tmp/rive-install.sh \
+ && RIVE_VERSION=$RIVE_VERSION RIVE_HOME=/opt/rive RIVE_INSTALL_DIR=/usr/local/bin \
+      bash /tmp/rive-install.sh \
+ && rm /tmp/rive-install.sh \
+ && rive --version
 
 COPY start-screen /usr/local/bin/start-screen
 ENV DISPLAY=:1 HOME=/home/bot

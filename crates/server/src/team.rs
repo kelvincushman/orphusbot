@@ -2,7 +2,8 @@
 //! bridge's `ask_bot` tool: the server makes it a ticket for that bot and starts
 //! it, and when that run ends the answer goes back to the asker as a new message,
 //! so it carries on. Every action either bot takes still goes through the gate.
-//! Hand-offs stop three deep, and a bot can't ask itself.
+//! Hand-offs stop three deep, a bot can't ask itself, and a job a teammate
+//! asked for can't be handed back to them.
 
 use std::collections::HashMap;
 
@@ -59,6 +60,22 @@ async fn handoff(app: &App, run: i64, asker: &str, request: &Value) -> Result<St
     .map_err(|e| format!("couldn't read this run: {e}"))?;
     if depth >= MAX_DEPTH {
         return Err("this is already three hand-offs deep; finish it yourself".into());
+    }
+    // A job a teammate asked for doesn't go back to them: that's how two bots
+    // each thinking the other owned a job passed it to and fro (D-049).
+    let asked_by = sqlx::query_scalar!(
+        r#"select b.slug from run r join ticket t on t.id = r.ticket_id join bot b on b.id = t.asked_by where r.id = $1"#,
+        run
+    )
+    .fetch_optional(&app.db)
+    .await
+    .map_err(|e| format!("couldn't read this run: {e}"))?;
+    if asked_by.as_deref() == Some(to.as_str()) {
+        return Err(format!(
+            "{to} asked you for this, so don't hand it back. Finish your turn with your answer, \
+             or say plainly that you can't do it and why (for example, a tool you don't have); \
+             that goes back to {to} by itself"
+        ));
     }
     let title: String = task
         .lines()
@@ -345,6 +362,23 @@ mod tests {
         assert!(
             deep.starts_with("error:this is already three hand-offs deep"),
             "{deep}"
+        );
+
+        // Not deep, but the researcher asked for this: the coder can't hand it back.
+        sqlx::query!("update ticket set ask_depth = 1 where id = $1", t.id)
+            .execute(&db)
+            .await
+            .unwrap();
+        let bounce = ask(
+            &app,
+            coder_run,
+            "coder",
+            &json!({ "bot": "researcher", "task": "Can you do it instead?" }),
+        )
+        .await;
+        assert!(
+            bounce.starts_with("error:researcher asked you for this"),
+            "{bounce}"
         );
     }
 

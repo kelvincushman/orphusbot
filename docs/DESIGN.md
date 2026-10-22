@@ -484,6 +484,8 @@ Every transition is an event on the wearable thread, so the Wearable view in the
 
 #### 9.3.5 Button → agent (the uplink task path)
 
+Button codes from the app: older firmware sends `AGENT_REQUEST` (or `NOTE`, `REPLY`) for a capture and `SINGLE` / `DOUBLE` for yes and no. Newer firmware with always-on capture sends `CAPTURE_TOGGLE` for a tap and `CANCEL` for a double tap. On the server a `CAPTURE_TOGGLE` answers the ask on the badge if there is one, and otherwise opens a press, so the next transcript is deliberate (push-to-talk). A `CANCEL` says no to the ask, or else drops the open press. `LINK_RECOVER` and the `POWER_OFF_*` codes are accepted and left to the firmware.
+
 1. **Tap in IDLE** → capture opens (white, steady, non-suppressible) → the wearer speaks → **tap** → the app files it. The transcript arrives at `/api/device/text` with `overheard = false` and a capture id.
 2. The server runs `intake(source = wearable, …)`. There is no gesture for "which bot": intent comes from the words.
 3. Triage decides. If it says act now (and the work is reversible, §19 D6), the run starts and the wrist gets `task_queued`. If not, the wrist gets a "should I start?" ask (§9.3.3).

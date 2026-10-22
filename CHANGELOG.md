@@ -8,6 +8,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- The badge's taps now reach your bots with the current firmware. A tap asks a task (or answers the question on the badge) and a double tap says no or cancels. Before, the server rejected these presses, so spoken tasks were treated as background speech and dropped.
 - The wearable is called a badge in the app and web page: it's worn as a pin badge, not on the wrist.
 - **Wearable** page in the app's menu: your paired wearables and when each was last seen, pairing a new one, hands-free listening, what it overheard (accept, dismiss or undo), and the signals sent to the badge. Each wearable has a switch for where its button captures go: the **Inbox** as a task, or the **Ideas Room** as an idea it remembers, which the Orchestrator files in your vault under `wiki/ideas`.
 - **Shared vault:** the bots' team folder is now also your Obsidian vault, synced over WebDAV at `/vault/` (Remotely Save plugin) on the laptop and phone. New settings `ORPHUSBOT_VAULT_DIR`, `ORPHUSBOT_VAULT_PASSWORD`.

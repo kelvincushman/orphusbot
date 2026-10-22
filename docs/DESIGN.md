@@ -751,6 +751,7 @@ The key is `ORPHUSBOT_KIE_KEY` in `~/.config/orphusbot/keys.env` (`deploy/keys.e
 - **Menu:** OrphusBot and the server's host, then Schedules, Social, Gallery and Discussions, then the bots with their faces, status and needs-you badges; a search pill and the settings button float at its foot.
 - **Messages:** the owner's in grey bubbles on the right; a bot's replies as plain full-width text with copy and save underneath. Files, approvals and questions keep their cards.
 - **Empty chat:** the bot's robot in the middle (it can still be poked) and quick starters above the composer.
+- **Logo and intro (M14.6):** the app's logo is the owner's pick from Media Creator's concepts, built in Rive (`design/app-logo`). At launch the app shows `assets/brand/intro.riv` on black (status and navigation bars too) for at least 1.9 s while the session loads: the head pops in, the eyes blink on, the coil springs up and the cyan light pulses. Android's own launch screen is black with the adaptive icon (black background layer, logo foreground), so it runs into the intro; the Mac and Linux icons come from the same artwork.
 - **Composer:** one rounded card: the text field ("Ask <bot> anything"; Enter sends), then an attach circle, the model pill, and a round send arrow that becomes **Stop** while the bot works and nothing is typed.
 
 ### 12.2 The Gallery

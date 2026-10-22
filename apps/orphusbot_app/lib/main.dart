@@ -9,6 +9,7 @@ import 'package:rive/rive.dart' show RiveNative;
 
 import 'api.dart';
 import 'chat.dart';
+import 'intro.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +27,8 @@ class OrphusBotApp extends StatefulWidget {
 class _OrphusBotAppState extends State<OrphusBotApp> {
   Api? api;
   bool loading = true;
+  // The intro plays once at launch, at least [introLength], while the session loads.
+  bool intro = true;
 
   @override
   void initState() {
@@ -36,6 +39,9 @@ class _OrphusBotAppState extends State<OrphusBotApp> {
         loading = false;
       }),
     );
+    Future<void>.delayed(introLength, () {
+      if (mounted) setState(() => intro = false);
+    });
   }
 
   Future<void> signedOut() async {
@@ -49,8 +55,8 @@ class _OrphusBotAppState extends State<OrphusBotApp> {
       title: 'OrphusBot',
       theme: appTheme(Brightness.light),
       darkTheme: appTheme(Brightness.dark),
-      home: loading
-          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
+      home: intro || loading
+          ? const Scaffold(backgroundColor: Colors.black, body: Intro())
           : api == null
           ? SignIn(onSignedIn: (a) => setState(() => api = a))
           : ChatScreen(api: api!, onSignedOut: signedOut),

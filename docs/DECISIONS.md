@@ -11,6 +11,14 @@ Format:
 
 ---
 
+## D-047: One Flutter app on every device, kept on one build by the server (2026-10-22)
+
+**Decided:** Linux, Android and macOS all run the Flutter app, the Mac included (its setup script no longer builds the Tauri wrapper). Builds are stamped with their commit; the laptop publishes the Android build and `latest.json` to the server, which serves them at `/app`, and an older copy shows an update banner (one tap on Android).
+
+**Why:** The owner wants the phone, Omarchy and the Mac to show the same thing. Data already lives on the server, so what can differ is the build and which client it is. A public folder of builds needs no app store, works over the Cloudflare address, and holds nothing secret. Building on one machine keeps one signing key until a release keystore is made.
+
+---
+
 ## D-046: Media generation runs on the host with the node's key, for bots allowed it (2026-10-21)
 
 **Decided:** kie.ai calls go through a `media` tool in the bridge, on the host, with `ORPHUSBOT_KIE_KEY` from a separate `keys.env`. The node passes the key only to engines of bots with **Media generation** on, and the gate refuses the tool from others. The owner's skills, which had the key written into them, are installed without it.

@@ -76,7 +76,9 @@ class _GalleryScreenState extends State<GalleryScreen> {
     var done = 0;
     for (final f in files) {
       try {
-        await widget.api.galleryUpload(f.path, f.name);
+        final item = await widget.api.galleryUpload(f, f.name);
+        // Picking for a message: what was just added is what's wanted.
+        if (widget.picking && item['id'] is int) picked.add(item['id'] as int);
         done++;
       } catch (e) {
         if (mounted) setState(() => note = '${f.name}: ${explain(e)}');
@@ -126,17 +128,14 @@ class _GalleryScreenState extends State<GalleryScreen> {
                       ),
                 child: Text('Attach ${picked.isEmpty ? '' : picked.length}'),
               ),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: FilledButton.icon(
-                onPressed: uploading ? null : _upload,
-                icon: const Icon(Icons.upload),
-                label: const Text('Add files'),
-              ),
             ),
         ],
+      ),
+      // Adding works while picking too, so an empty gallery isn't a dead end.
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: uploading ? null : _upload,
+        icon: const Icon(Icons.add_photo_alternate_outlined),
+        label: const Text('Add files'),
       ),
       body: Column(
         children: [

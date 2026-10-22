@@ -93,6 +93,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Fixed
 
+- Android: pictures can be added to the gallery. **Add files** now shows when choosing from the gallery for a message too (new files are selected), and uploads read Android's picked files directly.
 - **Bots know today's date and time:** every task now starts with the date and time in your time zone, so a bot no longer guesses the day (PA had called a Tuesday "Friday").
 - **Bots no longer think they have Google before it's set up:** they were told about their Google access even though Google wasn't connected yet, so a calendar request bounced between bots. Until Google is set up they now say so plainly.
 - **Changing a bot's model works, and you can do it from the chat:** the model list in Settings was empty in the app, so only the default could be chosen. Choosing a model now opens a searchable list of every model your machines have (or type your own), and the chat header shows the bot's model; click it to switch.

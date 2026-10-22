@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:file_selector/file_selector.dart' show XFile;
 import 'package:path_provider/path_provider.dart';
 
 const userAgent = 'OrphusBot app';
@@ -173,9 +174,11 @@ class Api {
 
   String galleryUrl(int id) => '$server/api/gallery/$id/file';
 
-  /// Streams a file from disk into the gallery, so a long video never sits in memory.
-  Future<Map<String, dynamic>> galleryUpload(String path, String name) async {
-    final file = File(path);
+  /// Streams a picked file into the gallery. On desktops it streams from disk,
+  /// so a long video never sits in memory; Android's picker hands over the
+  /// bytes with a content address rather than a file, so read it through the
+  /// XFile either way.
+  Future<Map<String, dynamic>> galleryUpload(XFile file, String name) async {
     final req =
         http.StreamedRequest(
             'POST',

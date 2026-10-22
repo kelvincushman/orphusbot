@@ -11,6 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_local_notifications: ^22.3.2
+  flutter_soloud: ^4.1.7
   http: ^1.6.0
   markdown_widget: ^2.3.2+8
   media_kit: ^1.2.6

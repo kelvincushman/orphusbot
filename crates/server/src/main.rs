@@ -330,6 +330,7 @@ fn router(app: Shared) -> Router {
             post(room::transcribe).layer(axum::extract::DefaultBodyLimit::max(5 * 1024 * 1024)),
         )
         .route("/api/room/speak", post(room::speak))
+        .route("/api/room/voice", post(room::voice))
         .route("/api/routines", get(routines::list).post(routines::save))
         .route("/api/routines/delete", post(routines::delete))
         .route("/api/routines/run", post(routines::run_now))

@@ -16,6 +16,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 import 'api.dart';
+import 'live_voice.dart';
 import 'thread.dart' as t;
 
 enum Phase { idle, listening, writing, thinking, speaking }
@@ -80,6 +81,12 @@ class _IdeasRoomState extends State<IdeasRoom>
   int voicesPending = 0;
   bool playing = false;
   bool ended = true;
+  // Fast mode: a live, hands-free conversation with Grok's voice, which asks
+  // the Orchestrator when it needs Kelvin's own context (D-052).
+  bool fast = true;
+  LiveVoice? live;
+  Completer<String>? asking;
+  int askFrom = 0;
 
   @override
   void initState() {
@@ -87,6 +94,18 @@ class _IdeasRoomState extends State<IdeasRoom>
     events = widget.api.events().listen((e) {
       if (e['bot'] != widget.bot) return;
       setState(() => view.apply(e));
+      final a = asking;
+      if (a != null && e['type'] == 'run_ended') {
+        asking = null;
+        final fresh = view.items
+            .skip(askFrom)
+            .whereType<t.Message>()
+            .where((m) => !m.mine);
+        a.complete(
+          fresh.isEmpty ? "The Orchestrator didn't answer." : fresh.last.text,
+        );
+        return;
+      }
       if (waitingFrom == null) return;
       if (view.streaming != null) {
         setState(() => reply = view.streaming!);
@@ -103,6 +122,7 @@ class _IdeasRoomState extends State<IdeasRoom>
 
   @override
   void dispose() {
+    live?.dispose();
     events?.cancel();
     amplitude?.cancel();
     recorder.dispose();
@@ -256,7 +276,90 @@ class _IdeasRoomState extends State<IdeasRoom>
     setState(() => phase = Phase.idle);
   }
 
+  /// Asks the Orchestrator for Grok (a function call) and waits for its answer.
+  Future<String> _ask(String name, Map<String, dynamic> args) async {
+    final request = switch (name) {
+      'save_idea' =>
+        'Save this idea brief into the team wiki as wiki/ideas/<a short slug of the title>.md, '
+            'add it to the wiki index, then reply only with where you saved it.\n\n'
+            'Title: ${args['title']}\n\n${args['brief']}',
+      _ => args['request'] as String? ?? '',
+    };
+    if (request.trim().isEmpty) return 'Nothing was asked.';
+    final done = Completer<String>();
+    asking = done;
+    askFrom = view.items.length;
+    await widget.api.send(widget.bot, request, room: true);
+    return done.future.timeout(
+      const Duration(seconds: 90),
+      onTimeout: () {
+        asking = null;
+        return 'The Orchestrator is still working on it; it will be in the chat.';
+      },
+    );
+  }
+
+  Future<void> _startLive() async {
+    setState(() {
+      note = null;
+      heard = '';
+      reply = '';
+      phase = Phase.writing;
+    });
+    final voice = LiveVoice(
+      api: widget.api,
+      ask: _ask,
+      onState: (s) {
+        if (!mounted) return;
+        setState(() {
+          phase = switch (s) {
+            LiveState.connecting => Phase.writing,
+            LiveState.listening || LiveState.hearing => Phase.listening,
+            LiveState.thinking => Phase.thinking,
+            LiveState.speaking => Phase.speaking,
+            LiveState.closed => Phase.idle,
+          };
+          if (s == LiveState.closed) live = null;
+        });
+      },
+      onLevel: (v) {
+        if (mounted) setState(() => level = v);
+      },
+      onYou: (text) {
+        if (mounted && text.isNotEmpty) setState(() => heard = text);
+      },
+      onReply: (text) {
+        if (mounted) setState(() => reply = text);
+      },
+      onError: (msg) {
+        if (mounted) setState(() => note = msg);
+      },
+    );
+    live = voice;
+    try {
+      await voice.start();
+    } catch (e) {
+      await voice.stop();
+      if (mounted) {
+        setState(() {
+          live = null;
+          phase = Phase.idle;
+          note = 'Fast voice: ${explain(e)}';
+        });
+      }
+    }
+  }
+
+  Future<void> _endLive() async {
+    await live?.stop();
+    if (mounted) setState(() => live = null);
+  }
+
   void _mic() {
+    if (fast) {
+      live == null ? _startLive() : _endLive();
+      return;
+    }
     switch (phase) {
       case Phase.listening:
         _stopListening();
@@ -278,6 +381,24 @@ class _IdeasRoomState extends State<IdeasRoom>
         appBar: AppBar(
           backgroundColor: Colors.black,
           title: const Text('Ideas Room'),
+          actions: [
+            // Fast: Grok's live voice. Off: the Orchestrator's own voice.
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilterChip(
+                label: Text(fast ? 'Fast voice' : 'Orchestrator voice'),
+                avatar: Icon(
+                  fast ? Icons.bolt : Icons.record_voice_over,
+                  size: 18,
+                ),
+                selected: fast,
+                showCheckmark: false,
+                onSelected: live != null
+                    ? null
+                    : (v) => setState(() => fast = v),
+              ),
+            ),
+          ],
         ),
         body: SafeArea(
           child: Column(
@@ -292,7 +413,7 @@ class _IdeasRoomState extends State<IdeasRoom>
                       painter: Orb(
                         time: spin.value,
                         phase: phase,
-                        level: phase == Phase.speaking
+                        level: phase == Phase.speaking && live == null
                             // Speaking has no live level; a lively stand-in.
                             ? 0.45 + 0.35 * sin(spin.value * 2 * pi * 9).abs()
                             : level,
@@ -307,6 +428,12 @@ class _IdeasRoomState extends State<IdeasRoom>
                 child: Column(
                   children: [
                     Text(switch (phase) {
+                      Phase.idle when fast =>
+                        'Tap to start a live conversation',
+                      Phase.listening when live != null =>
+                        'Listening… just talk; tap to end',
+                      Phase.speaking when live != null =>
+                        'Talk any time to cut in',
                       Phase.idle => 'Tap the microphone and talk',
                       Phase.listening => 'Listening… tap to send',
                       Phase.writing => 'Writing it down…',
@@ -374,17 +501,24 @@ class _IdeasRoomState extends State<IdeasRoom>
                       child: IconButton.filled(
                         tooltip: phase == Phase.listening ? 'Send' : 'Talk',
                         style: IconButton.styleFrom(
-                          backgroundColor: phase == Phase.listening
+                          backgroundColor:
+                              live != null || phase == Phase.listening
                               ? Colors.redAccent
                               : Colors.white,
                           foregroundColor: Colors.black,
                         ),
                         onPressed:
-                            phase == Phase.writing || phase == Phase.thinking
+                            live == null &&
+                                (phase == Phase.writing ||
+                                    phase == Phase.thinking)
                             ? null
                             : _mic,
                         icon: Icon(
-                          phase == Phase.listening ? Icons.stop : Icons.mic,
+                          live != null
+                              ? Icons.call_end
+                              : phase == Phase.listening
+                              ? Icons.stop
+                              : Icons.mic,
                           size: 30,
                         ),
                       ),

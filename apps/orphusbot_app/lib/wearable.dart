@@ -1,7 +1,7 @@
 // Wearable: the one-button wearable linked to this server (DESIGN §9.3). Its
 // devices, pairing a new one, hands-free listening, where its button captures
 // go (a task in the Inbox or an idea for the Ideas Room), what it overheard
-// and the signals sent to the wrist.
+// and the signals sent to the badge.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -108,7 +108,7 @@ class _WearableScreenState extends State<WearableScreen> {
             heading(
               'Your wearables',
               'Press the button and speak: the words come here. Tap answers '
-                  'a question on the wrist, double tap says no.',
+                  'a question on the badge, double tap says no.',
             ),
             if (loaded && devices.isEmpty)
               const ListTile(
@@ -149,7 +149,7 @@ class _WearableScreenState extends State<WearableScreen> {
             if (loaded && open.isEmpty)
               const ListTile(dense: true, title: Text('Nothing waiting.')),
             for (final p in open) _heard(p as Map<String, dynamic>, text),
-            heading('Signals to the wrist'),
+            heading('Signals to the badge'),
             if (loaded && signals.isEmpty)
               const ListTile(dense: true, title: Text('None yet.')),
             for (final s in signals.take(15))

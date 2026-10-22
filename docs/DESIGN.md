@@ -418,6 +418,8 @@ Wire constants (`OP`, `PATTERN`, `HABITAT_CUE` ids, button codes 1–11) live in
 
 ### 9.3 Duplex habitat (the wearable conversation)
 
+The wearable is worn as a **pin badge** on the chest, not on the wrist. This document calls it "the wrist" in places, an old name: read it as the badge. Its LED is seen by glancing down, and its vibration is felt against the chest.
+
 The wearable has **no speaker, by design**, and no screen. Its only outputs are the NeoPixel and the vibration motor; its inputs are the button and the mic. "Duplex habitat" means that channel works **both ways as a closed loop**:
 
 - every signal OrphusBot sends to the wrist has a defined meaning;

@@ -158,10 +158,6 @@ All settings are environment variables.
 | `ORPHUSBOT_UI_DIR` | `crates/ui/dist` | The built web UI, served at `/` |
 | `ORPHUSBOT_APP_DIR` | `~/.local/share/orphusbot/app` | Published app builds (`latest.json`, `orphusbot.apk`), served publicly at `/app` (DESIGN §12.3) |
 | `ORPHUSBOT_PUSH_HOSTS` | none (any https host) | Comma-separated host names a phone's UnifiedPush endpoint must be on, such as `push.example.com`; set it so pushes never go through a public ntfy server |
-| `ORPHUSBOT_STT_URL` | `http://127.0.0.1:6006/transcribe` | The Ideas Room's speech recognition (qwen-stt): takes a WAV body, answers `{"text": …}` |
-| `ORPHUSBOT_STT_TOKEN` (in `keys.env`) | none | Bearer token for that service |
-| `ORPHUSBOT_ELEVENLABS_KEY` (in `keys.env`) | none | ElevenLabs API key for the Ideas Room's voice; without it the room shows replies but doesn't speak |
-| `ORPHUSBOT_ELEVENLABS_VOICE` | a British voice (`JBFqnCBsd6RMkjVDRZzb`) | ElevenLabs voice id for the room |
 | `ORPHUSBOT_ROOM_MODEL` | `claude-bridge/claude-sonnet-5-5` | The model Ideas Room turns run on, with thinking off |
 | `ORPHUSBOT_XAI_KEY` (in `keys.env`) | none | xAI API key for the Ideas Room's fast voice (Grok realtime); the server mints five-minute client secrets from it |
 | `ORPHUSBOT_XAI_VOICE` | `eve` | Grok's voice in the Ideas Room |

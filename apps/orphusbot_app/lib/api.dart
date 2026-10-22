@@ -143,22 +143,6 @@ class Api {
     if (room) 'room': true,
   });
 
-  /// The Ideas Room's ears: a 16 kHz mono WAV, written down by the server.
-  Future<String> transcribe(List<int> wav) async {
-    final r = await _check(
-      _http.post(
-        Uri.parse('$server/api/room/transcribe'),
-        headers: {...headers, 'content-type': 'audio/wav'},
-        body: wav,
-      ),
-    );
-    return (jsonDecode(r.body) as Map<String, dynamic>)['text'] as String? ??
-        '';
-  }
-
-  /// The Ideas Room's voice: the reply read aloud, as MP3 bytes.
-  Future<List<int>> speak(String text) async =>
-      (await _post('/api/room/speak', {'text': text})).bodyBytes;
 
   /// Uploads a file for `bot`; returns its id, to send with the message.
   Future<int> upload(String bot, String name, List<int> bytes) async {

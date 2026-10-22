@@ -11,6 +11,14 @@ Format:
 
 ---
 
+## D-050: The Ideas Room keeps the Orchestrator as the brain, with box speech recognition and ElevenLabs (2026-10-22)
+
+**Decided:** The voice room sends speech to the box's qwen-stt, gives the text to the Orchestrator as a room message, and speaks the reply with ElevenLabs. A realtime speech-to-speech model (Grok Voice Agent) was not used as the brain.
+
+**Why:** The owner chose it. A realtime voice model answers faster but isn't the Orchestrator: it would lack the wiki, memory, team and tools unless it called the Orchestrator as a tool, and the owner's speech and ideas would go to xAI. Claude has no voice API to use instead. qwen-stt was already on the GPU box, so recognition stays local and works for every device; Omarchy's Voxtype is laptop-only dictation. ElevenLabs gives the best voice, and the owner already has an account.
+
+---
+
 ## D-049: A job can't be handed back to the bot that asked for it (2026-10-22)
 
 **Decided:** `ask_bot` refuses when the asking bot's current run is a ticket that the named teammate asked for. The refusal tells the bot to answer with what it has, or to say it can't and why; that answer reaches the asker by the usual route.

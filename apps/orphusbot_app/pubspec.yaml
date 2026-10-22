@@ -19,6 +19,7 @@ dependencies:
   pasteboard: ^0.5.0
   path_provider: ^2.1.6
   pdfrx: ^2.9.0
+  record: ^7.1.2
   rive: ^0.14.11
   unifiedpush: ^6.2.0
   url_launcher: ^6.3.3

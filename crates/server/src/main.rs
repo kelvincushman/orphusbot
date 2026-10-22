@@ -27,6 +27,7 @@ mod oauth;
 mod phone;
 mod placement;
 mod profiles;
+mod room;
 mod routines;
 mod runs;
 mod screens;
@@ -324,6 +325,11 @@ fn router(app: Shared) -> Router {
         .route("/api/decisions/apply", post(calibrate::apply))
         .route("/api/decisions/rollback", post(calibrate::rollback))
         .route("/api/usage", get(usage::summary))
+        .route(
+            "/api/room/transcribe",
+            post(room::transcribe).layer(axum::extract::DefaultBodyLimit::max(5 * 1024 * 1024)),
+        )
+        .route("/api/room/speak", post(room::speak))
         .route("/api/routines", get(routines::list).post(routines::save))
         .route("/api/routines/delete", post(routines::delete))
         .route("/api/routines/run", post(routines::run_now))
@@ -422,6 +428,9 @@ struct NewMessage {
     /// Uploaded first with `POST /api/attachments`.
     #[serde(default)]
     attachments: Vec<i64>,
+    /// Said in the Ideas Room: the bot is told it's a spoken conversation.
+    #[serde(default)]
+    room: bool,
 }
 
 fn inbox() -> String {
@@ -485,6 +494,9 @@ async fn send_message(
 
     // Tickets named in the message (OB-12) go to the bot as labelled data (B-TKT-03).
     let mut run_text = format!("{text}{}", tickets::referenced(&app.db, &text).await);
+    if msg.room {
+        run_text.push_str(room::ROOM_NOTE);
+    }
     if !files.is_empty() {
         let list: Vec<String> = files
             .iter()

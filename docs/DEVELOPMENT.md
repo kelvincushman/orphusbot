@@ -158,6 +158,10 @@ All settings are environment variables.
 | `ORPHUSBOT_UI_DIR` | `crates/ui/dist` | The built web UI, served at `/` |
 | `ORPHUSBOT_APP_DIR` | `~/.local/share/orphusbot/app` | Published app builds (`latest.json`, `orphusbot.apk`), served publicly at `/app` (DESIGN §12.3) |
 | `ORPHUSBOT_PUSH_HOSTS` | none (any https host) | Comma-separated host names a phone's UnifiedPush endpoint must be on, such as `push.example.com`; set it so pushes never go through a public ntfy server |
+| `ORPHUSBOT_STT_URL` | `http://127.0.0.1:6006/transcribe` | The Ideas Room's speech recognition (qwen-stt): takes a WAV body, answers `{"text": …}` |
+| `ORPHUSBOT_STT_TOKEN` (in `keys.env`) | none | Bearer token for that service |
+| `ORPHUSBOT_ELEVENLABS_KEY` (in `keys.env`) | none | ElevenLabs API key for the Ideas Room's voice; without it the room shows replies but doesn't speak |
+| `ORPHUSBOT_ELEVENLABS_VOICE` | a British voice (`JBFqnCBsd6RMkjVDRZzb`) | ElevenLabs voice id for the room |
 | `ORPHUSBOT_LAYA_URL` | none | The System 1 model's `/v1/systemone` server (kev or laya-serve), such as `http://127.0.0.1:8009`. Without it System 1 abstains: the inbox keeps its messages and every non-read tool call asks |
 | `ORPHUSBOT_LAYA_TIMEOUT_MS` | `1500` | How long to wait for System 1 before abstaining |
 | `ORPHUSBOT_ROUTE_THRESHOLD` | `0.85` | Confidence Laya needs to move an inbox message to another bot |

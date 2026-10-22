@@ -185,15 +185,26 @@ class _IdeasRoomState extends State<IdeasRoom>
             child: Column(
               children: [
                 Expanded(
-                  child: AnimatedBuilder(
-                    animation: spin,
-                    builder: (_, _) => CustomPaint(
-                      painter: Orb(
-                        time: spin.value,
-                        phase: phase,
-                        level: level,
+                  child: GestureDetector(
+                    // Tapping the orb stops Grok (on a computer, the only
+                    // way to cut in, since its voice reaches the mic).
+                    behavior: HitTestBehavior.opaque,
+                    onTap:
+                        phase == Phase.speaking ||
+                            phase == Phase.thinking ||
+                            phase == Phase.researching
+                        ? () => live?.interrupt()
+                        : null,
+                    child: AnimatedBuilder(
+                      animation: spin,
+                      builder: (_, _) => CustomPaint(
+                        painter: Orb(
+                          time: spin.value,
+                          phase: phase,
+                          level: level,
+                        ),
+                        size: Size.infinite,
                       ),
-                      size: Size.infinite,
                     ),
                   ),
                 ),
@@ -207,7 +218,7 @@ class _IdeasRoomState extends State<IdeasRoom>
                         Phase.listening => 'Listening… just talk; tap to end',
                         Phase.thinking => 'Thinking…',
                         Phase.researching => 'Looking into it…',
-                        Phase.speaking => 'Talk any time to cut in',
+                        Phase.speaking => 'Tap the orb to stop it',
                       }, style: quiet),
                       if (heard.isNotEmpty) ...[
                         const SizedBox(height: 10),

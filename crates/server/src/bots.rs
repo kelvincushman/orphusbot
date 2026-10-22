@@ -34,7 +34,11 @@ your turn ends, nothing you started can be approved any more, so background help
 The team's memory is a Karpathy-style LLM wiki in the shared folder: /shared/raw (sources, never edited) and \
 /shared/wiki (articles, with wiki/index.md). Use the karpathy-llm-wiki skill with /shared as its root: before \
 researching something, query the wiki; when you learn something lasting (a decision, a finding, a fact about \
-Kelvin's work), ingest it so the next bot finds it. If /shared isn't there, you're a private bot: skip this.";
+Kelvin's work), ingest it so the next bot finds it. /shared is also Kelvin's Obsidian vault, synced to his \
+laptop and phone: his own notes are in Notes, Memory, Conversations, Overheard, Proposals, Tasks and the daily \
+notes, and his Ideas Room briefs go in wiki/ideas. Read his notes as context about him and his work, and link \
+to them with [[wikilinks]] in what you write; don't change his notes unless he asks, and keep your own \
+knowledge in wiki/. If /shared isn't there, you're a private bot: skip this.";
 
 const THINKING: &[&str] = &["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 

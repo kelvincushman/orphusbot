@@ -11,6 +11,14 @@ Format:
 
 ---
 
+## D-055: The owner picks, per wearable, whether its button captures are tasks or Ideas Room ideas (2026-10-22)
+
+**Decided:** Each paired device has a `captures_to` setting, `inbox` (the default) or `room`, switched in the app's Wearable page. With `room`, a deliberate capture is saved as a `room_idea`, which the Ideas Room recalls in its next session. The Orchestrator is then asked to file it as a brief under `wiki/ideas/` in the vault, and the wrist gets `task_done`. Answers to a question on the wrist and overheard speech are unaffected.
+
+**Why:** The button has no spare gesture, and the words alone can't reliably say "this is an idea, not a job". A setting the owner flips when he's in an ideas mood is simplest and never starts work he didn't mean. **Alternatives:** triage deciding from the words (guesses wrong, and a wrong guess starts a task); a double press for ideas (double tap already means "no"). **Revisit if:** he switches back and forth so often that a gesture or a spoken prefix ("idea: …") would be quicker.
+
+---
+
 ## D-054: Kelvin's Obsidian vault and the bots' team folder are one, synced over WebDAV (2026-10-22)
 
 **Decided:** The team folder on the box is the Obsidian vault. The server serves it over WebDAV at `/vault/` with its own password, and Obsidian on the laptop and the phone syncs to it with the Remotely Save plugin through the public Cloudflare address.

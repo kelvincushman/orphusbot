@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'api.dart';
 import 'avatar.dart';
 import 'decisions.dart';
+import 'wearable.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
@@ -31,7 +32,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Map<String, dynamic> usage = {};
   Map<String, dynamic> wearables = {};
   String? enrol; // the command to enrol a new machine
-  String? pairing; // a wearable pairing code
   Map<String, dynamic>? linking; // a device waiting to be approved
   final linkCode = TextEditingController();
 
@@ -444,47 +444,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
 
               heading('Wearable'),
-              for (final d in (wearables['devices'] as List? ?? []))
-                SwitchListTile(
-                  secondary: const Icon(Icons.watch),
-                  title: Text(
-                    (d['label'] as String?)?.isNotEmpty == true
-                        ? d['label'] as String
-                        : d['id'] as String,
+              ListTile(
+                leading: const Icon(Icons.watch),
+                title: Text(
+                  '${(wearables['devices'] as List? ?? []).length} paired',
+                ),
+                subtitle: const Text(
+                  'Pairing, hands-free and where captures go',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => WearableScreen(api: widget.api),
                   ),
-                  subtitle: Text(
-                    'last seen ${day(d['last_seen'] as String?)} · hands-free',
-                  ),
-                  value: d['hands_free'] == true,
-                  onChanged: (on) => _act(() async {
-                    await widget.api.post('/api/devices/hands-free', {
-                      'id': d['id'],
-                      'on': on,
-                    });
-                    await _load();
-                  }),
                 ),
-              _buttons([
-                OutlinedButton.icon(
-                  onPressed: () => _act(() async {
-                    final r = await widget.api.postJson(
-                      '/api/devices/pairing-code',
-                      {},
-                    );
-                    setState(() => pairing = r['code'] as String?);
-                  }),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Pair a wearable'),
-                ),
-              ]),
-              if (pairing != null) ...[
-                _note(
-                  "In the wearable app's pairing page, use this server "
-                  'address and paste the code as the token. It works once, '
-                  'for 10 minutes.',
-                ),
-                _copyable('Server: ${widget.api.server}\nToken:  $pairing'),
-              ],
+              ),
 
               heading('This device'),
               _buttons([

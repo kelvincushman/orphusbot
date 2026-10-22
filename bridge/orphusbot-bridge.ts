@@ -67,7 +67,7 @@ const HELPER_TOOLS = ["subagent", "fleet", "roundtable"];
 // Plus `mcp`, Orphus's MCP gateway, when the owner granted the bot a connection:
 // it only talks to those servers, so it is safe to run outside the computer.
 const COMPUTER_TOOLS = [
-  "read", "write", "edit", "bash", "request_takeover", "share_file", "ask_bot", "discuss", "install_skill",
+  "read", "write", "edit", "bash", "request_takeover", "ask_owner", "share_file", "ask_bot", "discuss", "install_skill",
   ...(process.env.ORPHUSBOT_MCP ? ["mcp"] : []),
   // Fleets: helpers whose calls come back through this gate and into the computer.
   ...(process.env.ORPHUSBOT_HELPERS_GATED === "1" ? HELPER_TOOLS : []),
@@ -802,6 +802,27 @@ export default function (pi: ExtensionAPI) {
       const text = done
         ? "The owner says they're done. Check the screen, then carry on."
         : "The owner couldn't do it. Find another way, or say what is blocking you.";
+      return { content: [{ type: "text", text }], details: {} };
+    },
+  });
+  // Runs here, not in the computer, but only asks the owner a question (on his wearable too).
+  pi.registerTool({
+    name: "ask_owner",
+    label: "Ask the owner",
+    description:
+      "Ask the owner a question you need answered to carry on, and wait for the answer. If he started the task from his wearable, it buzzes and he answers aloud.",
+    promptSnippet: "Ask the owner a question and wait for the answer",
+    promptGuidelines: [
+      "When you need something from the owner to carry on, ask with ask_owner and wait, rather than ending your reply with a question.",
+    ],
+    parameters: Type.Object({
+      question: Type.String({ description: "One short question he can answer in a sentence" }),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const answer = await (dialogs(ctx) ?? ctx.ui).input(params.question);
+      const text = answer?.trim()
+        ? `The owner says: ${answer.trim()}`
+        : "The owner didn't answer. Carry on as best you can, or say what you need.";
       return { content: [{ type: "text", text }], details: {} };
     },
   });

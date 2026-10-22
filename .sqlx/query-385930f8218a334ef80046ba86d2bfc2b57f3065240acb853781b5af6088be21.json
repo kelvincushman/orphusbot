@@ -1,38 +1,40 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select state, outcome from habitat_message where kind = 'ask' order by id",
+  "query": "select prompt, device_id from run where id <> $1",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "state",
+        "name": "prompt",
         "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "habitat_message",
-            "name": "state"
+            "table": "run",
+            "name": "prompt"
           }
         }
       },
       {
         "ordinal": 1,
-        "name": "outcome",
+        "name": "device_id",
         "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "habitat_message",
-            "name": "outcome"
+            "table": "run",
+            "name": "device_id"
           }
         }
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Int8"
+      ]
     },
     "nullable": [
       false,
       true
     ]
   },
-  "hash": "1e0d399cbfd49abd37bdab6d341761342cf8f0b2a0e95bad93c322ca33e7e637"
+  "hash": "385930f8218a334ef80046ba86d2bfc2b57f3065240acb853781b5af6088be21"
 }

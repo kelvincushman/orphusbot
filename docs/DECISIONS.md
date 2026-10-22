@@ -11,6 +11,22 @@ Format:
 
 ---
 
+## D-057: Bots ask the owner with a tool, and a closing question still reaches the wearable (2026-10-22)
+
+**Decided:** The bridge gains `ask_owner {question}`, a plain input dialog that the gate treats as read-only. On a run from the wearable it becomes an ask that the owner answers aloud. As a fallback, a wearable run whose last reply ends with a question mark sends "needs you" instead of "done", and the spoken answer becomes the owner's next message to that bot.
+
+**Why:** The wearable can't show a reply, so a question left at the end of a reply was invisible: the wrist said "done" and the work stalled. A tool makes asking explicit and keeps the run going; the fallback catches bots that ask in prose anyway. **Alternatives:** System 1 judging whether a reply needs the owner (another model call on every run end, for a rule a question mark mostly captures); phone only (the owner wants the loop on the wearable). **Revisit if:** rhetorical questions trigger false "needs you" signals.
+
+---
+
+## D-056: A wearable press starts the task (2026-10-22)
+
+**Decided:** A deliberate capture (a press, then words) becomes a ticket that System 1 routes to a bot and that starts at once. Nothing asks "should I start?": if its bot is busy, the ticket waits and starts when the bot finishes its run. Act-now from triage still decides tickets made elsewhere.
+
+**Why:** The owner only presses the button when he wants something done, so a second "should I start?" was a step he had to answer for every capture; left alone, it expired to the phone after 10 minutes and the work waited. Safety doesn't rest on that question: the gate still asks the owner before any irreversible tool call (rule 5). **Alternatives:** keep the ask unless triage says act-now (the old behaviour, which held back even "tell me my schedule"). **Revisit if:** captures are often misheard or routed wrong, so work starts that he didn't mean.
+
+---
+
 ## D-055: The owner picks, per wearable, whether its button captures are tasks or Ideas Room ideas (2026-10-22)
 
 **Decided:** Each paired device has a `captures_to` setting, `inbox` (the default) or `room`, switched in the app's Wearable page. With `room`, a deliberate capture is saved as a `room_idea`, which the Ideas Room recalls in its next session. The Orchestrator is then asked to file it as a brief under `wiki/ideas/` in the vault, and the wrist gets `task_done`. Answers to a question on the wrist and overheard speech are unaffected.

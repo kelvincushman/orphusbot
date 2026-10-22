@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update habitat_message set state = 'expired', closed_at = now(), outcome = 'not answered; on the phone'\n             where kind = 'ask' and state in ('sent', 'delivered') and sent_at + escalate_after < now()\n             returning device_id, subject",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "device_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "habitat_message",
+            "name": "device_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "subject",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "habitat_message",
+            "name": "subject"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "e8db8431041e93f6ceb95619d293116aad92a62f6eaf691c10169c5feda1376f"
+}

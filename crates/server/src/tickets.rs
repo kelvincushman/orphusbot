@@ -78,7 +78,7 @@ impl Ticket {
     }
 }
 
-async fn get(db: &PgPool, id: i64) -> sqlx::Result<Option<Ticket>> {
+pub(crate) async fn get(db: &PgPool, id: i64) -> sqlx::Result<Option<Ticket>> {
     sqlx::query_as!(
         Ticket,
         r#"select t.id, t.title, t.body, t.status::text as "status!", t.urgency, b.slug as "bot?", t.act_now
@@ -213,6 +213,9 @@ pub async fn start_now(
     Ok(StatusCode::ACCEPTED)
 }
 
+/// Why [start] refused: the bot already has a run.
+pub(crate) const BUSY: &str = "That bot is busy; start the ticket when it's free";
+
 /// Hands the ticket to its bot (B-TKT-01).
 pub(crate) async fn start(app: &App, id: i64) -> Result<(), ApiError> {
     let ticket = get(&app.db, id)
@@ -231,22 +234,30 @@ pub(crate) async fn start(app: &App, id: i64) -> Result<(), ApiError> {
         .await
         .map_err(|e| internal("checking the bot", e))?
     {
-        return Err((
-            StatusCode::CONFLICT,
-            "That bot is busy; start the ticket when it's free",
-        ));
+        return Err((StatusCode::CONFLICT, BUSY));
     }
+    let doing_from = ticket.status.clone();
     let doing = Ticket {
         status: "doing".into(),
         ..ticket
     };
-    sqlx::query!(
-        "update ticket set status = 'doing', updated_at = now() where id = $1",
-        id
+    // Only as it was read: an edit in between (status or bot) wins.
+    let started = sqlx::query_scalar!(
+        "update ticket set status = 'doing', updated_at = now()
+         where id = $1 and status = $2::text::ticket_status
+           and bot_id = (select id from bot where slug = $3)
+         returning updated_at",
+        id,
+        doing_from,
+        slug
     )
-    .execute(&app.db)
+    .fetch_optional(&app.db)
     .await
-    .map_err(|e| internal("starting a ticket", e))?;
+    .map_err(|e| internal("starting a ticket", e))?
+    .ok_or((
+        StatusCode::CONFLICT,
+        "That ticket just changed; start it again",
+    ))?;
     let notice = ThreadEvent::Notice {
         text: format!("Ticket OB-{id}: {}", doing.title),
     };
@@ -269,9 +280,21 @@ pub(crate) async fn start(app: &App, id: i64) -> Result<(), ApiError> {
         device,
         ..Default::default()
     };
-    submit(app, &thread, text, source)
+    if let Err(e) = submit(app, &thread, text, source).await {
+        // No run behind it: put it back, so it isn't left "doing" for ever,
+        // unless the owner changed it meanwhile.
+        if let Err(e) = sqlx::query!(
+            "update ticket set status = 'todo' where id = $1 and updated_at = $2 and status = 'doing'",
+            id,
+            started
+        )
+        .execute(&app.db)
         .await
-        .map_err(|e| internal("queueing the ticket's run", e))?;
+        {
+            warn!("putting a ticket back after a failed start: {e}");
+        }
+        return Err(internal("queueing the ticket's run", e));
+    }
     Ok(())
 }
 

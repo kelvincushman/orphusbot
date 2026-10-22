@@ -8,6 +8,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- Media: Nano Banana 2.1 (up to 4K) and Seedance 2.5 (4 to 30 s, 1080p, first and last frames) are the new defaults. Videos can be drafted cheaply at 480p for approval, then finished at 1080p.
 - Bots' computers now include the Rive CLI. Media Creator makes animations in three steps: concept images, your approval, then the Rive file (`rive-animation` skill). Rebuild the desktop image (`podman build -t localhost/orphusbot-desktop images/desktop`).
 - Bots can no longer pass a job back to the teammate who asked for it (the Orchestrator and PA loop); they answer, or say why they can't.
 - New server setting `ORPHUSBOT_PUSH_HOSTS`: phones can only register for pushes through your own ntfy server, never a public one.

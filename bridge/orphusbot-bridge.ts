@@ -583,7 +583,7 @@ export default function (pi: ExtensionAPI) {
           const ext = extname(new URL(urls[0]).pathname) || "";
           const path = extname(saveAs) ? saveAs : saveAs + (ext || ".bin");
           await save(path, data);
-          return text(`Saved ${path} (${Math.round(data.length / 1024)} KB). Read it to check it, then share_file it.`);
+          return text(`Saved ${path} (${Math.round(data.length / 1024)} KB, task ${task}). Read it to check it, then share_file it.`);
         }
         if (info?.state === "fail") throw new Error(`kie.ai couldn't make it: ${info.failMsg || "no reason given"}.`);
         if (Date.now() > until) {
@@ -598,21 +598,26 @@ export default function (pi: ExtensionAPI) {
       label: "Make images and video",
       description:
         "Generate images and video through kie.ai (spends Kelvin's credits, so make what was asked, not variations). One action per call:\n" +
-        `- {"action":"image","prompt":"…","model":"nano-banana-2"|"gpt-image-2","aspect_ratio":"1:1|3:2|2:3|16:9|9:16|4:3|auto","resolution":"1K|2K" (nano-banana-2 only),"references":["paths of images in your computer"],"save_as":"/shared/media/name.png"}. ` +
-        "nano-banana-2 (default) is fast and good for most images; gpt-image-2 follows precise instructions and renders text well. References keep a person, product or style consistent.\n" +
-        `- {"action":"video","prompt":"… refer to references as @Image1, @Image2 …","references":["up to 5 images"],"duration":4-15,"resolution":"480p|720p|1080p","aspect_ratio":"16:9|9:16|1:1|4:3|3:4|21:9","audio":true,"save_as":"/shared/media/name.mp4"}. Seedance 2; 720p and 5 seconds is the usual balance. Takes minutes.\n` +
+        `- {"action":"image","prompt":"…","model":"nano-banana-2-1"|"nano-banana-2"|"gpt-image-2","aspect_ratio":"1:1|2:3|3:2|3:4|4:3|4:5|9:16|16:9|1:4|4:1|auto","resolution":"1K|2K|4K","references":["paths of images in your computer"],"save_as":"/shared/media/name.png"}. ` +
+        "nano-banana-2-1 (default) is the newest Nano Banana, up to 4K; nano-banana-2 goes to 2K; gpt-image-2 follows precise instructions and renders text well. References keep a person, product or style consistent.\n" +
+        `- {"action":"video","prompt":"… refer to references as @Image1, @Image2 …","model":"seedance-2-5"|"seedance-2","references":["up to 5 images"],"first_frame":"path","last_frame":"path","duration":4-30,"resolution":"480p|720p|1080p","aspect_ratio":"16:9|9:16|1:1|4:3|3:4|21:9|adaptive","audio":true,"draft":false,"save_as":"/shared/media/name.mp4"}. ` +
+        "Seedance 2.5 (default): 4 to 30 seconds, first and last frames. Seedance 2 is the older model (4 to 15 s, no frames). 720p and 5 seconds is the usual balance; video takes minutes. " +
+        `"draft":true makes a cheap 480p draft of a Seedance 2.5 video: show it for approval, then {"action":"finalize","task":"the draft's task id","save_as":"…"} makes the same video in 1080p (within 7 days).\n` +
         `- {"action":"check","task":"…","save_as":"…"}: collect a result that was still generating.\n` +
         "Results are saved into your computer; references are read from it. Your media skills have prompt advice.",
       promptSnippet: "Generate images and video (kie.ai)",
       parameters: Type.Object({
-        action: Type.String({ description: "image, video or check" }),
+        action: Type.String({ description: "image, video, finalize or check" }),
         prompt: Type.Optional(Type.String()),
         model: Type.Optional(Type.String()),
         aspect_ratio: Type.Optional(Type.String()),
         resolution: Type.Optional(Type.String()),
         references: Type.Optional(Type.Array(Type.String())),
+        first_frame: Type.Optional(Type.String()),
+        last_frame: Type.Optional(Type.String()),
         duration: Type.Optional(Type.Number()),
         audio: Type.Optional(Type.Boolean()),
+        draft: Type.Optional(Type.Boolean()),
         task: Type.Optional(Type.String()),
         save_as: Type.Optional(Type.String()),
       }),
@@ -622,36 +627,62 @@ export default function (pi: ExtensionAPI) {
           if (!p.task || !p.save_as) throw new Error('Give "task" and "save_as".');
           return finish(p.task, p.save_as, 1, signal);
         }
-        if (!p.prompt?.trim()) throw new Error('Give "prompt".');
-        const refs = p.references ?? [];
-        if (refs.length > 5) throw new Error("At most 5 references.");
-        const urls = await Promise.all(refs.map((r) => upload(r, signal)));
-        const saveAs = p.save_as ?? `/shared/media/${stamp}-${slug(p.prompt)}`;
         let model: string;
         let input: Record<string, unknown>;
-        if (p.action === "image") {
-          const ratio = p.aspect_ratio ?? "auto";
-          if ((p.model ?? "nano-banana-2") === "nano-banana-2") {
-            model = "nano-banana-2";
-            input = { prompt: p.prompt, image_input: urls, aspect_ratio: ratio, resolution: p.resolution ?? "1K", output_format: "png" };
-          } else if (p.model === "gpt-image-2") {
-            model = urls.length ? "gpt-image-2-image-to-image" : "gpt-image-2-text-to-image";
-            input = { prompt: p.prompt, aspect_ratio: ratio, ...(urls.length ? { input_urls: urls } : {}) };
-          } else throw new Error('model is "nano-banana-2" or "gpt-image-2".');
-        } else if (p.action === "video") {
-          const duration = Math.round(p.duration ?? 5);
-          if (duration < 4 || duration > 15) throw new Error("duration is 4 to 15 seconds.");
-          model = "bytedance/seedance-2";
-          input = {
-            prompt: p.prompt, reference_image_urls: urls, reference_video_urls: [], reference_audio_urls: [],
-            generate_audio: p.audio ?? true, resolution: p.resolution ?? "720p", aspect_ratio: p.aspect_ratio ?? "16:9", duration,
-          };
-        } else throw new Error(`Unknown media action "${p.action}".`);
+        let saveAs: string;
+        if (p.action === "finalize") {
+          // A Seedance 2.5 draft (480p), made again at 1080p from its task id.
+          if (!p.task) throw new Error('Give "task": the draft\'s task id.');
+          model = "bytedance/seedance-2-5-draft";
+          input = { draft_task_id: p.task, resolution: "1080p" };
+          saveAs = p.save_as ?? `/shared/media/${stamp}-final`;
+        } else {
+          if (!p.prompt?.trim()) throw new Error('Give "prompt".');
+          const refs = p.references ?? [];
+          if (refs.length > 5) throw new Error("At most 5 references.");
+          const urls = await Promise.all(refs.map((r) => upload(r, signal)));
+          saveAs = p.save_as ?? `/shared/media/${stamp}-${slug(p.prompt)}`;
+          if (p.action === "image") {
+            const ratio = p.aspect_ratio ?? "auto";
+            const which = p.model ?? "nano-banana-2-1";
+            if (which === "nano-banana-2-1" || which === "nano-banana-2") {
+              if (p.resolution === "4K" && which === "nano-banana-2") throw new Error("4K needs nano-banana-2-1.");
+              model = which;
+              input = { prompt: p.prompt, image_input: urls, aspect_ratio: ratio, resolution: p.resolution ?? "1K", output_format: "png" };
+            } else if (which === "gpt-image-2") {
+              model = urls.length ? "gpt-image-2-image-to-image" : "gpt-image-2-text-to-image";
+              input = { prompt: p.prompt, aspect_ratio: ratio, ...(urls.length ? { input_urls: urls } : {}) };
+            } else throw new Error('model is "nano-banana-2-1", "nano-banana-2" or "gpt-image-2".');
+          } else if (p.action === "video") {
+            const which = p.model ?? "seedance-2-5";
+            const newest = which === "seedance-2-5";
+            if (!newest && which !== "seedance-2") throw new Error('model is "seedance-2-5" or "seedance-2".');
+            const duration = Math.round(p.duration ?? 5);
+            const longest = newest ? 30 : 15;
+            if (duration < 4 || duration > longest) throw new Error(`duration is 4 to ${longest} seconds.`);
+            if (!newest && (p.first_frame || p.last_frame || p.draft)) {
+              throw new Error("First and last frames and drafts need seedance-2-5.");
+            }
+            const [first, last] = await Promise.all(
+              [p.first_frame, p.last_frame].map((f) => (f ? upload(f, signal) : undefined)),
+            );
+            model = newest ? "bytedance/seedance-2-5" : "bytedance/seedance-2";
+            input = {
+              prompt: p.prompt, reference_image_urls: urls, reference_video_urls: [], reference_audio_urls: [],
+              generate_audio: p.audio ?? true, aspect_ratio: p.aspect_ratio ?? (newest ? "adaptive" : "16:9"), duration,
+              // A draft is 480p only.
+              resolution: p.draft ? "480p" : (p.resolution ?? "720p"),
+              ...(first ? { first_frame_url: first } : {}),
+              ...(last ? { last_frame_url: last } : {}),
+              ...(newest && p.draft ? { draft: true } : {}),
+            };
+          } else throw new Error(`Unknown media action "${p.action}".`);
+        }
         const created = await kie(`${KIE}/createTask`, {
           method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model, input }),
         }, signal);
         if (!created?.taskId) throw new Error("kie.ai didn't start the task.");
-        return finish(created.taskId, saveAs, p.action === "video" ? 12 : 4, signal);
+        return finish(created.taskId, saveAs, p.action === "image" ? 4 : 15, signal);
       },
     });
   }

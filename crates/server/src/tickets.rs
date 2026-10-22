@@ -240,11 +240,11 @@ pub(crate) async fn start(app: &App, id: i64) -> Result<(), ApiError> {
         status: "doing".into(),
         ..ticket
     };
-    sqlx::query!(
-        "update ticket set status = 'doing', updated_at = now() where id = $1",
+    let started = sqlx::query_scalar!(
+        "update ticket set status = 'doing', updated_at = now() where id = $1 returning updated_at",
         id
     )
-    .execute(&app.db)
+    .fetch_one(&app.db)
     .await
     .map_err(|e| internal("starting a ticket", e))?;
     let notice = ThreadEvent::Notice {
@@ -270,10 +270,15 @@ pub(crate) async fn start(app: &App, id: i64) -> Result<(), ApiError> {
         ..Default::default()
     };
     if let Err(e) = submit(app, &thread, text, source).await {
-        // No run behind it: put it back, so it isn't left "doing" for ever.
-        if let Err(e) = sqlx::query!("update ticket set status = 'todo' where id = $1", id)
-            .execute(&app.db)
-            .await
+        // No run behind it: put it back, so it isn't left "doing" for ever,
+        // unless the owner changed it meanwhile.
+        if let Err(e) = sqlx::query!(
+            "update ticket set status = 'todo' where id = $1 and updated_at = $2 and status = 'doing'",
+            id,
+            started
+        )
+        .execute(&app.db)
+        .await
         {
             warn!("putting a ticket back after a failed start: {e}");
         }

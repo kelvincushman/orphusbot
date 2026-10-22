@@ -388,10 +388,20 @@ pub async fn text(
         && at.elapsed() < ANSWER_WINDOW
     {
         let answered = match subject.split_once(':') {
-            Some(("reply", run)) => match run.parse() {
-                Ok(run) => reply_to_run(&app, &device, run, &text).await,
-                Err(_) => false,
-            },
+            // It's an answer even if it couldn't be delivered: never file it as a new task.
+            // A 500 makes the phone send it again, still as this answer.
+            Some(("reply", run)) => {
+                let sent = match run.parse() {
+                    Ok(run) => reply_to_run(&app, &device, run, &text).await,
+                    Err(_) => false,
+                };
+                if !sent {
+                    lock(&app.devices.answering).insert(device.clone(), (msg, subject, at));
+                    forget_text(&app, &device);
+                    return error(StatusCode::INTERNAL_SERVER_ERROR, "server error");
+                }
+                true
+            }
             Some((_, dialog)) => resolve_dialog(
                 &app,
                 Answer {
@@ -529,7 +539,7 @@ pub async fn start_waiting(app: &App, bot: &str) {
            and not exists (select 1 from run r where r.ticket_id = t.id)
            and t.created_at > now() - interval '1 day'
            and not exists (select 1 from habitat_message m where m.kind = 'ask' and m.subject = 'ticket:' || t.id
-                           and m.state in ('queued', 'sent', 'delivered', 'dismissed'))
+                           and m.state in ('queued', 'sent', 'delivered', 'dismissed', 'expired'))
          order by t.id limit 1",
         bot
     )
@@ -1342,5 +1352,22 @@ mod tests {
             .unwrap();
         assert_eq!(next.prompt, "the Italian, two of us");
         assert_eq!(next.device_id.as_deref(), Some("wrist-1"));
+
+        // An answer that can't reach its bot is refused for a retry, never filed as a new task.
+        sqlx::query!(
+            "insert into habitat_message (device_id, kind, cue, subject, tap, state)
+             values ('wrist-1', 'ask', 'awaiting_input', 'reply:999999', 'answer', 'sent')"
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        device(&app, "/api/device/event", me, None, press("CAPTURE_TOGGLE")).await;
+        let (status, _) = device(&app, "/api/device/text", me, None, say("at eight")).await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        let tickets = sqlx::query_scalar!(r#"select count(*) as "n!" from ticket"#)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(tickets, 1);
     }
 }

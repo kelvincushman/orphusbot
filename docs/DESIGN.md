@@ -486,6 +486,7 @@ Every transition is an event on the wearable thread, so the Wearable view in the
 2. The server runs `intake(source = wearable, …)`. There is no gesture for "which bot": intent comes from the words.
 3. Triage decides. If it says act now (and the work is reversible, §19 D6), the run starts and the wrist gets `task_queued`. If not, the wrist gets a "should I start?" ask (§9.3.3).
 4. While running: `task_running` (breathing blue). The run then ends with `task_done` (green, double buzz) or `error` (red, triple buzz), or moves to `awaiting_input` (amber pulse, long buzz) as an ask.
+5. **Where captures go (D-055):** each device's `captures_to` is `inbox` (steps 2–4) or `room`. With `room`, the words are kept as a `room_idea` (the Ideas Room's memory, §12.5), the Orchestrator is asked to file them as a brief in `wiki/ideas/` (§11.8), and the wrist gets `task_done`. Answers to an ask and overheard speech are not affected. The owner sets it in the app (`POST /api/devices/route {id, to}`), which also lists the devices with when they were last seen, pairs new ones, switches hands-free, and shows what was overheard and the signals sent to the wrist (`wearable.dart`, the menu's **Wearable** page).
 
 #### 9.3.6 Vibration and eyes-down use
 

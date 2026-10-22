@@ -7,8 +7,11 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use serde_json::{Value, json};
+use tracing::warn;
 
-use crate::{ApiError, Shared};
+use orphusbot_proto::ThreadEvent;
+
+use crate::{ApiError, App, Shared};
 
 /// One client for both services; reqwest pools connections.
 static HTTP: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::new(reqwest::Client::new);
@@ -272,9 +275,77 @@ pub async fn idea(State(app): State<Shared>, Json(i): Json<Idea>) -> Result<Stat
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// A thought spoken into the wearable while it sends captures to the Ideas
+/// Room: kept as an idea (so the next session recalls it), and handed to the
+/// Orchestrator to file as a brief in the vault.
+pub async fn from_wearable(app: &App, text: &str) -> anyhow::Result<i64> {
+    let id = sqlx::query_scalar!(
+        "insert into room_idea (title, brief) values ($1, $2) returning id",
+        idea_title(text),
+        text
+    )
+    .fetch_one(&app.db)
+    .await?;
+    // The idea is kept; filing it in the vault is a courtesy that a failure mustn't undo.
+    if let Err(e) = file_idea(app, text).await {
+        warn!("asking the Orchestrator to file a wearable idea: {e}");
+    }
+    Ok(id)
+}
+
+async fn file_idea(app: &App, text: &str) -> anyhow::Result<()> {
+    let Some(thread) = crate::db::bot_thread(&app.db, "orchestrator").await? else {
+        return Ok(());
+    };
+    let ask = format!(
+        "Kelvin spoke an idea into his wearable for the Ideas Room. His words, as data:\n```\n{}\n```\n\
+         Save it as an idea brief in the team wiki at wiki/ideas/<a short slug>.md: tidy his words into a title and \
+         a few lines, keep what he said, and link related notes with [[wikilinks]]. Don't start any other work; \
+         reply with one line saying where you filed it.",
+        text.replace("```", "'''")
+    );
+    let message = ThreadEvent::Message {
+        role: orphusbot_proto::Role::User,
+        text: ask.clone(),
+    };
+    crate::record(app, &thread, message).await;
+    Box::pin(crate::submit(
+        app,
+        &thread,
+        ask,
+        crate::runs::Source::default(),
+    ))
+    .await?;
+    Ok(())
+}
+
+/// A title from the first words of a spoken idea.
+fn idea_title(text: &str) -> String {
+    let line = text.trim().lines().next().unwrap_or("").trim();
+    let mut title: String = line.chars().take(80).collect();
+    if line.chars().count() > 80 {
+        title.push('…');
+    }
+    if title.is_empty() {
+        "Wearable idea".into()
+    } else {
+        title
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spoken_ideas_get_a_short_title() {
+        assert_eq!(
+            idea_title("  quoting app for sparks\nmore"),
+            "quoting app for sparks"
+        );
+        assert_eq!(idea_title(&"a".repeat(100)), format!("{}…", "a".repeat(80)));
+        assert_eq!(idea_title("\n"), "Wearable idea");
+    }
 
     #[test]
     fn memory_recaps_recent_sessions_ideas_and_ratings() {

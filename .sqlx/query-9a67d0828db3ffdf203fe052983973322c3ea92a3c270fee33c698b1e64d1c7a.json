@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select id, label, hands_free, last_seen_at::text as last_seen from device order by id",
+  "query": "select id, label, hands_free, captures_to, last_seen_at::text as last_seen from device order by id",
   "describe": {
     "columns": [
       {
@@ -38,6 +38,17 @@
       },
       {
         "ordinal": 3,
+        "name": "captures_to",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "device",
+            "name": "captures_to"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
         "name": "last_seen",
         "type_info": "Text",
         "origin": "Expression"
@@ -50,8 +61,9 @@
       false,
       false,
       false,
+      false,
       null
     ]
   },
-  "hash": "85a1d41183dab8e6f816c95c4a612788d1e770f055abd41e60cd1743d18aaa5c"
+  "hash": "9a67d0828db3ffdf203fe052983973322c3ea92a3c270fee33c698b1e64d1c7a"
 }

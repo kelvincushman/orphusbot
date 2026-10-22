@@ -184,7 +184,7 @@ pub async fn register(
 /// The owner's wearables and their recent signals, for the Wearable view.
 pub async fn list(State(app): State<Shared>) -> Result<Json<Value>, crate::ApiError> {
     let devices = sqlx::query!(
-        r#"select id, label, hands_free, last_seen_at::text as last_seen from device order by id"#
+        r#"select id, label, hands_free, captures_to, last_seen_at::text as last_seen from device order by id"#
     )
     .fetch_all(&app.db)
     .await
@@ -198,13 +198,45 @@ pub async fn list(State(app): State<Shared>) -> Result<Json<Value>, crate::ApiEr
     .map_err(|e| internal("listing habitat messages", e))?;
     Ok(Json(json!({
         "devices": devices.into_iter().map(|d| json!({
-            "id": d.id, "label": d.label, "hands_free": d.hands_free, "last_seen": d.last_seen,
+            "id": d.id, "label": d.label, "hands_free": d.hands_free,
+            "captures_to": d.captures_to, "last_seen": d.last_seen,
         })).collect::<Vec<_>>(),
         "messages": messages.into_iter().map(|m| json!({
             "id": m.id, "device": m.device_id, "kind": m.kind, "cue": m.cue, "subject": m.subject,
             "state": m.state, "outcome": m.outcome, "at": m.at,
         })).collect::<Vec<_>>(),
     })))
+}
+
+#[derive(Deserialize)]
+pub struct Route {
+    id: String,
+    to: String,
+}
+
+/// `POST /api/devices/route`: where a device's deliberate captures go, `inbox` or `room`.
+pub async fn route(
+    State(app): State<Shared>,
+    Json(r): Json<Route>,
+) -> Result<StatusCode, crate::ApiError> {
+    if !matches!(r.to.as_str(), "inbox" | "room") {
+        return Err((
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Send captures to inbox or room",
+        ));
+    }
+    let done = sqlx::query!(
+        "update device set captures_to = $2 where id = $1",
+        r.id,
+        r.to
+    )
+    .execute(&app.db)
+    .await
+    .map_err(|e| internal("routing captures", e))?;
+    if done.rows_affected() == 0 {
+        return Err((StatusCode::NOT_FOUND, "No such device"));
+    }
+    Ok(StatusCode::NO_CONTENT)
 }
 
 // --- Device-facing ---------------------------------------------------------
@@ -290,6 +322,20 @@ pub async fn text(
         };
         return Json(json!({ "ok": true, "chatId": chat_id, "filed": filed })).into_response();
     }
+    // Where it goes is read before the press is used up, so a failed lookup can be resent.
+    let to_room = match sqlx::query_scalar!(
+        r#"select captures_to = 'room' as "room!" from device where id = $1"#,
+        device
+    )
+    .fetch_one(&app.db)
+    .await
+    {
+        Ok(room) => room,
+        Err(e) => {
+            warn!("reading where captures go: {e}");
+            return error(StatusCode::INTERNAL_SERVER_ERROR, "server error");
+        }
+    };
     lock(&app.devices.intent).remove(&device);
     // A tap on a question opened the mic: this is its answer, if the question is still open.
     let answering = lock(&app.devices.answering).remove(&device);
@@ -310,6 +356,20 @@ pub async fn text(
             return Json(json!({ "ok": true, "chatId": chat_id, "filed": "answer" }))
                 .into_response();
         }
+    }
+    if to_room {
+        return match crate::room::from_wearable(&app, &text).await {
+            Ok(id) => {
+                if let Err(e) = inform(&app, &device, "task_done", &format!("idea:{id}")).await {
+                    warn!("telling the wrist an idea was kept: {e}");
+                }
+                Json(json!({ "ok": true, "chatId": chat_id, "filed": "idea" })).into_response()
+            }
+            Err(e) => {
+                warn!("keeping a wearable idea: {e}");
+                error(StatusCode::INTERNAL_SERVER_ERROR, "server error")
+            }
+        };
     }
     match wearable_task(&app, &device, &text).await {
         Ok(()) => Json(json!({ "ok": true, "chatId": chat_id, "filed": "task" })).into_response(),

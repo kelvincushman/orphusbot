@@ -24,6 +24,7 @@ import 'settings.dart';
 import 'social.dart';
 import 'thread.dart' as t;
 import 'viewer.dart';
+import 'wearable.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key, required this.api, required this.onSignedOut});
@@ -461,6 +462,11 @@ class _ChatScreenState extends State<ChatScreen> {
               Icons.forum_outlined,
               'Discussions',
               DiscussionsScreen(api: widget.api, bots: bots),
+            ),
+            place(
+              Icons.watch_outlined,
+              'Wearable',
+              WearableScreen(api: widget.api),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 6),

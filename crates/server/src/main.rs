@@ -338,6 +338,7 @@ fn router(app: Shared) -> Router {
         .route("/api/tickets/start", post(tickets::start_now))
         .route("/api/devices", get(device::list))
         .route("/api/devices/pairing-code", post(device::pairing_code))
+        .route("/api/devices/route", post(device::route))
         .route("/api/devices/hands-free", post(capture::set_hands_free))
         .route("/api/captures", get(capture::list))
         .route("/api/proposals/accept", post(capture::accept))

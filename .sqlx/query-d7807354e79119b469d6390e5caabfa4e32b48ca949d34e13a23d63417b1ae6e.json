@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select captures_to = 'room' as \"room!\" from device where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "room!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d7807354e79119b469d6390e5caabfa4e32b48ca949d34e13a23d63417b1ae6e"
+}

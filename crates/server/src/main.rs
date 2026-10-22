@@ -325,11 +325,6 @@ fn router(app: Shared) -> Router {
         .route("/api/decisions/apply", post(calibrate::apply))
         .route("/api/decisions/rollback", post(calibrate::rollback))
         .route("/api/usage", get(usage::summary))
-        .route(
-            "/api/room/transcribe",
-            post(room::transcribe).layer(axum::extract::DefaultBodyLimit::max(5 * 1024 * 1024)),
-        )
-        .route("/api/room/speak", post(room::speak))
         .route("/api/room/voice", post(room::voice))
         .route("/api/routines", get(routines::list).post(routines::save))
         .route("/api/routines/delete", post(routines::delete))

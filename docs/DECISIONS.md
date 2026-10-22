@@ -11,6 +11,14 @@ Format:
 
 ---
 
+## D-053: The Ideas Room is Grok only (2026-10-22)
+
+**Decided:** The Orchestrator-voice path (box speech recognition, ElevenLabs sentence by sentence) and its toggle are removed; the room is Grok's realtime voice with the Orchestrator behind it as a tool. The server's `/api/room/transcribe` and `/api/room/speak` went with it.
+
+**Why:** The owner asked for Grok only once he'd heard the speed. Two paths meant two sets of behaviour to keep right, and the old one's answers took seconds longer. Thinking and research sounds and the voice fixes (one queued stream, echo gating on computers) were made for the one path.
+
+---
+
 ## D-052: The Ideas Room talks through Grok's realtime voice, with the Orchestrator behind it (2026-10-22)
 
 **Decided:** The room's default is a live conversation with xAI's realtime voice model, instructed to speak for the Orchestrator and to call it (`ask_orchestrator`, `save_idea`) for anything about Kelvin's own work. The app connects to xAI with a five-minute token minted by the server. The Orchestrator-with-ElevenLabs path stays as a toggle.

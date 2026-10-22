@@ -30,7 +30,15 @@ double pcmLevel(Uint8List pcm) {
   return (sqrt(sum / n) * 5).clamp(0.0, 1.0);
 }
 
-enum LiveState { connecting, listening, hearing, thinking, speaking, closed }
+enum LiveState {
+  connecting,
+  listening,
+  hearing,
+  thinking,
+  researching,
+  speaking,
+  closed,
+}
 
 class LiveVoice {
   LiveVoice({
@@ -56,8 +64,20 @@ class LiveVoice {
   WebSocket? _ws;
   final _recorder = AudioRecorder();
   StreamSubscription<Uint8List>? _mic;
+  // One stream for Grok's voice for the whole conversation, so replies play
+  // one after another and never over each other; and when what's queued in it
+  // will have finished playing.
   AudioSource? _out;
   SoundHandle? _playing;
+  DateTime _playsUntil = DateTime.now();
+
+  /// On a computer the speakers reach the microphone, so while Grok talks the
+  /// mic is only sent when Kelvin is clearly louder than its echo. Phones
+  /// cancel the echo themselves and stay fully hands-free.
+  final bool _speakers = !(Platform.isAndroid || Platform.isIOS);
+  static const _talkingOver = 0.35;
+
+  bool get _grokTalking => DateTime.now().isBefore(_playsUntil);
   String _reply = '';
   LiveState _state = LiveState.connecting;
 
@@ -97,6 +117,11 @@ class LiveVoice {
       ),
     );
     _mic = stream.listen((chunk) {
+      final level = pcmLevel(chunk);
+      if (_speakers && _grokTalking) {
+        if (level < _talkingOver) return; // Its own voice through the speakers.
+        _hush(); // Kelvin is talking over it.
+      }
       _send({
         'type': 'input_audio_buffer.append',
         'audio': base64Encode(chunk),
@@ -120,6 +145,11 @@ class LiveVoice {
         onYou((e['transcript'] as String? ?? '').trim());
       case 'response.created':
         _reply = '';
+      case 'response.output_item.added':
+        // Anything but its spoken answer is a lookup: a call to the
+        // Orchestrator, a wiki save, or a web search on xAI's side.
+        final kind = (e['item'] as Map?)?['type'];
+        if (kind != null && kind != 'message') _set(LiveState.researching);
       case 'response.output_audio_transcript.delta':
         _reply += e['delta'] as String? ?? '';
         onReply(_reply);
@@ -134,20 +164,31 @@ class LiveVoice {
             format: BufferType.s16le,
           );
           _playing = SoLoud.instance.play(_out!);
-          _set(LiveState.speaking);
         }
+        if (_state != LiveState.speaking) _set(LiveState.speaking);
         SoLoud.instance.addAudioDataStream(_out!, pcm);
+        // 24 kHz, 16-bit mono: 48,000 bytes a second.
+        final start = _grokTalking ? _playsUntil : DateTime.now();
+        _playsUntil = start.add(
+          Duration(microseconds: pcm.length * 1000000 ~/ 48000),
+        );
         onLevel(pcmLevel(pcm));
-      case 'response.output_audio.done' || 'response.audio.done':
-        if (_out != null) SoLoud.instance.setDataIsEnded(_out!);
       case 'response.done':
-        _out = null;
-        // Back to listening once the last words have played.
-        Future<void>.delayed(const Duration(milliseconds: 600), () {
-          if (_state == LiveState.speaking) _set(LiveState.listening);
-        });
+        // Back to listening once the last queued words have played; the
+        // stream stays open for the next reply.
+        final left = _playsUntil.difference(DateTime.now());
+        Future<void>.delayed(
+          left.isNegative
+              ? Duration.zero
+              : left + const Duration(milliseconds: 200),
+          () {
+            if (_state == LiveState.speaking && !_grokTalking) {
+              _set(LiveState.listening);
+            }
+          },
+        );
       case 'response.function_call_arguments.done':
-        _set(LiveState.thinking);
+        _set(LiveState.researching);
         String output;
         try {
           final args = jsonDecode(e['arguments'] as String? ?? '{}');
@@ -169,11 +210,34 @@ class LiveVoice {
     }
   }
 
+  /// Something typed: said into the same conversation.
+  void sendText(String text) {
+    _send({
+      'type': 'conversation.item.create',
+      'item': {
+        'type': 'message',
+        'role': 'user',
+        'content': [
+          {'type': 'input_text', 'text': text},
+        ],
+      },
+    });
+    _send({'type': 'response.create'});
+    _set(LiveState.thinking);
+  }
+
+  bool get isOpen => _state != LiveState.closed && _ws != null;
+
+  /// Stops Grok mid-sentence and drops what was queued; the next reply opens
+  /// a fresh stream.
   Future<void> _hush() async {
     final h = _playing;
+    final src = _out;
     _playing = null;
     _out = null;
+    _playsUntil = DateTime.now();
     if (h != null) await SoLoud.instance.stop(h);
+    if (src != null) await SoLoud.instance.disposeSource(src);
   }
 
   Future<void> stop() async {

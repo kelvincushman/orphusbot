@@ -12,6 +12,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter_soloud/flutter_soloud.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 import 'api.dart';
@@ -28,6 +29,27 @@ double pcmLevel(Uint8List pcm) {
   }
   // Speech sits around 0.02 to 0.2 RMS; stretch that to fill the orb.
   return (sqrt(sum / n) * 5).clamp(0.0, 1.0);
+}
+
+/// A diagnostic trail of the room's last conversation (no audio or words):
+/// events, states and interruptions, in the app's cache folder as room.log.
+IOSink? _logFile;
+final _started = DateTime.now();
+Future<void> openRoomLog() async {
+  try {
+    final dir = Directory(
+      Platform.isLinux
+          ? '${Platform.environment['HOME']}/.cache/orphusbot'
+          : (await getApplicationSupportDirectory()).path,
+    );
+    await dir.create(recursive: true);
+    _logFile = File('${dir.path}/room.log').openWrite();
+  } catch (_) {}
+}
+
+void _log(String line) {
+  final t = DateTime.now().difference(_started).inMilliseconds / 1000;
+  _logFile?.writeln('${t.toStringAsFixed(2)} $line');
 }
 
 enum LiveState {
@@ -69,15 +91,42 @@ class LiveVoice {
   // will have finished playing.
   AudioSource? _out;
   SoundHandle? _playing;
-  DateTime _playsUntil = DateTime.now();
+  // How much audio has been queued on the stream; what's actually been
+  // played comes from SoLoud, so "still talking" is the real remainder (plus a
+  // moment for the speakers' tail), not a guess from when audio arrived.
+  Duration _queued = Duration.zero;
+  static const _tail = Duration(milliseconds: 400);
 
-  /// On a computer the speakers reach the microphone, so while Grok talks the
-  /// mic is only sent when Kelvin is clearly louder than its echo. Phones
-  /// cancel the echo themselves and stay fully hands-free.
+  /// On a computer the speakers reach the microphone loudly enough to sound
+  /// like Kelvin, so while Grok talks (or a cue plays) the mic isn't sent at
+  /// all; he interrupts by tapping the orb ([interrupt]). Phones cancel the
+  /// echo themselves and can be talked over.
   final bool _speakers = !(Platform.isAndroid || Platform.isIOS);
-  static const _talkingOver = 0.35;
 
-  bool get _grokTalking => DateTime.now().isBefore(_playsUntil);
+  /// What's left of Grok's queued voice to play, as heard.
+  Duration get _remaining {
+    final out = _out;
+    if (out == null) return Duration.zero;
+    try {
+      final left = _queued - SoLoud.instance.getStreamTimeConsumed(out);
+      return left.isNegative ? Duration.zero : left;
+    } catch (_) {
+      return Duration.zero;
+    }
+  }
+
+  // When the voice went (or will go) quiet; the tail after it still counts
+  // as talking, since the room's echo lingers a moment.
+  DateTime _silentAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  bool get _grokTalking {
+    final left = _remaining;
+    if (left > Duration.zero) {
+      _silentAt = DateTime.now().add(left);
+      return true;
+    }
+    return DateTime.now().isBefore(_silentAt.add(_tail));
+  }
 
   /// Set by the room while a thinking or research cue plays: on a computer
   /// that sound reaches the mic too, and mustn't be heard as Kelvin talking.
@@ -101,23 +150,37 @@ class LiveVoice {
   /// When the queued voice ends: the waiting state, or back to listening.
   void _armQuiet() {
     _quiet?.cancel();
-    final left = _playsUntil.difference(DateTime.now());
-    _quiet = Timer(
-      (left.isNegative ? Duration.zero : left) +
-          const Duration(milliseconds: 250),
-      () {
-        if (_grokTalking) return _armQuiet();
-        final next = _next ?? LiveState.listening;
-        _next = null;
-        if (_state == LiveState.speaking) _set(next);
-      },
-    );
+    _quiet = Timer(_remaining + _tail, () {
+      if (_grokTalking) return _armQuiet();
+      final next = _next ?? LiveState.listening;
+      _next = null;
+      if (_state == LiveState.speaking) _set(next);
+    });
   }
 
   String _reply = '';
   LiveState _state = LiveState.connecting;
 
+  /// Thinking or researching never lasts for ever: with no reply in this
+  /// long, it goes back to listening (and its sound stops).
+  static const _maxWait = {
+    LiveState.thinking: Duration(seconds: 15),
+    LiveState.researching: Duration(minutes: 2),
+  };
+  Timer? _watchdog;
+
   void _set(LiveState s) {
+    _log('state ${s.name}');
+    _watchdog?.cancel();
+    final wait = _maxWait[s];
+    if (wait != null) {
+      _watchdog = Timer(wait, () {
+        if (_state == s) {
+          _log('gave up waiting in ${s.name}');
+          _set(LiveState.listening);
+        }
+      });
+    }
     _state = s;
     onState(s);
   }
@@ -125,6 +188,7 @@ class LiveVoice {
   void _send(Map<String, Object?> event) => _ws?.add(jsonEncode(event));
 
   Future<void> start() async {
+    await openRoomLog();
     _set(LiveState.connecting);
     final got =
         await api.postJson('/api/room/voice', {}) as Map<String, dynamic>;
@@ -153,11 +217,7 @@ class LiveVoice {
       ),
     );
     _mic = stream.listen((chunk) {
-      final level = pcmLevel(chunk);
-      if (_speakers && (_grokTalking || cueOn)) {
-        if (level < _talkingOver) return; // Its own voice through the speakers.
-        _hush(); // Kelvin is talking over it.
-      }
+      if (_speakers && (_grokTalking || cueOn)) return;
       _send({
         'type': 'input_audio_buffer.append',
         'audio': base64Encode(chunk),
@@ -170,6 +230,11 @@ class LiveVoice {
   }
 
   Future<void> _event(Map<String, dynamic> e) async {
+    final type = e['type'] as String? ?? '';
+    if (!type.endsWith('.delta')) {
+      final item = (e['item'] as Map?)?['type'];
+      _log('event $type${item == null ? '' : ' ($item)'}');
+    }
     switch (e['type']) {
       case 'input_audio_buffer.speech_started':
         // The owner is talking: stop Grok mid-sentence.
@@ -205,16 +270,17 @@ class LiveVoice {
         if (_state != LiveState.speaking) _set(LiveState.speaking);
         SoLoud.instance.addAudioDataStream(_out!, pcm);
         // 24 kHz, 16-bit mono: 48,000 bytes a second.
-        final start = _grokTalking ? _playsUntil : DateTime.now();
-        _playsUntil = start.add(
-          Duration(microseconds: pcm.length * 1000000 ~/ 48000),
-        );
+        _queued += Duration(microseconds: pcm.length * 1000000 ~/ 48000);
         _armQuiet();
         onLevel(pcmLevel(pcm));
       case 'response.done':
         // Back to listening (or what's waiting) once the queued words have
-        // played; the stream stays open for the next reply.
+        // played; the stream stays open for the next reply. A reply with
+        // nothing said (no audio) ends the thinking too.
         _armQuiet();
+        if (!_grokTalking && _state == LiveState.thinking) {
+          _set(LiveState.listening);
+        }
       case 'response.function_call_arguments.done':
         _after(LiveState.researching);
         String output;
@@ -238,6 +304,15 @@ class LiveVoice {
     }
   }
 
+  /// Kelvin tapped the orb: stop Grok now and drop what it was going to say.
+  Future<void> interrupt() async {
+    _log('interrupted by tap');
+    _next = null;
+    _send({'type': 'response.cancel'});
+    await _hush();
+    _set(LiveState.listening);
+  }
+
   /// Something typed: said into the same conversation.
   void sendText(String text) {
     _send({
@@ -259,11 +334,13 @@ class LiveVoice {
   /// Stops Grok mid-sentence and drops what was queued; the next reply opens
   /// a fresh stream.
   Future<void> _hush() async {
+    if (_playing != null) _log('voice stopped');
     final h = _playing;
     final src = _out;
     _playing = null;
     _out = null;
-    _playsUntil = DateTime.now();
+    _queued = Duration.zero;
+    _silentAt = DateTime.fromMillisecondsSinceEpoch(0);
     _quiet?.cancel();
     if (h != null) await SoLoud.instance.stop(h);
     if (src != null) await SoLoud.instance.disposeSource(src);
@@ -272,6 +349,8 @@ class LiveVoice {
   Future<void> stop() async {
     if (_state == LiveState.closed) return;
     _set(LiveState.closed);
+    _watchdog?.cancel();
+    _quiet?.cancel();
     await _mic?.cancel();
     try {
       await _recorder.stop();

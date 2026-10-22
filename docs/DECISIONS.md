@@ -11,6 +11,14 @@ Format:
 
 ---
 
+## D-048: The app follows Grok's layout, with our own bots (2026-10-22)
+
+**Decided:** The Flutter app copies the layout and visual style of xAI's Grok mobile app: monochrome, one full-screen conversation, a side menu, a round button at each end of the top bar, a card-shaped composer, and replies as plain text. Where Grok shows its mark, the app shows the bot's own animated face or robot. No Grok assets are used.
+
+**Why:** The owner asked for Grok's layout and style. It suits a phone, leaves the conversation the whole screen, and its plainness lets the bots' faces stand out. Layout and style patterns are not Grok's property; its logo, name and artwork are, so they stay out.
+
+---
+
 ## D-047: One Flutter app on every device, kept on one build by the server (2026-10-22)
 
 **Decided:** Linux, Android and macOS all run the Flutter app, the Mac included (its setup script no longer builds the Tauri wrapper). Builds are stamped with their commit; the laptop publishes the Android build and `latest.json` to the server, which serves them at `/app`, and an older copy shows an update banner (one tap on Android).

@@ -55,7 +55,6 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) {
         setState(() {
           chosen = bot;
-          chatOpen = true;
         });
       }
     }).then(
@@ -142,6 +141,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     sub?.cancel();
     composer.dispose();
+    search.dispose();
     scroll.dispose();
     focus.dispose();
     super.dispose();
@@ -324,161 +324,225 @@ class _ChatScreenState extends State<ChatScreen> {
 
   t.ThreadView get view => threads[chosen] ?? t.ThreadView();
 
-  // On a phone: the bot list, or one bot's chat over it (back returns to the list).
-  bool chatOpen = false;
+  /// Filters the bot list in the menu.
+  final search = TextEditingController();
 
+  /// A wide window keeps the menu beside the chat; a phone or a narrow
+  /// window opens it as a drawer from the top bar's menu button.
+  bool _wide(BoxConstraints box) => box.maxWidth >= 840;
+
+  final scaffold = GlobalKey<ScaffoldState>();
+
+  void _open(String slug) {
+    setState(() => chosen = slug);
+    if (scaffold.currentState?.isDrawerOpen ?? false) {
+      Navigator.of(context).pop();
+    }
+    _toBottom();
+    focus.requestFocus();
+  }
+
+  void _push(Widget screen) {
+    if (scaffold.currentState?.isDrawerOpen ?? false) {
+      Navigator.of(context).pop();
+    }
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
+  }
+
+  // Layout after Grok's app (DESIGN §12.4): one conversation full screen, a
+  // menu with everything else, a round button each side of the top bar and a
+  // card-shaped composer. Our own bots' faces stand where Grok has its mark.
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            UpdateBanner(api: widget.api),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, box) {
-                  // Phones get the list, then one chat full screen; a desktop window
-                  // keeps the bot list beside the chat however narrow it is.
-                  final phone = Platform.isAndroid || Platform.isIOS;
-                  if (!phone || box.maxWidth >= 640) {
-                    return Row(
-                      children: [
-                        SizedBox(width: 220, child: _botList(scheme)),
-                        VerticalDivider(width: 1, color: scheme.outlineVariant),
-                        Expanded(child: _conversation(scheme)),
-                      ],
-                    );
-                  }
-                  if (!chatOpen) return _botList(scheme);
-                  return PopScope(
-                    canPop: false,
-                    onPopInvokedWithResult: (didPop, _) {
-                      if (!didPop) setState(() => chatOpen = false);
-                    },
-                    child: Column(
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: IconButton(
-                            tooltip: 'All bots',
-                            icon: const Icon(Icons.arrow_back),
-                            onPressed: () => setState(() => chatOpen = false),
-                          ),
-                        ),
-                        Expanded(child: _conversation(scheme)),
-                      ],
-                    ),
-                  );
-                },
-              ),
+    return LayoutBuilder(
+      builder: (context, box) {
+        final wide = _wide(box);
+        return Scaffold(
+          key: scaffold,
+          drawer: wide
+              ? null
+              : Drawer(width: box.maxWidth * 0.86, child: _menu(scheme)),
+          body: SafeArea(
+            child: Column(
+              children: [
+                UpdateBanner(api: widget.api),
+                Expanded(
+                  child: wide
+                      ? Row(
+                          children: [
+                            SizedBox(width: 280, child: _menu(scheme)),
+                            VerticalDivider(
+                              width: 1,
+                              color: scheme.outlineVariant,
+                            ),
+                            Expanded(child: _conversation(scheme, wide)),
+                          ],
+                        )
+                      : _conversation(scheme, wide),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _botList(ColorScheme scheme) {
-    return ListView(
+  /// A round grey button, as in the top bar and the menu's foot.
+  Widget _round(
+    IconData icon,
+    String tooltip,
+    VoidCallback onPressed,
+    ColorScheme scheme,
+  ) => IconButton.filledTonal(
+    tooltip: tooltip,
+    style: IconButton.styleFrom(
+      backgroundColor: scheme.surfaceContainerHigh,
+      foregroundColor: scheme.onSurface,
+    ),
+    icon: Icon(icon, size: 20),
+    onPressed: onPressed,
+  );
+
+  /// The menu: places, then the bots, then search and settings at the foot.
+  Widget _menu(ColorScheme scheme) {
+    final text = Theme.of(context).textTheme;
+    final q = search.text.trim().toLowerCase();
+    final shown = [
+      for (final b in bots)
+        if (q.isEmpty || '${b['name']} ${b['remit']}'.toLowerCase().contains(q))
+          b,
+    ];
+    Widget place(IconData icon, String label, Widget screen) => ListTile(
+      leading: Icon(icon),
+      title: Text(label, style: text.titleMedium),
+      dense: true,
+      onTap: () => _push(screen),
+    );
+    return Stack(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 20, 4, 8),
+        ListView(
+          padding: const EdgeInsets.fromLTRB(8, 16, 8, 96),
+          children: [
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor: scheme.surfaceContainerHighest,
+                child: Icon(Icons.hub_outlined, color: scheme.onSurface),
+              ),
+              title: Text('OrphusBot', style: text.titleMedium),
+              subtitle: Text(
+                Uri.tryParse(widget.api.server)?.host ?? widget.api.server,
+              ),
+            ),
+            const SizedBox(height: 8),
+            place(
+              Icons.alarm,
+              'Schedules',
+              SchedulesScreen(api: widget.api, bots: bots),
+            ),
+            place(
+              Icons.campaign_outlined,
+              'Social',
+              SocialScreen(api: widget.api),
+            ),
+            place(
+              Icons.photo_library_outlined,
+              'Gallery',
+              GalleryScreen(api: widget.api, bots: bots),
+            ),
+            place(
+              Icons.forum_outlined,
+              'Discussions',
+              DiscussionsScreen(api: widget.api, bots: bots),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 6),
+              child: Text(
+                'Bots',
+                style: text.labelLarge?.copyWith(color: scheme.outline),
+              ),
+            ),
+            for (final b in shown) _botTile(b, scheme),
+          ],
+        ),
+        // The foot, floating over the list as in Grok's menu.
+        Positioned(
+          left: 12,
+          right: 12,
+          bottom: 12,
           child: Row(
             children: [
               Expanded(
-                child: Text(
-                  'OrphusBot',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-              IconButton(
-                tooltip: 'Gallery',
-                icon: const Icon(Icons.photo_library_outlined),
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => GalleryScreen(api: widget.api, bots: bots),
+                child: TextField(
+                  controller: search,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: 'Search bots',
+                    prefixIcon: const Icon(Icons.search),
+                    isDense: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(28),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
               ),
-              IconButton(
-                tooltip: 'Schedules',
-                icon: const Icon(Icons.schedule),
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) =>
-                        SchedulesScreen(api: widget.api, bots: bots),
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Social',
-                icon: const Icon(Icons.campaign_outlined),
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => SocialScreen(api: widget.api),
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Discuss',
-                icon: const Icon(Icons.forum_outlined),
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) =>
-                        DiscussionsScreen(api: widget.api, bots: bots),
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Settings',
-                icon: const Icon(Icons.settings_outlined),
-                onPressed: _settings,
-              ),
+              const SizedBox(width: 8),
+              _round(Icons.settings_outlined, 'Settings', () {
+                if (scaffold.currentState?.isDrawerOpen ?? false) {
+                  Navigator.of(context).pop();
+                }
+                _settings();
+              }, scheme),
             ],
           ),
         ),
-        for (final b in bots)
-          Builder(
-            builder: (context) {
-              final slug = b['slug'] as String;
-              final v = threads[slug];
-              final waiting = v?.waiting ?? 0;
-              final working = v != null && v.run != t.RunState.idle;
-              return ListTile(
-                leading: BotAvatar(
-                  key: ValueKey(slug),
-                  slug: faceOf(b, slug),
-                  mood: v?.mood ?? 0,
-                ),
-                selected: slug == chosen,
-                selectedTileColor: scheme.primary.withValues(alpha: 0.12),
-                title: Text(b['name'] as String),
-                subtitle: Text(
-                  waiting > 0
-                      ? 'needs you'
-                      : (working ? 'working…' : (b['remit'] as String? ?? '')),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: waiting > 0 ? scheme.error : null),
-                ),
-                trailing: waiting > 0 ? Badge(label: Text('$waiting')) : null,
-                onTap: () {
-                  setState(() {
-                    chosen = slug;
-                    chatOpen = true;
-                  });
-                  _toBottom();
-                  focus.requestFocus();
-                },
-              );
-            },
-          ),
       ],
     );
   }
 
-  Widget _conversation(ColorScheme scheme) {
+  Widget _botTile(Map<String, dynamic> b, ColorScheme scheme) {
+    final slug = b['slug'] as String;
+    final v = threads[slug];
+    final waiting = v?.waiting ?? 0;
+    final working = v != null && v.run != t.RunState.idle;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: ListTile(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        leading: BotAvatar(
+          key: ValueKey(slug),
+          slug: faceOf(b, slug),
+          mood: v?.mood ?? 0,
+          size: 36,
+        ),
+        selected: slug == chosen,
+        selectedTileColor: scheme.surfaceContainerHigh,
+        selectedColor: scheme.onSurface,
+        title: Text(b['name'] as String),
+        subtitle: Text(
+          waiting > 0
+              ? 'Needs you'
+              : (working ? 'Working…' : (b['remit'] as String? ?? '')),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: waiting > 0 ? scheme.error : scheme.outline),
+        ),
+        trailing: waiting > 0 ? Badge(label: Text('$waiting')) : null,
+        onTap: () => _open(slug),
+      ),
+    );
+  }
+
+  /// Things to ask a bot with an empty chat, as Grok's quick actions.
+  static const starters = [
+    'What can you do for me?',
+    'What are you working on?',
+    'Summarise what you did today',
+  ];
+
+  Widget _conversation(ColorScheme scheme, bool wide) {
     final v = view;
     final name =
         bots.firstWhere(
@@ -486,91 +550,171 @@ class _ChatScreenState extends State<ChatScreen> {
               orElse: () => {'name': chosen},
             )['name']
             as String;
+    final status = [
+      switch (v.run) {
+        t.RunState.idle => 'Ready',
+        t.RunState.queued => 'Waiting${v.where == null ? '' : ': ${v.where}'}',
+        t.RunState.running => 'Working${v.where == null ? '' : ' ${v.where}'}',
+      },
+      _usageLine(chosen),
+    ].where((p) => p.isNotEmpty).join(' · ');
     return Column(
       children: [
-        // Header: who, and what it's doing.
-        ListTile(
-          minTileHeight: 84,
-          leading: BotAvatar(
-            key: ValueKey('body-$chosen'),
-            slug: faceOf(_bot, chosen),
-            mood: v.mood,
-            size: 60,
-            body: true,
-          ),
-          title: Text(name, style: Theme.of(context).textTheme.titleMedium),
-          subtitle: Text(
-            [
-              switch (v.run) {
-                t.RunState.idle => 'Ready',
-                t.RunState.queued =>
-                  'Waiting${v.where == null ? '' : ': ${v.where}'}',
-                t.RunState.running =>
-                  'Working${v.where == null ? '' : ' ${v.where}'}',
-              },
-              _usageLine(chosen),
-            ].where((p) => p.isNotEmpty).join(' · '),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          trailing: v.run == t.RunState.idle
-              ? TextButton.icon(
-                  onPressed: _changeModel,
-                  icon: const Icon(Icons.tune, size: 18),
-                  label: Text(_modelLabel()),
+        // Top bar: menu, who (a pill with the bot's face), model.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: Row(
+            children: [
+              if (!wide)
+                _round(
+                  Icons.menu,
+                  'Menu',
+                  () => scaffold.currentState?.openDrawer(),
+                  scheme,
                 )
-              : OutlinedButton.icon(
-                  onPressed: () => _act(() => widget.api.stop(chosen)),
-                  icon: const Icon(Icons.stop),
-                  label: const Text('Stop'),
+              else
+                const SizedBox(width: 48),
+              Expanded(
+                child: Center(
+                  child: Tooltip(
+                    message: status,
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(6, 4, 14, 4),
+                      decoration: ShapeDecoration(
+                        color: scheme.surfaceContainerHigh,
+                        shape: const StadiumBorder(),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          BotAvatar(
+                            key: ValueKey('pill-$chosen'),
+                            slug: faceOf(_bot, chosen),
+                            mood: v.mood,
+                            size: 26,
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.labelLarge,
+                                ),
+                                Text(
+                                  status,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.labelSmall
+                                      ?.copyWith(color: scheme.outline),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-        ),
-        if (problem != null)
-          MaterialBanner(
-            content: Text(problem!),
-            actions: [
-              TextButton(
-                onPressed: () => setState(() => problem = null),
-                child: const Text('Dismiss'),
+              ),
+              _round(
+                Icons.tune,
+                'Model: ${_modelLabel()}',
+                _changeModel,
+                scheme,
               ),
             ],
           ),
-        Divider(height: 1, color: scheme.outlineVariant),
-        Expanded(
-          child: ListView(
-            controller: scroll,
-            padding: const EdgeInsets.all(16),
-            children: [
-              if (v.items.isEmpty)
-                Center(
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 24),
-                      BotAvatar(
-                        key: ValueKey('stage-$chosen'),
-                        slug: faceOf(_bot, chosen),
-                        mood: v.mood,
-                        size: 180,
-                        body: true,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Say hello to $name. (Go on, poke it.)',
-                        style: TextStyle(color: scheme.outline),
-                      ),
-                    ],
-                  ),
-                ),
-              for (final item in v.items) _item(item, scheme, name),
-              if (v.streaming != null) _bubble(v.streaming!, false, scheme),
-            ],
-          ),
         ),
-        Divider(height: 1, color: scheme.outlineVariant),
-        _composer(name),
+        if (problem != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+            child: Material(
+              color: scheme.surfaceContainerHigh,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: ListTile(
+                dense: true,
+                title: Text(problem!),
+                trailing: IconButton(
+                  tooltip: 'Dismiss',
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () => setState(() => problem = null),
+                ),
+              ),
+            ),
+          ),
+        Expanded(
+          child: v.items.isEmpty && v.streaming == null
+              ? _empty(scheme, name, v.mood)
+              : ListView(
+                  controller: scroll,
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  children: [
+                    for (final item in v.items) _item(item, scheme, name),
+                    if (v.streaming != null)
+                      _bubble(v.streaming!, false, scheme),
+                  ],
+                ),
+        ),
+        _composer(name, scheme, v),
       ],
     );
   }
+
+  /// An empty chat: the bot itself in the middle (poke it), quick starters
+  /// just above the composer.
+  Widget _empty(ColorScheme scheme, String name, int mood) => Column(
+    children: [
+      Expanded(
+        child: Center(
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                BotAvatar(
+                  key: ValueKey('stage-$chosen'),
+                  slug: faceOf(_bot, chosen),
+                  mood: mood,
+                  size: 170,
+                  body: true,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Ask $name anything',
+                  style: TextStyle(color: scheme.outline),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      SizedBox(
+        height: 44,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          children: [
+            for (final s in starters)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ActionChip(
+                  label: Text(s),
+                  onPressed: () {
+                    composer.text = s;
+                    _send();
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    ],
+  );
 
   Widget _item(t.Item item, ColorScheme scheme, String name) => switch (item) {
     t.Message(:final mine, :final text) => _bubble(text, mine, scheme),
@@ -579,6 +723,7 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Center(
         child: Text(
           text,
+          textAlign: TextAlign.center,
           style: TextStyle(color: error ? scheme.error : scheme.outline),
         ),
       ),
@@ -588,58 +733,65 @@ class _ChatScreenState extends State<ChatScreen> {
     t.Card() => _card(item, scheme, name),
   };
 
+  /// The owner's words in a grey bubble on the right; a bot's reply as plain
+  /// text across the page with its actions underneath, as in Grok.
   Widget _bubble(String text, bool mine, ColorScheme scheme) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final bubble = Container(
-      constraints: const BoxConstraints(maxWidth: 720),
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: mine ? scheme.primaryContainer : scheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: mine
-          ? SelectableText(text)
-          : MarkdownBlock(
-              data: text,
-              selectable: true,
-              config: markdownConfig(dark, scheme),
-            ),
-    );
+    if (mine) {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 560),
+          margin: const EdgeInsets.fromLTRB(48, 8, 0, 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: SelectableText(text),
+        ),
+      );
+    }
+    Widget action(IconData icon, String tip, VoidCallback onPressed) =>
+        IconButton(
+          tooltip: tip,
+          iconSize: 18,
+          visualDensity: VisualDensity.compact,
+          color: scheme.outline,
+          icon: Icon(icon),
+          onPressed: onPressed,
+        );
     return Align(
-      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: Column(
-        crossAxisAlignment: mine
-            ? CrossAxisAlignment.end
-            : CrossAxisAlignment.start,
-        children: [
-          bubble,
-          // Copy or save a reply.
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                tooltip: 'Copy',
-                iconSize: 16,
-                visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.copy),
-                onPressed: () {
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: MarkdownBlock(
+                data: text,
+                selectable: true,
+                config: markdownConfig(dark, scheme),
+              ),
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                action(Icons.copy_outlined, 'Copy', () {
                   Clipboard.setData(ClipboardData(text: text));
                   setState(() => problem = 'Copied.');
-                },
-              ),
-              if (!mine)
-                IconButton(
-                  tooltip: 'Save as a file',
-                  iconSize: 16,
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.save_alt),
-                  onPressed: () =>
-                      _save('$chosen-reply.md', () => utf8.encode(text)),
+                }),
+                action(
+                  Icons.file_download_outlined,
+                  'Save as a file',
+                  () => _save('$chosen-reply.md', () => utf8.encode(text)),
                 ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -837,97 +989,143 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _composer(String name) => Padding(
-    padding: const EdgeInsets.all(12),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (pending.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final (i, (fname, bytes)) in pending.indexed)
-                  InputChip(
-                    avatar:
-                        RegExp(
-                          r'\.(png|jpe?g|gif|webp)$',
-                          caseSensitive: false,
-                        ).hasMatch(fname)
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: Image.memory(
-                              bytes,
-                              width: 24,
-                              height: 24,
-                              fit: BoxFit.cover,
-                            ),
-                          )
-                        : const Icon(Icons.attach_file, size: 18),
-                    label: Text('$fname · ${(bytes.length / 1024).ceil()} KB'),
-                    onDeleted: () => setState(() => pending.removeAt(i)),
-                  ),
-              ],
-            ),
-          ),
-        Row(
+  /// Grok's composer: one rounded card, the text on top, then attach, the
+  /// model pill, and send (or Stop while the bot works).
+  Widget _composer(String name, ColorScheme scheme, t.ThreadView v) {
+    final working = v.run != t.RunState.idle;
+    final hasText = composer.text.trim().isNotEmpty || pending.isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+      child: Container(
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(28),
+        ),
+        padding: const EdgeInsets.fromLTRB(14, 6, 8, 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            PopupMenuButton<String>(
-              tooltip: 'Attach pictures or files',
-              icon: const Icon(Icons.attach_file),
-              onSelected: (how) =>
-                  how == 'gallery' ? _fromGallery() : _attach(),
-              itemBuilder: (_) => const [
-                PopupMenuItem(
-                  value: 'computer',
-                  child: ListTile(
-                    leading: Icon(Icons.computer),
-                    title: Text('From this computer'),
-                  ),
+            if (pending.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6, bottom: 4),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final (i, (fname, bytes)) in pending.indexed)
+                      InputChip(
+                        backgroundColor: scheme.surfaceContainerHighest,
+                        avatar:
+                            RegExp(
+                              r'\.(png|jpe?g|gif|webp)$',
+                              caseSensitive: false,
+                            ).hasMatch(fname)
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: Image.memory(
+                                  bytes,
+                                  width: 24,
+                                  height: 24,
+                                  fit: BoxFit.cover,
+                                ),
+                              )
+                            : const Icon(Icons.attach_file, size: 18),
+                        label: Text(
+                          '$fname · ${(bytes.length / 1024).ceil()} KB',
+                        ),
+                        onDeleted: () => setState(() => pending.removeAt(i)),
+                      ),
+                  ],
                 ),
-                PopupMenuItem(
-                  value: 'gallery',
-                  child: ListTile(
-                    leading: Icon(Icons.photo_library_outlined),
-                    title: Text('From the gallery'),
-                  ),
-                ),
-              ],
-            ),
-            Expanded(
-              child: CallbackShortcuts(
-                bindings: {
-                  const SingleActivator(LogicalKeyboardKey.enter): _send,
-                  const SingleActivator(LogicalKeyboardKey.keyV, control: true):
-                      _paste,
-                },
-                child: TextField(
-                  controller: composer,
-                  focusNode: focus,
-                  autofocus: true,
-                  minLines: 1,
-                  maxLines: 6,
-                  decoration: InputDecoration(
-                    hintText:
-                        'Message $name  (Enter sends, Shift+Enter new line, Ctrl+V pastes pictures)',
-                    border: const OutlineInputBorder(),
-                  ),
+              ),
+            CallbackShortcuts(
+              bindings: {
+                const SingleActivator(LogicalKeyboardKey.enter): _send,
+                const SingleActivator(LogicalKeyboardKey.keyV, control: true):
+                    _paste,
+              },
+              child: TextField(
+                controller: composer,
+                focusNode: focus,
+                autofocus: !(Platform.isAndroid || Platform.isIOS),
+                minLines: 1,
+                maxLines: 6,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  hintText: 'Ask $name anything',
+                  filled: false,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            FilledButton.icon(
-              onPressed: _send,
-              icon: const Icon(Icons.send),
-              label: const Text('Send'),
+            Row(
+              children: [
+                PopupMenuButton<String>(
+                  tooltip: 'Attach pictures or files',
+                  onSelected: (how) =>
+                      how == 'gallery' ? _fromGallery() : _attach(),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: 'computer',
+                      child: ListTile(
+                        leading: Icon(Icons.computer),
+                        title: Text('From this device'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'gallery',
+                      child: ListTile(
+                        leading: Icon(Icons.photo_library_outlined),
+                        title: Text('From the gallery'),
+                      ),
+                    ),
+                  ],
+                  child: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: scheme.surfaceContainerHighest,
+                    child: Icon(
+                      Icons.attach_file,
+                      size: 18,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: ActionChip(
+                      avatar: const Icon(Icons.auto_awesome_outlined, size: 16),
+                      backgroundColor: scheme.surfaceContainerHighest,
+                      label: Text(
+                        _modelLabel(),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onPressed: _changeModel,
+                    ),
+                  ),
+                ),
+                if (working && !hasText)
+                  FilledButton.icon(
+                    onPressed: () => _act(() => widget.api.stop(chosen)),
+                    icon: const Icon(Icons.stop, size: 18),
+                    label: const Text('Stop'),
+                  )
+                else
+                  IconButton.filled(
+                    tooltip: 'Send (Enter)',
+                    onPressed: hasText ? _send : null,
+                    icon: const Icon(Icons.arrow_upward),
+                  ),
+              ],
             ),
           ],
         ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }
 
 /// Pick an option, or type an answer.

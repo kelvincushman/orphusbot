@@ -66,6 +66,11 @@ void main() {
     expect(find.text('launch.mp4'), findsOneWidget);
     await t.tap(find.text('brand-guide.pdf'));
     await settle(t);
+    await t.scrollUntilVisible(
+      find.text('Researcher'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
     await t.tap(find.text('Researcher'));
     await t.tap(find.text('Save'));
     await settle(t);
@@ -75,6 +80,45 @@ void main() {
       'media-creator',
       'researcher',
     });
+  });
+
+  testWidgets('an item can be renamed and tagged', (t) async {
+    final posted = <String, Object?>{};
+    await t.pumpWidget(
+      MaterialApp(
+        home: GalleryScreen(api: fake(posted), bots: bots),
+      ),
+    );
+    await settle(t);
+    await t.tap(find.text('launch.mp4'));
+    await settle(t);
+    expect(find.text('Details'), findsOneWidget);
+    await t.enterText(
+      find.widgetWithText(TextField, 'launch.mp4'),
+      'Launch teaser.mp4',
+    );
+    final tagField = find.widgetWithText(
+      TextField,
+      'Add a tag, such as brand or logo',
+    );
+    await t.enterText(tagField, 'Video, launch');
+    await t.testTextInput.receiveAction(TextInputAction.done);
+    await settle(t);
+    expect(find.widgetWithText(InputChip, 'video'), findsOneWidget);
+    expect(find.widgetWithText(InputChip, 'launch'), findsOneWidget);
+    // Remove one again with its x.
+    await t.tap(
+      find.descendant(
+        of: find.widgetWithText(InputChip, 'video'),
+        matching: find.byTooltip('Delete'),
+      ),
+    );
+    await settle(t);
+    await t.tap(find.text('Save'));
+    await settle(t);
+    final saved = posted['/api/gallery/update'] as Map<String, dynamic>;
+    expect(saved['name'], 'Launch teaser.mp4');
+    expect(saved['tags'], ['launch']);
   });
 
   testWidgets('picking returns the chosen items', (t) async {

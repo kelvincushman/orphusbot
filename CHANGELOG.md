@@ -8,6 +8,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- Bots can ask to install a skill they wrote: you get a card with the whole skill and choose Allow or Deny, every time.
 - **Ideas Room** (in the menu): brainstorm with the Orchestrator by voice. Tap the microphone and talk; your words are written down on the box (qwen-stt), the Orchestrator answers conversationally and can send Researcher to search the web, and the reply is spoken (ElevenLabs) while a colour orb listens, thinks and speaks with you. New settings `ORPHUSBOT_STT_URL`, `ORPHUSBOT_STT_TOKEN`, `ORPHUSBOT_ELEVENLABS_KEY`, `ORPHUSBOT_ELEVENLABS_VOICE`.
 - Gallery: rename items and add or remove tags on a full-screen details page (tap an item, or long-press it when attaching from the gallery). On phones the old dialog hid these fields.
 - The app has its own logo (a robot head with a coiled antenna and a cyan light) as its icon on Android, Mac and Linux, and an opening animation when it starts.

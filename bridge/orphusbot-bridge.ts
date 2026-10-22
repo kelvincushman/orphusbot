@@ -67,7 +67,7 @@ const HELPER_TOOLS = ["subagent", "fleet", "roundtable"];
 // Plus `mcp`, Orphus's MCP gateway, when the owner granted the bot a connection:
 // it only talks to those servers, so it is safe to run outside the computer.
 const COMPUTER_TOOLS = [
-  "read", "write", "edit", "bash", "request_takeover", "share_file", "ask_bot", "discuss",
+  "read", "write", "edit", "bash", "request_takeover", "share_file", "ask_bot", "discuss", "install_skill",
   ...(process.env.ORPHUSBOT_MCP ? ["mcp"] : []),
   // Fleets: helpers whose calls come back through this gate and into the computer.
   ...(process.env.ORPHUSBOT_HELPERS_GATED === "1" ? HELPER_TOOLS : []),
@@ -278,6 +278,43 @@ export default function (pi: ExtensionAPI) {
       return {
         content: [{ type: "text", text: `Shared ${name} with the owner.` }],
         details: { artifact: { name, data: data.toString("base64") } },
+      };
+    },
+  });
+
+  // Skills live on the host, read only to bots (DESIGN §11.4). A bot that writes
+  // one asks to install it; the gate always asks the owner, showing the whole
+  // text, and only then is it written into the user's skills folder (D-051).
+  const MAX_SKILL = 64 * 1024;
+  pi.registerTool({
+    name: "install_skill",
+    label: "Install a skill",
+    description:
+      "Ask Kelvin to install a skill you wrote, so every bot gets it from its next run. Pass its name and the whole SKILL.md " +
+      "(starting with --- frontmatter that has the same name: and a description:). Kelvin sees the full text and approves or " +
+      "refuses it. To change a skill that's already installed, set replace to true.",
+    promptSnippet: "Ask Kelvin to install a skill you wrote",
+    parameters: Type.Object({
+      name: Type.String({ description: "Lower-case letters, digits and hyphens, such as google-workspace-lookups" }),
+      skill: Type.String({ description: "The whole SKILL.md" }),
+      replace: Type.Optional(Type.Boolean({ description: "true to replace an installed skill of that name" })),
+    }),
+    async execute(_id, p) {
+      if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(p.name)) throw new Error("The name is lower-case letters, digits and hyphens, at most 64.");
+      if (Buffer.byteLength(p.skill) > MAX_SKILL) throw new Error("A skill can be at most 64 KB.");
+      const head = /^---\n([\s\S]*?)\n---\n/.exec(p.skill);
+      if (!head || !new RegExp(`^name:\\s*${p.name}\\s*$`, "m").test(head[1]) || !/^description:/m.test(head[1])) {
+        throw new Error(`Start the skill with --- frontmatter that has "name: ${p.name}" and a description.`);
+      }
+      const dir = join(skillRoots[0], p.name);
+      const file = join(dir, "SKILL.md");
+      const exists = await access(file).then(() => true, () => false);
+      if (exists && !p.replace) throw new Error(`A skill called ${p.name} is already installed; set replace to true to change it.`);
+      await mkdir(dir, { recursive: true });
+      await writeFile(file, p.skill);
+      return {
+        content: [{ type: "text" as const, text: `Installed ${p.name}${exists ? " (replaced)" : ""}. Every bot gets it from its next run.` }],
+        details: {},
       };
     },
   });

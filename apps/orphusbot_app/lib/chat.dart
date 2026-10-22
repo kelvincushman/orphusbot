@@ -916,12 +916,17 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _card(t.Card c, ColorScheme scheme, String name) {
     final k = c.kind;
+    final skill = k['kind'] == 'approval' && k['tool'] == 'install_skill';
     final title = switch (k['kind']) {
+      'approval' when skill =>
+        '$name wants to install the skill "${(k['input'] as Map?)?['name']}"${(k['input'] as Map?)?['replace'] == true ? ', replacing the installed one' : ''}',
       'approval' => 'Allow $name to use ${k['tool']}?',
       'takeover' => '$name needs you on its screen',
       _ => (k['title'] as String?) ?? 'A question',
     };
     final detail = switch (k['kind']) {
+      // The whole skill as it will be installed, readable rather than as JSON.
+      'approval' when skill => (k['input'] as Map?)?['skill'] as String? ?? '',
       'approval' => const JsonEncoder.withIndent('  ').convert(k['input']),
       'takeover' => k['reason'] as String? ?? '',
       _ => k['message'] as String? ?? '',
@@ -960,12 +965,14 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     child: const Text('Allow once'),
                   ),
-                  OutlinedButton(
-                    onPressed: () => _act(
-                      () => widget.api.answer(c.id, {'decision': 'always'}),
+                  // Skills are asked about every time, so no "always".
+                  if (!skill)
+                    OutlinedButton(
+                      onPressed: () => _act(
+                        () => widget.api.answer(c.id, {'decision': 'always'}),
+                      ),
+                      child: Text('Always allow ${k['tool']}'),
                     ),
-                    child: Text('Always allow ${k['tool']}'),
-                  ),
                   OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: scheme.error,

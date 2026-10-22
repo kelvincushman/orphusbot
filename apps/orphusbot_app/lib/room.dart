@@ -103,7 +103,10 @@ class _IdeasRoomState extends State<IdeasRoom>
   void _setPhase(Phase p) {
     if (!mounted) return;
     setState(() => phase = p);
-    _cue(cueFor(p));
+    final path = cueFor(p);
+    // The voice holds the mic back while a cue plays (on computers).
+    live?.cueOn = path != null;
+    _cue(path);
   }
 
   Future<void> _start() async {

@@ -78,6 +78,42 @@ class LiveVoice {
   static const _talkingOver = 0.35;
 
   bool get _grokTalking => DateTime.now().isBefore(_playsUntil);
+
+  /// Set by the room while a thinking or research cue plays: on a computer
+  /// that sound reaches the mic too, and mustn't be heard as Kelvin talking.
+  bool cueOn = false;
+
+  // What to show once Grok's queued words have played (thinking, research):
+  // a cue never starts over its voice.
+  LiveState? _next;
+  Timer? _quiet;
+
+  /// Moves to [s] now, or as soon as Grok has finished speaking.
+  void _after(LiveState s) {
+    if (_grokTalking) {
+      _next = s;
+      _armQuiet();
+    } else {
+      _set(s);
+    }
+  }
+
+  /// When the queued voice ends: the waiting state, or back to listening.
+  void _armQuiet() {
+    _quiet?.cancel();
+    final left = _playsUntil.difference(DateTime.now());
+    _quiet = Timer(
+      (left.isNegative ? Duration.zero : left) +
+          const Duration(milliseconds: 250),
+      () {
+        if (_grokTalking) return _armQuiet();
+        final next = _next ?? LiveState.listening;
+        _next = null;
+        if (_state == LiveState.speaking) _set(next);
+      },
+    );
+  }
+
   String _reply = '';
   LiveState _state = LiveState.connecting;
 
@@ -118,7 +154,7 @@ class LiveVoice {
     );
     _mic = stream.listen((chunk) {
       final level = pcmLevel(chunk);
-      if (_speakers && _grokTalking) {
+      if (_speakers && (_grokTalking || cueOn)) {
         if (level < _talkingOver) return; // Its own voice through the speakers.
         _hush(); // Kelvin is talking over it.
       }
@@ -137,10 +173,11 @@ class LiveVoice {
     switch (e['type']) {
       case 'input_audio_buffer.speech_started':
         // The owner is talking: stop Grok mid-sentence.
+        _next = null;
         await _hush();
         _set(LiveState.hearing);
       case 'input_audio_buffer.speech_stopped':
-        _set(LiveState.thinking);
+        _after(LiveState.thinking);
       case 'conversation.item.input_audio_transcription.completed':
         onYou((e['transcript'] as String? ?? '').trim());
       case 'response.created':
@@ -149,7 +186,7 @@ class LiveVoice {
         // Anything but its spoken answer is a lookup: a call to the
         // Orchestrator, a wiki save, or a web search on xAI's side.
         final kind = (e['item'] as Map?)?['type'];
-        if (kind != null && kind != 'message') _set(LiveState.researching);
+        if (kind != null && kind != 'message') _after(LiveState.researching);
       case 'response.output_audio_transcript.delta':
         _reply += e['delta'] as String? ?? '';
         onReply(_reply);
@@ -172,23 +209,14 @@ class LiveVoice {
         _playsUntil = start.add(
           Duration(microseconds: pcm.length * 1000000 ~/ 48000),
         );
+        _armQuiet();
         onLevel(pcmLevel(pcm));
       case 'response.done':
-        // Back to listening once the last queued words have played; the
-        // stream stays open for the next reply.
-        final left = _playsUntil.difference(DateTime.now());
-        Future<void>.delayed(
-          left.isNegative
-              ? Duration.zero
-              : left + const Duration(milliseconds: 200),
-          () {
-            if (_state == LiveState.speaking && !_grokTalking) {
-              _set(LiveState.listening);
-            }
-          },
-        );
+        // Back to listening (or what's waiting) once the queued words have
+        // played; the stream stays open for the next reply.
+        _armQuiet();
       case 'response.function_call_arguments.done':
-        _set(LiveState.researching);
+        _after(LiveState.researching);
         String output;
         try {
           final args = jsonDecode(e['arguments'] as String? ?? '{}');
@@ -223,7 +251,7 @@ class LiveVoice {
       },
     });
     _send({'type': 'response.create'});
-    _set(LiveState.thinking);
+    _after(LiveState.thinking);
   }
 
   bool get isOpen => _state != LiveState.closed && _ws != null;
@@ -236,6 +264,7 @@ class LiveVoice {
     _playing = null;
     _out = null;
     _playsUntil = DateTime.now();
+    _quiet?.cancel();
     if (h != null) await SoLoud.instance.stop(h);
     if (src != null) await SoLoud.instance.disposeSource(src);
   }

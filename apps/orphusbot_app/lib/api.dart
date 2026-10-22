@@ -143,7 +143,6 @@ class Api {
     if (room) 'room': true,
   });
 
-
   /// Uploads a file for `bot`; returns its id, to send with the message.
   Future<int> upload(String bot, String name, List<int> bytes) async {
     final uri = Uri.parse('$server/api/attachments')

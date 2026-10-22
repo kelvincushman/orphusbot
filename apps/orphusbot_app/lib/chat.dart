@@ -17,6 +17,7 @@ import 'avatar.dart';
 import 'discuss.dart';
 import 'gallery.dart';
 import 'push.dart';
+import 'room.dart';
 import 'schedules.dart';
 import 'update.dart';
 import 'settings.dart';
@@ -436,6 +437,11 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
             const SizedBox(height: 8),
+            place(
+              Icons.bubble_chart_outlined,
+              'Ideas Room',
+              IdeasRoom(api: widget.api),
+            ),
             place(
               Icons.alarm,
               'Schedules',

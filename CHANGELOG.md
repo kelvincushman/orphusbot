@@ -8,6 +8,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- Gallery: rename items and add or remove tags on a full-screen details page (tap an item, or long-press it when attaching from the gallery). On phones the old dialog hid these fields.
 - The app has its own logo (a robot head with a coiled antenna and a cyan light) as its icon on Android, Mac and Linux, and an opening animation when it starts.
 - Media: Nano Banana 2.1 (up to 4K) and Seedance 2.5 (4 to 30 s, 1080p, first and last frames) are the new defaults. Videos can be drafted cheaply at 480p for approval, then finished at 1080p.
 - Bots' computers now include the Rive CLI. Media Creator makes animations in three steps: concept images, your approval, then the Rive file (`rive-animation` skill). Rebuild the desktop image (`podman build -t localhost/orphusbot-desktop images/desktop`).

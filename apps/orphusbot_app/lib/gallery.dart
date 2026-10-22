@@ -101,10 +101,16 @@ class _GalleryScreenState extends State<GalleryScreen> {
       );
       return;
     }
-    final changed = await showDialog<bool>(
-      context: context,
-      builder: (_) =>
-          _ItemSheet(api: widget.api, item: item, bots: widget.bots),
+    await _edit(item);
+  }
+
+  /// The item's details page: rename, tags, description, bots, view, delete.
+  Future<void> _edit(Map<String, dynamic> item) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) =>
+            _ItemSheet(api: widget.api, item: item, bots: widget.bots),
+      ),
     );
     if (changed == true) _load();
   }
@@ -183,6 +189,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
                           item: i,
                           picked: picked.contains(i['id']),
                           onTap: () => _open(i),
+                          onLongPress: () => _edit(i),
                           scheme: scheme,
                         ),
                     ],
@@ -200,17 +207,19 @@ class _Tile extends StatelessWidget {
     required this.item,
     required this.picked,
     required this.onTap,
+    required this.onLongPress,
     required this.scheme,
   });
   final Api api;
   final Map<String, dynamic> item;
   final bool picked;
-  final VoidCallback onTap;
+  final VoidCallback onTap, onLongPress;
   final ColorScheme scheme;
 
   @override
   Widget build(BuildContext context) => InkWell(
     onTap: onTap,
+    onLongPress: onLongPress,
     borderRadius: BorderRadius.circular(12),
     child: Container(
       decoration: BoxDecoration(
@@ -263,9 +272,8 @@ class _ItemSheet extends StatefulWidget {
 
 class _ItemSheetState extends State<_ItemSheet> {
   late final name = TextEditingController(text: widget.item['name'] as String);
-  late final tags = TextEditingController(
-    text: (widget.item['tags'] as List).join(', '),
-  );
+  final tagInput = TextEditingController();
+  late final tags = [...(widget.item['tags'] as List).cast<String>()];
   late final description = TextEditingController(
     text: widget.item['description'] as String,
   );
@@ -274,18 +282,34 @@ class _ItemSheetState extends State<_ItemSheet> {
 
   @override
   void dispose() {
-    for (final c in [name, tags, description]) {
+    for (final c in [name, tagInput, description]) {
       c.dispose();
     }
     super.dispose();
   }
 
+  /// Adds what's typed as tags (commas split several), lower case, no repeats.
+  void _addTags([String? text]) {
+    final added = (text ?? tagInput.text)
+        .split(',')
+        .map((t) => t.trim().toLowerCase())
+        .where((t) => t.isNotEmpty && !tags.contains(t));
+    setState(() {
+      tags.addAll(added);
+      tagInput.clear();
+    });
+  }
+
   Future<void> _save() async {
+    if (tagInput.text.trim().isNotEmpty) _addTags();
+    if (name.text.trim().isEmpty) {
+      return setState(() => error = 'Give it a name.');
+    }
     try {
       await widget.api.post('/api/gallery/update', {
         'id': widget.item['id'],
         'name': name.text.trim(),
-        'tags': tags.text.split(',').map((t) => t.trim()).toList(),
+        'tags': tags,
         'description': description.text.trim(),
         'pinned_for': pinned.toList(),
       });
@@ -296,6 +320,23 @@ class _ItemSheetState extends State<_ItemSheet> {
   }
 
   Future<void> _delete() async {
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('Delete ${widget.item['name']}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Keep'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (sure != true) return;
     try {
       await widget.api.post('/api/gallery/delete', {'id': widget.item['id']});
       if (mounted) Navigator.pop(context, true);
@@ -315,96 +356,134 @@ class _ItemSheetState extends State<_ItemSheet> {
   @override
   Widget build(BuildContext context) {
     final i = widget.item;
-    final small = Theme.of(context).textTheme.bodySmall;
-    return AlertDialog(
-      title: Text(i['name'] as String),
-      content: SizedBox(
-        width: 560,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final scheme = Theme.of(context).colorScheme;
+    final small = Theme.of(context).textTheme.bodySmall
+        ?.copyWith(color: scheme.outline);
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Details'),
+        actions: [
+          IconButton(
+            tooltip: 'View',
+            icon: const Icon(Icons.open_in_full),
+            onPressed: _view,
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: FilledButton(onPressed: _save, child: const Text('Save')),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        children: [
+          InkWell(
+            onTap: _view,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              height: 180,
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: isImage(i)
+                  ? Image.network(
+                      widget.api.galleryUrl(i['id'] as int),
+                      headers: widget.api.headers,
+                      fit: BoxFit.contain,
+                    )
+                  : Icon(kindIcon(i), size: 56, color: scheme.outline),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${i['mime']} · ${sizeText(i['size'] as int)}'
+            '${(i['source'] as String).startsWith('bot:') ? ' · made by ${(i['source'] as String).substring(4)}' : ''}',
+            style: small,
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: name,
+            decoration: const InputDecoration(labelText: 'Name'),
+          ),
+          const SizedBox(height: 16),
+          Text('Tags', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
             children: [
-              if (isImage(i))
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    widget.api.galleryUrl(i['id'] as int),
-                    headers: widget.api.headers,
-                    fit: BoxFit.contain,
-                    height: 260,
-                  ),
+              for (final t in tags)
+                InputChip(
+                  label: Text(t),
+                  onDeleted: () => setState(() => tags.remove(t)),
                 ),
-              const SizedBox(height: 8),
-              Text(
-                '${i['mime']} · ${sizeText(i['size'] as int)}'
-                '${(i['source'] as String).startsWith('bot:') ? ' · made by ${(i['source'] as String).substring(4)}' : ''}',
-                style: small,
+            ],
+          ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: tagInput,
+            textInputAction: TextInputAction.done,
+            onSubmitted: _addTags,
+            decoration: InputDecoration(
+              hintText: 'Add a tag, such as brand or logo',
+              suffixIcon: IconButton(
+                tooltip: 'Add tag',
+                icon: const Icon(Icons.add),
+                onPressed: _addTags,
               ),
-              TextField(
-                controller: name,
-                decoration: const InputDecoration(labelText: 'Name'),
-              ),
-              TextField(
-                controller: tags,
-                decoration: const InputDecoration(
-                  labelText: 'Tags, separated by commas',
-                  hintText: 'brand, logo, product',
-                ),
-              ),
-              TextField(
-                controller: description,
-                minLines: 2,
-                maxLines: 5,
-                maxLength: 2000,
-                decoration: const InputDecoration(
-                  labelText: 'Description (what it is and when to use it)',
-                ),
-              ),
-              Text(
-                'Standing context for (these bots are told it exists):',
-                style: small,
-              ),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  for (final b in widget.bots)
-                    FilterChip(
-                      label: Text(b['name'] as String),
-                      selected: pinned.contains(b['slug']),
-                      onSelected: (on) => setState(
-                        () => on
-                            ? pinned.add(b['slug'] as String)
-                            : pinned.remove(b['slug']),
-                      ),
-                    ),
-                ],
-              ),
-              if (error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    error!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: description,
+            minLines: 2,
+            maxLines: 5,
+            maxLength: 2000,
+            decoration: const InputDecoration(
+              labelText: 'Description (what it is and when to use it)',
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Bots told it exists (standing context)',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final b in widget.bots)
+                FilterChip(
+                  label: Text(b['name'] as String),
+                  selected: pinned.contains(b['slug']),
+                  onSelected: (on) => setState(
+                    () => on
+                        ? pinned.add(b['slug'] as String)
+                        : pinned.remove(b['slug']),
                   ),
                 ),
             ],
           ),
-        ),
+          if (error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(error!, style: TextStyle(color: scheme.error)),
+            ),
+          const SizedBox(height: 24),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              style: TextButton.styleFrom(foregroundColor: scheme.error),
+              onPressed: _delete,
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Delete from the gallery'),
+            ),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(onPressed: _delete, child: const Text('Delete')),
-        TextButton(onPressed: _view, child: const Text('View')),
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(onPressed: _save, child: const Text('Save')),
-      ],
     );
   }
 }

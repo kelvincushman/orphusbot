@@ -43,6 +43,8 @@ const EXPLICIT_GRACE: Duration = Duration::from_secs(180);
 const ANSWER_WINDOW: Duration = Duration::from_secs(120);
 const QUEUE_MAX: usize = 32;
 const MAX_TEXT_CHARS: usize = 4_000;
+/// The same transcript from the same device within this long is a resend.
+const RESEND_WINDOW: Duration = Duration::from_secs(60);
 
 /// Commands waiting for a device's next poll, each with the message it belongs to.
 type Queue = Vec<(Option<i64>, Value)>;
@@ -58,6 +60,8 @@ pub struct Devices {
     answering: Mutex<HashMap<String, (i64, String, Instant)>>,
     /// Token bucket for `/text`: (tokens, last refill).
     text_rate: Mutex<HashMap<String, (f64, Instant)>>,
+    /// Each device's last transcript and when, to drop one sent twice.
+    last_text: Mutex<HashMap<String, (String, Instant)>>,
 }
 
 fn error(status: StatusCode, message: &str) -> Response {
@@ -261,7 +265,7 @@ pub async fn event(
         Err((status, why)) => return error(status, why),
     };
     if ev.kind == "button" {
-        info!(%device, code = ev.code.as_deref().unwrap_or(""), "badge button");
+        info!(%device, code = ev.code.as_deref().unwrap_or(""), "wearable button");
     }
     match (ev.kind.as_str(), ev.code.as_deref()) {
         ("heartbeat", _) => return Json(json!({ "ok": true, "at": ev.at })).into_response(),
@@ -270,7 +274,7 @@ pub async fn event(
         }
         ("button", Some(code @ ("SINGLE" | "DOUBLE"))) => {
             if let Err(e) = answer(&app, &device, code == "SINGLE").await {
-                warn!("answering on the badge: {e}");
+                warn!("answering on the wearable: {e}");
             }
         }
         // Newer firmware: a tap answers the ask if there is one, otherwise it's
@@ -282,12 +286,12 @@ pub async fn event(
                     lock(&app.devices.intent).insert(device, Instant::now());
                 }
                 // Not knowing whether an ask is waiting, open nothing.
-                Err(e) => warn!("answering on the badge: {e}"),
+                Err(e) => warn!("answering on the wearable: {e}"),
             }
         }
         ("button", Some("CANCEL")) => {
             if let Err(e) = answer(&app, &device, false).await {
-                warn!("answering on the badge: {e}");
+                warn!("answering on the wearable: {e}");
             }
         }
         // Hold is power and a triple tap re-links; the firmware handles them.
@@ -339,6 +343,11 @@ pub async fn text(
         return error(StatusCode::BAD_REQUEST, "text is empty");
     }
     let chat_id = format!("device:{device}");
+    if resent(&app, &device, &text) {
+        info!(%device, chars = text.chars().count(), "wearable text: resent, dropped");
+        return Json(json!({ "ok": true, "chatId": chat_id, "filed": "duplicate" }))
+            .into_response();
+    }
     // The client may say it's ambient, but can't make it deliberate: that needs a recent press.
     let pressed = lock(&app.devices.intent)
         .get(&device)
@@ -353,7 +362,7 @@ pub async fn text(
                 "ignored"
             }
         };
-        info!(%device, filed, overheard = body.overheard, pressed, chars = text.chars().count(), "badge text");
+        info!(%device, filed, overheard = body.overheard, pressed, chars = text.chars().count(), "wearable text");
         return Json(json!({ "ok": true, "chatId": chat_id, "filed": filed })).into_response();
     }
     // Where it goes is read before the press is used up, so a failed lookup can be resent.
@@ -367,10 +376,11 @@ pub async fn text(
         Ok(room) => room,
         Err(e) => {
             warn!("reading where captures go: {e}");
+            forget_text(&app, &device);
             return error(StatusCode::INTERNAL_SERVER_ERROR, "server error");
         }
     };
-    info!(%device, to_room, chars = text.chars().count(), "badge text: deliberate");
+    info!(%device, to_room, chars = text.chars().count(), "wearable text: deliberate");
     lock(&app.devices.intent).remove(&device);
     // A tap on a question opened the mic: this is its answer, if the question is still open.
     let answering = lock(&app.devices.answering).remove(&device);
@@ -402,6 +412,7 @@ pub async fn text(
             }
             Err(e) => {
                 warn!("keeping a wearable idea: {e}");
+                forget_text(&app, &device);
                 error(StatusCode::INTERNAL_SERVER_ERROR, "server error")
             }
         };
@@ -410,9 +421,26 @@ pub async fn text(
         Ok(()) => Json(json!({ "ok": true, "chatId": chat_id, "filed": "task" })).into_response(),
         Err(e) => {
             warn!("filing a wearable task: {e}");
+            forget_text(&app, &device);
             error(StatusCode::INTERNAL_SERVER_ERROR, "server error")
         }
     }
+}
+
+/// Whether `device` sent this same text within [RESEND_WINDOW]; remembers it either way.
+fn resent(app: &App, device: &str, text: &str) -> bool {
+    let mut last = lock(&app.devices.last_text);
+    let again = last
+        .get(device)
+        .is_some_and(|(t, at)| t == text && at.elapsed() < RESEND_WINDOW);
+    last.insert(device.to_owned(), (text.to_owned(), Instant::now()));
+    again
+}
+
+/// Filing failed: the phone's resend must get through, as the same press.
+fn forget_text(app: &App, device: &str) {
+    lock(&app.devices.last_text).remove(device);
+    lock(&app.devices.intent).insert(device.to_owned(), Instant::now());
 }
 
 /// ~10 at once, then one every 6 s (the reference server's limit).
@@ -628,7 +656,7 @@ async fn close(db: &PgPool, msg: i64, state: &str, outcome: &str) {
 }
 
 /// A tap (yes) or double tap (no) answers the one ask on the wrist (§9.3.3).
-/// Answers the ask on the badge, if there is one; false when there wasn't.
+/// Answers the ask on the wearable, if there is one; false when there wasn't.
 async fn answer(app: &App, device: &str, yes: bool) -> sqlx::Result<bool> {
     let current = sqlx::query!(
         "select id, subject, tap from habitat_message
@@ -924,8 +952,11 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         let (_, r) = device(&app, "/api/device/text", me, None, say("book the dentist")).await;
         assert_eq!(r["filed"], "task");
+        // The phone sending the same words again makes no second ticket.
+        let (_, r) = device(&app, "/api/device/text", me, None, say("book the dentist")).await;
+        assert_eq!(r["filed"], "duplicate");
 
-        // With "should I start?" on the badge, a tap answers it and opens nothing.
+        // With "should I start?" on the wearable, a tap answers it and opens nothing.
         device(&app, "/api/device/event", me, None, press("CAPTURE_TOGGLE")).await;
         let answered: Option<String> =
             sqlx::query_scalar!("select outcome from habitat_message where kind = 'ask'")
@@ -967,7 +998,25 @@ mod tests {
             .execute(&db)
             .await
             .unwrap();
+        // If keeping it fails, the phone's resend goes through as the same press.
+        sqlx::query!("alter table room_idea add constraint test_refuse check (false) not valid")
+            .execute(&db)
+            .await
+            .unwrap();
         device(&app, "/api/device/event", me, None, press("CAPTURE_TOGGLE")).await;
+        let (status, _) = device(
+            &app,
+            "/api/device/text",
+            me,
+            None,
+            say("a quoting app for sparks"),
+        )
+        .await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        sqlx::query!("alter table room_idea drop constraint test_refuse")
+            .execute(&db)
+            .await
+            .unwrap();
         let (_, r) = device(
             &app,
             "/api/device/text",

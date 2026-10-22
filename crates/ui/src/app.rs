@@ -1969,7 +1969,7 @@ fn Settings(open: RwSignal<bool>, link_code: RwSignal<String>) -> impl IntoView 
                             <pre>{format!("Server: {origin}\nToken:  {code}")}</pre>
                         }
                     })}
-                    <h3>"Signals to the badge"</h3>
+                    <h3>"Signals to the wearable"</h3>
                     <ul class="decisions">
                         {move || wearables.with(|w| w["messages"].as_array().cloned().unwrap_or_default()).into_iter().take(12).map(|m| {
                             let text = format!("{} · {} · {}", m["cue"].as_str().unwrap_or_default().replace('_', " "),

@@ -608,6 +608,13 @@ class WearableChatProvider extends ChangeNotifier {
     // surface for users.
     if (err is SocketException) {
       _lastError = 'Connection lost — reconnecting…';
+    } else if (chatStreamMissing(err)) {
+      // A server without chat (OrphusBot keeps its chats in its own app):
+      // say so once, and don't retry something that isn't there.
+      _circuitOpen = true;
+      _lastError = noChatHere;
+      notifyListeners();
+      return;
     } else {
       _lastError = 'Chat stream error — reconnecting…';
     }
@@ -624,6 +631,7 @@ class WearableChatProvider extends ChangeNotifier {
   void _scheduleReconnect() {
     if (_disposed) return;
     if (_chatId == null) return;
+    if (_circuitOpen) return;
     // Circuit breaker: after enough consecutive failed reconnects with
     // no healthy frame in between, latch open and stop retrying. The UI
     // surfaces a tap-to-retry banner; resumeReconnect() (driven by the
@@ -839,4 +847,15 @@ class WearableChatProvider extends ChangeNotifier {
     _cancelAllTaskRecovery();
     super.dispose();
   }
+}
+
+/// Shown when the paired server has no chat stream.
+const noChatHere =
+    'This server has no chat here. Chat with your bots in the OrphusBot app; '
+    'the button and your voice still work.';
+
+/// Whether a chat stream error means the server has no chat at all (404/405).
+bool chatStreamMissing(Object err) {
+  final m = RegExp(r'chatStream failed \((\d+)\)').firstMatch('$err');
+  return m != null && (m[1] == '404' || m[1] == '405');
 }

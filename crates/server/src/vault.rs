@@ -50,6 +50,16 @@ pub fn authorized(headers: &HeaderMap, password: &str) -> bool {
     !password.is_empty() && bool::from(pass.ct_eq(password.as_bytes()))
 }
 
+/// Sends anything under `/vault` to the vault, whatever its method.
+pub async fn first(req: Request, next: axum::middleware::Next) -> Response {
+    let path = req.uri().path();
+    if path == "/vault" || path.starts_with("/vault/") {
+        serve(req).await
+    } else {
+        next.run(req).await
+    }
+}
+
 /// Every WebDAV method under `/vault`.
 pub async fn serve(req: Request) -> Response {
     let (Some(dav), Some(password)) = (DAV.as_ref(), env("ORPHUSBOT_VAULT_PASSWORD")) else {

@@ -378,15 +378,16 @@ fn router(app: Shared) -> Router {
             get(device::hands_free).post(device::set_hands_free),
         )
         .route("/node", get(node_link))
-        // Public, with its own password: the shared Obsidian vault over WebDAV.
-        .route("/vault", axum::routing::any(vault::serve))
-        .route("/vault/{*path}", axum::routing::any(vault::serve))
         // Public: the newest app builds (`latest.json`, `orphusbot.apk`), so a
         // phone can update itself from the browser (DESIGN §12.3). They hold no
         // secrets: the server address and sign-in are entered in the app.
         .nest_service("/app", ServeDir::new(app_builds_dir()))
         .merge(api)
         .fallback_service(ServeDir::new(&app.ui_dir))
+        // Public, with its own password: the shared Obsidian vault over
+        // WebDAV. Taken before routing, since WebDAV uses methods (PROPFIND,
+        // MKCOL, MOVE…) and paths (`/vault/`) the router doesn't match.
+        .layer(axum::middleware::from_fn(vault::first))
         .with_state(app)
 }
 

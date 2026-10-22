@@ -8,6 +8,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- The app has a new look, after Grok's app: black or white, the bot's face in a pill at the top, the menu behind a button (beside the chat on wide screens), replies as plain text, and a rounded composer with attach, model and send. The bots' own faces and robots stay.
 - **Schedules** in the app (the clock icon): have a bot do something on its own every day, on weekdays, weekly, every few hours, once, by cron or by webhook, with Run now, pause and edit.
 - Every copy of the app now knows its build. `scripts/publish-app.sh` publishes the newest Android build on the server at `/app`, and an older app shows **Update**. `scripts/macos-setup.sh` now builds the same Flutter app for the Mac, replacing the Tauri wrapper. New server setting `ORPHUSBOT_APP_DIR` (default `~/.local/share/orphusbot/app`).
 - Social drafts must go through the [humanizer](https://github.com/blader/humanizer) skill (installed on the node): the phone tool refuses a `draft` without `"humanized": true` and records the humanizer version on the review.

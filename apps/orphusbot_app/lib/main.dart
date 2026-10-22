@@ -45,17 +45,10 @@ class _OrphusBotAppState extends State<OrphusBotApp> {
 
   @override
   Widget build(BuildContext context) {
-    ThemeData theme(Brightness b) => ThemeData(
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF2F6BFF),
-        brightness: b,
-      ),
-      useMaterial3: true,
-    );
     return MaterialApp(
       title: 'OrphusBot',
-      theme: theme(Brightness.light),
-      darkTheme: theme(Brightness.dark),
+      theme: appTheme(Brightness.light),
+      darkTheme: appTheme(Brightness.dark),
       home: loading
           ? const Scaffold(body: Center(child: CircularProgressIndicator()))
           : api == null
@@ -158,4 +151,79 @@ class _SignInState extends State<SignIn> {
       ),
     );
   }
+}
+
+/// The app's look (DESIGN §12.4): monochrome like Grok's app. Pure black or
+/// white, grey surfaces, pills and rounded cards, no accent colour; the bots'
+/// faces bring the colour.
+ThemeData appTheme(Brightness b) {
+  final dark = b == Brightness.dark;
+  final grey = dark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F3);
+  final greyHigh = dark ? const Color(0xFF2A2A2D) : const Color(0xFFE7E7E9);
+  final scheme =
+      ColorScheme.fromSeed(
+        seedColor: Colors.grey,
+        brightness: b,
+        dynamicSchemeVariant: DynamicSchemeVariant.monochrome,
+      ).copyWith(
+        surface: dark ? Colors.black : Colors.white,
+        onSurface: dark ? const Color(0xFFF2F2F2) : const Color(0xFF111111),
+        primary: dark ? Colors.white : Colors.black,
+        onPrimary: dark ? Colors.black : Colors.white,
+        primaryContainer: greyHigh,
+        onPrimaryContainer: dark ? Colors.white : Colors.black,
+        surfaceContainerLow: grey,
+        surfaceContainer: grey,
+        surfaceContainerHigh: grey,
+        surfaceContainerHighest: greyHigh,
+        outline: const Color(0xFF8E8E93),
+        outlineVariant: dark
+            ? const Color(0xFF2C2C2E)
+            : const Color(0xFFE5E5EA),
+      );
+  const pill = StadiumBorder();
+  return ThemeData(
+    colorScheme: scheme,
+    useMaterial3: true,
+    scaffoldBackgroundColor: scheme.surface,
+    appBarTheme: AppBarTheme(
+      backgroundColor: scheme.surface,
+      surfaceTintColor: Colors.transparent,
+      centerTitle: true,
+      elevation: 0,
+    ),
+    cardTheme: CardThemeData(
+      color: grey,
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    ),
+    filledButtonTheme: const FilledButtonThemeData(
+      style: ButtonStyle(shape: WidgetStatePropertyAll(pill)),
+    ),
+    outlinedButtonTheme: const OutlinedButtonThemeData(
+      style: ButtonStyle(shape: WidgetStatePropertyAll(pill)),
+    ),
+    chipTheme: ChipThemeData(
+      shape: pill,
+      side: BorderSide.none,
+      backgroundColor: grey,
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: grey,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
+      ),
+    ),
+    drawerTheme: DrawerThemeData(
+      backgroundColor: scheme.surface,
+      shape: const RoundedRectangleBorder(),
+    ),
+    dividerTheme: DividerThemeData(color: scheme.outlineVariant),
+    snackBarTheme: const SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      shape: pill,
+    ),
+  );
 }

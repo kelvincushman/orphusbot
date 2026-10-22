@@ -631,6 +631,7 @@ class WearableChatProvider extends ChangeNotifier {
   void _scheduleReconnect() {
     if (_disposed) return;
     if (_chatId == null) return;
+    if (_circuitOpen) return;
     // Circuit breaker: after enough consecutive failed reconnects with
     // no healthy frame in between, latch open and stop retrying. The UI
     // surfaces a tap-to-retry banner; resumeReconnect() (driven by the

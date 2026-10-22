@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "alter table room_idea add constraint test_refuse check (false) not valid",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "57157df47929a7b246567699330d996fb92ce1e6fcff894e87e8c42827ab3e98"
+}

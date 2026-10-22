@@ -418,7 +418,7 @@ Wire constants (`OP`, `PATTERN`, `HABITAT_CUE` ids, button codes 1–11) live in
 
 ### 9.3 Duplex habitat (the wearable conversation)
 
-The wearable is worn as a **pin badge** on the chest, not on the wrist. This document calls it "the wrist" in places, an old name: read it as the badge. Its LED is seen by glancing down, and its vibration is felt against the chest.
+The wearable is worn like a **pin badge** on the chest, not on the wrist. This document calls it "the wrist" in places, an old name: read it as the wearable. Its LED is seen by glancing down, and its vibration is felt against the chest.
 
 The wearable has **no speaker, by design**, and no screen. Its only outputs are the NeoPixel and the vibration motor; its inputs are the button and the mic. "Duplex habitat" means that channel works **both ways as a closed loop**:
 
@@ -484,7 +484,7 @@ Every transition is an event on the wearable thread, so the Wearable view in the
 
 #### 9.3.5 Button → agent (the uplink task path)
 
-Button codes from the app: older firmware sends `AGENT_REQUEST` (or `NOTE`, `REPLY`) for a capture and `SINGLE` / `DOUBLE` for yes and no. Newer firmware with always-on capture sends `CAPTURE_TOGGLE` for a tap and `CANCEL` for a double tap. On the server a `CAPTURE_TOGGLE` answers the ask on the badge if there is one, and otherwise opens a press, so the next transcript is deliberate (push-to-talk). A `CANCEL` says no to the ask; like the app in always-on capture, it leaves an open press alone. A press holds for 3 minutes, because the phone listens in 30 s windows and can take another 90 s to transcribe one. The same transcript from the same device within 60 s is a resend and is dropped (`filed: "duplicate"`). The app attaches one bridge at a time and shuts down a failed start, which had left two bridges handling every frame. Its Chat tab, written for the reference server, says once that the server has no chat when `/api/chat/stream` is 404, instead of retrying. `LINK_RECOVER` and the `POWER_OFF_*` codes are accepted and left to the firmware.
+Button codes from the app: older firmware sends `AGENT_REQUEST` (or `NOTE`, `REPLY`) for a capture and `SINGLE` / `DOUBLE` for yes and no. Newer firmware with always-on capture sends `CAPTURE_TOGGLE` for a tap and `CANCEL` for a double tap. On the server a `CAPTURE_TOGGLE` answers the ask on the wearable if there is one, and otherwise opens a press, so the next transcript is deliberate (push-to-talk). A `CANCEL` says no to the ask; like the app in always-on capture, it leaves an open press alone. A press holds for 3 minutes, because the phone listens in 30 s windows and can take another 90 s to transcribe one. The same transcript from the same device within 60 s is a resend and is dropped (`filed: "duplicate"`). The app attaches one bridge at a time and shuts down a failed start, which had left two bridges handling every frame. Its Chat tab, written for the reference server, says once that the server has no chat when `/api/chat/stream` is 404 or 405, instead of retrying. `LINK_RECOVER` and the `POWER_OFF_*` codes are accepted and left to the firmware.
 
 1. **Tap in IDLE** → capture opens (white, steady, non-suppressible) → the wearer speaks → **tap** → the app files it. The transcript arrives at `/api/device/text` with `overheard = false` and a capture id.
 2. The server runs `intake(source = wearable, …)`. There is no gesture for "which bot": intent comes from the words.

@@ -445,7 +445,8 @@ class WearableDeviceBridge {
     try {
       await bridge._start();
     } catch (_) {
-      await bridge.dispose();
+      // Keep the link: the caller retries on the same connected device.
+      await bridge.dispose(disconnect: false);
       rethrow;
     }
     return bridge;
@@ -523,6 +524,7 @@ class WearableDeviceBridge {
     _audioEncoding = encoding;
     _audioFrameMs = frameMs;
     await _configureAudioPath();
+    if (!_running) return; // disposed during await
 
     // --- Button: BLE notify → Wearable HTTP event ---
     ble.BluetoothCharacteristic? buttonChar;
@@ -533,6 +535,7 @@ class WearableDeviceBridge {
     }
     if (buttonChar != null) {
       await buttonChar.setNotifyValue(true);
+      if (!_running) return; // disposed during await
       _buttonSub = buttonChar.lastValueStream.listen((value) {
         if (value.isEmpty) return;
         final raw = value[0];
@@ -1768,7 +1771,7 @@ class WearableDeviceBridge {
     } catch (_) {}
   }
 
-  Future<void> dispose() async {
+  Future<void> dispose({bool disconnect = true}) async {
     if (identical(_current, this)) _current = null;
     if (!_running) return;
     // File an in-flight note before tearing anything down. The link dropping
@@ -1809,6 +1812,7 @@ class WearableDeviceBridge {
     _utteranceBuffer = null;
     _opusDecoder?.dispose();
     _opusDecoder = null;
+    if (!disconnect) return;
     try {
       await _device.disconnect();
     } catch (_) {

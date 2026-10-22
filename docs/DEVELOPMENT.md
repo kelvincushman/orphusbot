@@ -162,6 +162,7 @@ All settings are environment variables.
 | `ORPHUSBOT_STT_TOKEN` (in `keys.env`) | none | Bearer token for that service |
 | `ORPHUSBOT_ELEVENLABS_KEY` (in `keys.env`) | none | ElevenLabs API key for the Ideas Room's voice; without it the room shows replies but doesn't speak |
 | `ORPHUSBOT_ELEVENLABS_VOICE` | a British voice (`JBFqnCBsd6RMkjVDRZzb`) | ElevenLabs voice id for the room |
+| `ORPHUSBOT_ROOM_MODEL` | `claude-bridge/claude-sonnet-5-5` | The model Ideas Room turns run on, with thinking off |
 | `ORPHUSBOT_LAYA_URL` | none | The System 1 model's `/v1/systemone` server (kev or laya-serve), such as `http://127.0.0.1:8009`. Without it System 1 abstains: the inbox keeps its messages and every non-read tool call asks |
 | `ORPHUSBOT_LAYA_TIMEOUT_MS` | `1500` | How long to wait for System 1 before abstaining |
 | `ORPHUSBOT_ROUTE_THRESHOLD` | `0.85` | Confidence Laya needs to move an inbox message to another bot |

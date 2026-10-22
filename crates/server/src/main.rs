@@ -1032,6 +1032,9 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
         Err(e) => return warn!("finding the run's thread: {e}"),
     };
     let mut spec = bot.spec();
+    if claimed.prompt.contains(room::ROOM_NOTE) {
+        room::quick(&mut spec);
+    }
     if let Some((session, name)) = discussions::session(&app.db, run, &bot.slug).await {
         spec.session = Some(session);
         spec.name = Some(name);

@@ -71,6 +71,7 @@ class LiveVoice {
     required this.onYou,
     required this.onReply,
     required this.onError,
+    this.onTurn,
   });
 
   final Api api;
@@ -82,6 +83,12 @@ class LiveVoice {
   final void Function(String) onYou;
   final void Function(String) onReply;
   final void Function(String) onError;
+
+  /// Each finished turn, for the session's transcript: who and what.
+  final void Function(String who, String text)? onTurn;
+
+  /// The server's record of this conversation (its memory), once started.
+  int? sessionId;
 
   WebSocket? _ws;
   final _recorder = AudioRecorder();
@@ -192,6 +199,7 @@ class LiveVoice {
     _set(LiveState.connecting);
     final got =
         await api.postJson('/api/room/voice', {}) as Map<String, dynamic>;
+    sessionId = (got['session_id'] as num?)?.toInt();
     if (!SoLoud.instance.isInitialized) await SoLoud.instance.init();
     _ws = await WebSocket.connect(
       got['url'] as String,
@@ -244,7 +252,12 @@ class LiveVoice {
       case 'input_audio_buffer.speech_stopped':
         _after(LiveState.thinking);
       case 'conversation.item.input_audio_transcription.completed':
-        onYou((e['transcript'] as String? ?? '').trim());
+        final said = (e['transcript'] as String? ?? '').trim();
+        onYou(said);
+        if (said.isNotEmpty) onTurn?.call('Kelvin', said);
+      case 'response.output_audio_transcript.done':
+        final said = (e['transcript'] as String? ?? _reply).trim();
+        if (said.isNotEmpty) onTurn?.call('Grok', said);
       case 'response.created':
         _reply = '';
       case 'response.output_item.added':

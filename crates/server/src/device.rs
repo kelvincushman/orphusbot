@@ -264,23 +264,28 @@ pub async fn event(
         ("button", Some("AGENT_REQUEST" | "NOTE" | "REPLY")) => {
             lock(&app.devices.intent).insert(device, Instant::now());
         }
-        ("button", Some("SINGLE")) => {
-            answer(&app, &device, true).await;
-        }
-        ("button", Some("DOUBLE")) => {
-            answer(&app, &device, false).await;
+        ("button", Some(code @ ("SINGLE" | "DOUBLE"))) => {
+            if let Err(e) = answer(&app, &device, code == "SINGLE").await {
+                warn!("answering on the badge: {e}");
+            }
         }
         // Newer firmware: a tap answers the ask if there is one, otherwise it's
         // push-to-talk; a double tap says no, or drops a press.
         ("button", Some("CAPTURE_TOGGLE")) => {
-            if !answer(&app, &device, true).await {
-                lock(&app.devices.intent).insert(device, Instant::now());
+            match answer(&app, &device, true).await {
+                Ok(true) => {}
+                Ok(false) => {
+                    lock(&app.devices.intent).insert(device, Instant::now());
+                }
+                // Not knowing whether an ask is waiting, open nothing.
+                Err(e) => warn!("answering on the badge: {e}"),
             }
         }
         ("button", Some("CANCEL")) => {
-            if !answer(&app, &device, false).await {
-                lock(&app.devices.intent).remove(&device);
+            if let Err(e) = answer(&app, &device, false).await {
+                warn!("answering on the badge: {e}");
             }
+            lock(&app.devices.intent).remove(&device);
         }
         // Hold is power and a triple tap re-links; the firmware handles them.
         (
@@ -619,16 +624,16 @@ async fn close(db: &PgPool, msg: i64, state: &str, outcome: &str) {
 
 /// A tap (yes) or double tap (no) answers the one ask on the wrist (§9.3.3).
 /// Answers the ask on the badge, if there is one; false when there wasn't.
-async fn answer(app: &App, device: &str, yes: bool) -> bool {
+async fn answer(app: &App, device: &str, yes: bool) -> sqlx::Result<bool> {
     let current = sqlx::query!(
         "select id, subject, tap from habitat_message
          where device_id = $1 and kind = 'ask' and state in ('sent', 'delivered') order by id limit 1",
         device
     )
     .fetch_optional(&app.db)
-    .await;
-    let Ok(Some(m)) = current else {
-        return false;
+    .await?;
+    let Some(m) = current else {
+        return Ok(false);
     };
     // Stop the amber pulse first, so whatever the answer starts (queued, running) plays after it.
     enqueue(app, device, None, "ack");
@@ -663,6 +668,8 @@ async fn answer(app: &App, device: &str, yes: bool) -> bool {
                 device.to_owned(),
                 (m.id, subject_id.to_owned(), Instant::now()),
             );
+            // The answer is spoken next, so it counts as a press.
+            lock(&app.devices.intent).insert(device.to_owned(), Instant::now());
             ("answered", "answering aloud")
         }
         (_, true) => ("answered", "seen; it's on the phone"),
@@ -672,7 +679,7 @@ async fn answer(app: &App, device: &str, yes: bool) -> bool {
     if let Err(e) = send_next_ask(app, device).await {
         warn!("sending the next ask: {e}");
     }
-    true
+    Ok(true)
 }
 
 /// What happened to a run, for the wrist that started it.
@@ -923,6 +930,18 @@ mod tests {
         assert!(answered.is_some());
         let (_, r) = device(&app, "/api/device/text", me, None, say("and buy milk")).await;
         assert_eq!(r["filed"], "ignored");
+
+        // A tap on a question to answer aloud lets the next words through.
+        sqlx::query!(
+            "insert into habitat_message (device_id, kind, cue, subject, tap, state)
+             values ('wrist-1', 'ask', 'awaiting_input', 'dialog:q-1', 'answer', 'sent')"
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        device(&app, "/api/device/event", me, None, press("CAPTURE_TOGGLE")).await;
+        let (_, r) = device(&app, "/api/device/text", me, None, say("Thursday works")).await;
+        assert_ne!(r["filed"], "ignored", "the spoken answer is deliberate");
 
         // A double tap drops a press.
         device(&app, "/api/device/event", me, None, press("CAPTURE_TOGGLE")).await;

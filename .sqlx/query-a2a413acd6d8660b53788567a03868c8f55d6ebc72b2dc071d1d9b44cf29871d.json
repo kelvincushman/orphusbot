@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "update ticket set status = 'doing', updated_at = now() where id = $1 returning updated_at",
+  "query": "update ticket set status = 'doing', updated_at = now()\n         where id = $1 and status = $2::text::ticket_status\n           and bot_id = (select id from bot where slug = $3)\n         returning updated_at",
   "describe": {
     "columns": [
       {
@@ -17,12 +17,14 @@
     ],
     "parameters": {
       "Left": [
-        "Int8"
+        "Int8",
+        "Text",
+        "Text"
       ]
     },
     "nullable": [
       false
     ]
   },
-  "hash": "d7bf4ea6e85c9002ad20eb956aa8a97dc3c5ecfcd1cea3db297ee8dd2ddf063a"
+  "hash": "a2a413acd6d8660b53788567a03868c8f55d6ebc72b2dc071d1d9b44cf29871d"
 }

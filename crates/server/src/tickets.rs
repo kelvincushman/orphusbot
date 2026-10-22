@@ -236,17 +236,28 @@ pub(crate) async fn start(app: &App, id: i64) -> Result<(), ApiError> {
     {
         return Err((StatusCode::CONFLICT, BUSY));
     }
+    let doing_from = ticket.status.clone();
     let doing = Ticket {
         status: "doing".into(),
         ..ticket
     };
+    // Only as it was read: an edit in between (status or bot) wins.
     let started = sqlx::query_scalar!(
-        "update ticket set status = 'doing', updated_at = now() where id = $1 returning updated_at",
-        id
+        "update ticket set status = 'doing', updated_at = now()
+         where id = $1 and status = $2::text::ticket_status
+           and bot_id = (select id from bot where slug = $3)
+         returning updated_at",
+        id,
+        doing_from,
+        slug
     )
-    .fetch_one(&app.db)
+    .fetch_optional(&app.db)
     .await
-    .map_err(|e| internal("starting a ticket", e))?;
+    .map_err(|e| internal("starting a ticket", e))?
+    .ok_or((
+        StatusCode::CONFLICT,
+        "That ticket just changed; start it again",
+    ))?;
     let notice = ThreadEvent::Notice {
         text: format!("Ticket OB-{id}: {}", doing.title),
     };

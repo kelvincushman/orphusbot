@@ -384,19 +384,27 @@ pub async fn text(
     lock(&app.devices.intent).remove(&device);
     // A tap on a question opened the mic: this is its answer, if the question is still open.
     let answering = lock(&app.devices.answering).remove(&device);
-    if let Some((msg, dialog, at)) = answering
+    if let Some((msg, subject, at)) = answering
         && at.elapsed() < ANSWER_WINDOW
     {
-        let answered = resolve_dialog(
-            &app,
-            Answer {
-                id: dialog,
-                value: Some(text.clone()),
-                ..Answer::default()
+        let answered = match subject.split_once(':') {
+            Some(("reply", run)) => match run.parse() {
+                Ok(run) => reply_to_run(&app, &device, run, &text).await,
+                Err(_) => false,
             },
-        )
-        .await;
-        if answered.is_ok() {
+            Some((_, dialog)) => resolve_dialog(
+                &app,
+                Answer {
+                    id: dialog.to_owned(),
+                    value: Some(text.clone()),
+                    ..Answer::default()
+                },
+            )
+            .await
+            .is_ok(),
+            None => false,
+        };
+        if answered {
             close(&app.db, msg, "answered", "answered aloud").await;
             return Json(json!({ "ok": true, "chatId": chat_id, "filed": "answer" }))
                 .into_response();
@@ -512,11 +520,13 @@ async fn wearable_task(app: &App, device: &str, text: &str) -> anyhow::Result<()
 }
 
 /// When `bot` finishes a run, starts the oldest wearable capture that was
-/// waiting for it (D-056), unless the owner said no to it or is still being asked.
+/// waiting for it (D-056): never started (a cancelled one has a run), and not
+/// one the owner said no to or is still being asked about.
 pub async fn start_waiting(app: &App, bot: &str) {
     let next = sqlx::query_scalar!(
         "select t.id from ticket t join bot b on b.id = t.bot_id
          where b.slug = $1 and t.status = 'todo' and t.device_id is not null
+           and not exists (select 1 from run r where r.ticket_id = t.id)
            and t.created_at > now() - interval '1 day'
            and not exists (select 1 from habitat_message m where m.kind = 'ask' and m.subject = 'ticket:' || t.id
                            and m.state in ('queued', 'sent', 'delivered', 'dismissed'))
@@ -734,7 +744,7 @@ async fn answer(app: &App, device: &str, yes: bool) -> sqlx::Result<bool> {
             // Opens the mic on the app; the next deliberate transcript answers the question.
             lock(&app.devices.answering).insert(
                 device.to_owned(),
-                (m.id, subject_id.to_owned(), Instant::now()),
+                (m.id, format!("{subject_kind}:{subject_id}"), Instant::now()),
             );
             // The answer is spoken next, so it counts as a press.
             lock(&app.devices.intent).insert(device.to_owned(), Instant::now());
@@ -782,6 +792,17 @@ pub async fn run_news(app: &App, run: i64, news: RunNews<'_>) {
     let done = match news {
         RunNews::Queued => inform(app, &device, "task_queued", &subject).await,
         RunNews::Running => inform(app, &device, "task_running", &subject).await,
+        // A reply that ends by asking the owner something needs him, not a green light.
+        RunNews::Done if ends_with_question(app, run).await => {
+            ask(
+                app,
+                &device,
+                "awaiting_input",
+                &format!("reply:{run}"),
+                "answer",
+            )
+            .await
+        }
         RunNews::Done => inform(app, &device, "task_done", &subject).await,
         RunNews::Failed => inform(app, &device, "error", &subject).await,
         RunNews::Cancelled => inform(app, &device, "nop", &subject).await,
@@ -838,6 +859,52 @@ pub async fn dialog_settled(app: &App, dialog: &str) {
     }
 }
 
+/// Whether the run's last reply ends by asking the owner something.
+async fn ends_with_question(app: &App, run: i64) -> bool {
+    let last = sqlx::query_scalar!(
+        r#"select e.body ->> 'text' as "text!" from event e join run r on r.thread_id = e.thread_id
+           where r.id = $1 and e.body ->> 'type' = 'message' and e.body ->> 'role' = 'assistant'
+           order by e.id desc limit 1"#,
+        run
+    )
+    .fetch_optional(&app.db)
+    .await;
+    match last {
+        Ok(Some(text)) => asks_something(&text),
+        _ => false,
+    }
+}
+
+/// The text ends with a question mark, past any closing markdown or quotes.
+fn asks_something(text: &str) -> bool {
+    text.trim_end_matches(|c: char| c.is_whitespace() || "*_)\"'”’`".contains(c))
+        .ends_with('?')
+}
+
+/// The owner answered a bot's closing question aloud: it goes to that bot as
+/// his next message, and the run it starts reports to the same wrist.
+async fn reply_to_run(app: &App, device: &str, run: i64, text: &str) -> bool {
+    let Ok(thread) = crate::db::run_thread(&app.db, run).await else {
+        return false;
+    };
+    let message = orphusbot_proto::ThreadEvent::Message {
+        role: orphusbot_proto::Role::User,
+        text: text.to_owned(),
+    };
+    crate::record(app, &thread, message).await;
+    let source = crate::runs::Source {
+        device: Some(device.to_owned()),
+        ..Default::default()
+    };
+    match crate::submit(app, &thread, text.to_owned(), source).await {
+        Ok(_) => true,
+        Err(e) => {
+            warn!("sending a spoken answer to its bot: {e:?}");
+            false
+        }
+    }
+}
+
 /// What an unanswered ask was about, and the bot a tap on its push opens.
 async fn expired_push(app: &App, subject: &str) -> (String, Option<String>) {
     let unanswered = "It wasn't answered on the wearable.".to_owned();
@@ -860,6 +927,19 @@ async fn expired_push(app: &App, subject: &str) -> (String, Option<String>) {
                 }
                 None => (unanswered, None),
             }
+        }
+        Some(("reply", run)) => {
+            let bot = match run.parse() {
+                Ok(run) => crate::db::run_thread(&app.db, run)
+                    .await
+                    .ok()
+                    .map(|t| t.bot),
+                Err(_) => None,
+            };
+            (
+                "A bot asked you something. Its question is in its chat.".to_owned(),
+                bot,
+            )
         }
         Some(("dialog", id)) => {
             let bot = lock(&app.rt).dialogs.get(id).map(|p| p.thread.bot.clone());
@@ -1169,17 +1249,25 @@ mod tests {
         assert_eq!(asks, 0);
 
         // When the bot finishes, the waiting one starts by itself.
-        sqlx::query!("update run set status = 'completed'")
-            .execute(&db)
+        let first = sqlx::query_scalar!("update run set status = 'completed' returning id")
+            .fetch_one(&db)
             .await
             .unwrap();
-        start_waiting(&app, "inbox").await;
+        let thread = crate::db::bot_thread(&db, "inbox").await.unwrap().unwrap();
+        crate::run_ended(
+            &app,
+            &thread,
+            first,
+            orphusbot_proto::RunOutcome::Completed,
+            None,
+        )
+        .await;
         let statuses: Vec<String> =
             sqlx::query_scalar!(r#"select status::text as "s!" from ticket order by id"#)
                 .fetch_all(&db)
                 .await
                 .unwrap();
-        assert_eq!(statuses, ["doing", "doing"]);
+        assert_eq!(statuses, ["review", "doing"]);
         let runs =
             sqlx::query_scalar!(r#"select count(*) as "n!" from run where device_id = 'wrist-1'"#)
                 .fetch_one(&db)
@@ -1191,5 +1279,68 @@ mod tests {
         let (body, bot) = expired_push(&app, "ticket:2").await;
         assert!(body.contains("book the dentist"), "{body}");
         assert_eq!(bot.as_deref(), Some("inbox"));
+    }
+    #[test]
+    fn a_reply_that_asks_needs_the_owner() {
+        assert!(asks_something("Which calendar do you mean?"));
+        assert!(asks_something("Shall I book it?**\n"));
+        assert!(!asks_something("Booked for 7pm."));
+        assert!(!asks_something(""));
+    }
+
+    #[sqlx::test]
+    async fn a_closing_question_is_answered_aloud(db: PgPool) {
+        let app = app(db.clone());
+        let token = paired(&app, &db).await;
+        let me = ("wrist-1", token.as_str());
+        let press = |code: &'static str| json!({ "kind": "button", "code": code });
+        let say = |text: &'static str| json!({ "text": text, "overheard": false });
+
+        device(&app, "/api/device/event", me, None, press("CAPTURE_TOGGLE")).await;
+        let (_, r) = device(&app, "/api/device/text", me, None, say("book me a table")).await;
+        assert_eq!(r["filed"], "task");
+
+        // The bot ends its turn by asking something: the wrist gets a question, not done.
+        let thread = crate::db::bot_thread(&db, "inbox").await.unwrap().unwrap();
+        let reply = orphusbot_proto::ThreadEvent::Message {
+            role: orphusbot_proto::Role::Assistant,
+            text: "Which restaurant, and for how many?".into(),
+        };
+        crate::record(&app, &thread, reply).await;
+        let run = sqlx::query_scalar!("update run set status = 'completed' returning id")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        crate::run_ended(
+            &app,
+            &thread,
+            run,
+            orphusbot_proto::RunOutcome::Completed,
+            None,
+        )
+        .await;
+        let subject = sqlx::query_scalar!("select subject from habitat_message where kind = 'ask'")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(subject, format!("reply:{run}"));
+
+        // A tap opens the mic; the spoken answer goes to the bot as a new run from this wrist.
+        device(&app, "/api/device/event", me, None, press("CAPTURE_TOGGLE")).await;
+        let (_, r) = device(
+            &app,
+            "/api/device/text",
+            me,
+            None,
+            say("the Italian, two of us"),
+        )
+        .await;
+        assert_eq!(r["filed"], "answer");
+        let next = sqlx::query!("select prompt, device_id from run where id <> $1", run)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(next.prompt, "the Italian, two of us");
+        assert_eq!(next.device_id.as_deref(), Some("wrist-1"));
     }
 }

@@ -269,9 +269,16 @@ pub(crate) async fn start(app: &App, id: i64) -> Result<(), ApiError> {
         device,
         ..Default::default()
     };
-    submit(app, &thread, text, source)
-        .await
-        .map_err(|e| internal("queueing the ticket's run", e))?;
+    if let Err(e) = submit(app, &thread, text, source).await {
+        // No run behind it: put it back, so it isn't left "doing" for ever.
+        if let Err(e) = sqlx::query!("update ticket set status = 'todo' where id = $1", id)
+            .execute(&app.db)
+            .await
+        {
+            warn!("putting a ticket back after a failed start: {e}");
+        }
+        return Err(internal("queueing the ticket's run", e));
+    }
     Ok(())
 }
 

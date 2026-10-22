@@ -1,16 +1,16 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select state from habitat_message order by id",
+  "query": "select subject from habitat_message where kind = 'ask'",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "state",
+        "name": "subject",
         "type_info": "Text",
         "origin": {
           "Table": {
             "table": "habitat_message",
-            "name": "state"
+            "name": "subject"
           }
         }
       }
@@ -22,5 +22,5 @@
       false
     ]
   },
-  "hash": "0efb0a61de38fc5c5543807c1d8535cd3932827afd1b4796399ce9348fbb52ce"
+  "hash": "58cf9dc408d354156ae9c1f31ab9535f5cc4500fa567f83a5aba2472be1a25a3"
 }

@@ -11,6 +11,14 @@ Format:
 
 ---
 
+## D-057: Bots ask the owner with a tool, and a closing question still reaches the wearable (2026-10-22)
+
+**Decided:** The bridge gains `ask_owner {question}`, a plain input dialog that the gate treats as read-only. On a run from the wearable it becomes an ask that the owner answers aloud. As a fallback, a wearable run whose last reply ends with a question mark sends "needs you" instead of "done", and the spoken answer becomes the owner's next message to that bot.
+
+**Why:** The wearable can't show a reply, so a question left at the end of a reply was invisible: the wrist said "done" and the work stalled. A tool makes asking explicit and keeps the run going; the fallback catches bots that ask in prose anyway. **Alternatives:** System 1 judging whether a reply needs the owner (another model call on every run end, for a rule a question mark mostly captures); phone only (the owner wants the loop on the wearable). **Revisit if:** rhetorical questions trigger false "needs you" signals.
+
+---
+
 ## D-056: A wearable press starts the task (2026-10-22)
 
 **Decided:** A deliberate capture (a press, then words) becomes a ticket that System 1 routes to a bot and that starts at once. Nothing asks "should I start?": if its bot is busy, the ticket waits and starts when the bot finishes its run. Act-now from triage still decides tickets made elsewhere.

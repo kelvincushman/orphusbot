@@ -61,6 +61,12 @@ class _IdeasRoomState extends State<IdeasRoom>
   SoundHandle? cue;
   String? cuePath;
   final loaded = <String, AudioSource>{};
+  // The conversation so far (the session's memory), and the Orchestrator's
+  // live view, waiting for a pause to be passed on.
+  final transcript = <String>[];
+  Timer? chimeIn;
+  String? orchestratorView;
+  int? sessionId;
 
   @override
   void initState() {
@@ -70,6 +76,7 @@ class _IdeasRoomState extends State<IdeasRoom>
 
   @override
   void dispose() {
+    chimeIn?.cancel();
     _cue(null);
     live?.dispose();
     orchestrator.stop();
@@ -103,6 +110,12 @@ class _IdeasRoomState extends State<IdeasRoom>
   void _setPhase(Phase p) {
     if (!mounted) return;
     setState(() => phase = p);
+    // The Orchestrator's view goes in at a pause, never over Grok.
+    final view = orchestratorView;
+    if (p == Phase.listening && view != null && (live?.isOpen ?? false)) {
+      orchestratorView = null;
+      live!.sendText('(The Orchestrator has been listening and says: $view)');
+    }
     final path = cueFor(p);
     // The voice holds the mic back while a cue plays (on computers).
     live?.cueOn = path != null;
@@ -117,7 +130,19 @@ class _IdeasRoomState extends State<IdeasRoom>
     });
     final voice = LiveVoice(
       api: widget.api,
-      ask: (name, args) => orchestrator.ask(widget.api, widget.bot, name, args),
+      ask: (name, args) {
+        if (name == 'save_idea') {
+          widget.api
+              .post('/api/room/ideas', {
+                'session': live?.sessionId,
+                'title': args['title'],
+                'brief': args['brief'],
+              })
+              .catchError((_) {});
+        }
+        return orchestrator.ask(widget.api, widget.bot, name, args);
+      },
+      onTurn: (who, text) => transcript.add('$who: $text'),
       onState: (s) {
         if (s == LiveState.closed && mounted) setState(() => live = null);
         _setPhase(phaseOf(s));
@@ -136,8 +161,12 @@ class _IdeasRoomState extends State<IdeasRoom>
       },
     );
     setState(() => live = voice);
+    transcript.clear();
     try {
       await voice.start();
+      sessionId = voice.sessionId;
+      // Every few minutes of a longer talk, the Orchestrator gives its view.
+      chimeIn = Timer.periodic(const Duration(minutes: 5), (_) => _chimeIn());
     } catch (e) {
       await voice.stop();
       if (mounted) {
@@ -151,9 +180,80 @@ class _IdeasRoomState extends State<IdeasRoom>
   }
 
   Future<void> _end() async {
+    chimeIn?.cancel();
+    orchestratorView = null;
     await live?.stop();
     if (mounted) setState(() => live = null);
     _setPhase(Phase.idle);
+    await _wrapUp();
+  }
+
+  /// The Orchestrator's view of the conversation so far, for Grok to pass on.
+  Future<void> _chimeIn() async {
+    // Not over one of Grok's own questions to it, or with too little said.
+    if (transcript.length < 4 ||
+        orchestrator.busy ||
+        !(live?.isOpen ?? false)) {
+      return;
+    }
+    final view = await orchestrator.ask(
+      widget.api,
+      widget.bot,
+      'ask_orchestrator',
+      {
+        'request':
+            "You've been listening in on Kelvin's Ideas Room conversation with Grok. "
+            'In two or three sentences: the strongest point so far, the biggest risk, '
+            'and one question worth exploring next.\n\n${_recent()}',
+      },
+    );
+    if (mounted && (live?.isOpen ?? false)) {
+      orchestratorView = view;
+      if (phase == Phase.listening) _setPhase(Phase.listening);
+    }
+  }
+
+  /// The last part of the conversation, short enough to send.
+  String _recent([int chars = 12000]) {
+    final all = transcript.join('\n');
+    return all.length <= chars ? all : '…${all.substring(all.length - chars)}';
+  }
+
+  /// After a conversation: keep it as memory, ask the Orchestrator for its
+  /// review in its chat, and ask Kelvin how it went.
+  Future<void> _wrapUp() async {
+    final id = sessionId;
+    if (id == null || transcript.isEmpty) return;
+    final text = transcript.join('\n');
+    try {
+      await widget.api.post('/api/room/sessions/end', {
+        'id': id,
+        'transcript': text,
+      });
+      if (transcript.length >= 2) {
+        await widget.api.send(
+          widget.bot,
+          'Review this Ideas Room conversation for me: what\'s strong, the risks, '
+          'what to check or research, and the next steps. Keep it short.\n\n${_recent()}',
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() => note = explain(e));
+    }
+    if (!mounted) return;
+    final rated = await showModalBottomSheet<(int, String)>(
+      context: context,
+      backgroundColor: const Color(0xFF1C1C1E),
+      builder: (_) => const RateSession(),
+    );
+    if (rated == null) return;
+    try {
+      await widget.api.post('/api/room/sessions/rate', {
+        'id': id,
+        'rating': rated.$1,
+        'note': rated.$2,
+      });
+    } catch (_) {}
   }
 
   /// Typed text goes into the same live conversation, starting one if needed.
@@ -331,6 +431,9 @@ class OrchestratorLine {
 
   void stop() => _events?.cancel();
 
+  /// Waiting on an answer already; one question at a time.
+  bool get busy => _waiting != null;
+
   Future<String> ask(
     Api api,
     String bot,
@@ -456,4 +559,89 @@ class Orb extends CustomPainter {
   @override
   bool shouldRepaint(Orb old) =>
       old.time != time || old.phase != phase || old.level != level;
+}
+
+/// After a conversation: was it useful? An optional note says why.
+class RateSession extends StatefulWidget {
+  const RateSession({super.key});
+
+  @override
+  State<RateSession> createState() => _RateSessionState();
+}
+
+class _RateSessionState extends State<RateSession> {
+  final note = TextEditingController();
+  int? rating;
+
+  @override
+  void dispose() {
+    note.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.fromLTRB(
+      20,
+      20,
+      20,
+      20 + MediaQuery.of(context).viewInsets.bottom,
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Was that useful?',
+          style: TextStyle(fontSize: 18, color: Colors.white),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          "The Orchestrator is writing its review in its chat. Your rating helps the next one.",
+          style: TextStyle(color: Colors.white54),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            for (final (value, icon) in const [
+              (1, Icons.thumb_up_alt_outlined),
+              (-1, Icons.thumb_down_alt_outlined),
+            ])
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Icon(icon, size: 20),
+                  selected: rating == value,
+                  onSelected: (_) => setState(() => rating = value),
+                ),
+              ),
+          ],
+        ),
+        TextField(
+          controller: note,
+          maxLength: 2000,
+          minLines: 1,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: 'Anything to do differently next time? (optional)',
+          ),
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Skip'),
+            ),
+            FilledButton(
+              onPressed: rating == null
+                  ? null
+                  : () => Navigator.pop(context, (rating!, note.text.trim())),
+              child: const Text('Send'),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
 }

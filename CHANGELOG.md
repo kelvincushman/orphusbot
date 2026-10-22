@@ -8,6 +8,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- Ideas Room remembers: each conversation starts with a recap of your last few, the ideas you've saved and how you rated past sessions. The Orchestrator chimes in every five minutes, reviews each conversation in its chat when you end it, Grok checks in on how it's going, and you can rate each session.
 - Ideas Room: Grok is no longer cut off by its own echo and the thinking sound no longer loops; on a computer, tap the orb to stop it talking.
 - Ideas Room: the thinking and research sounds no longer cut Grok off; they wait until it has finished speaking.
 - Ideas Room is Grok only (the toggle is gone): typing goes into the same live conversation, soft sounds play while it thinks and while it researches, replies no longer overlap, and on a computer Grok no longer hears itself through the speakers. The settings `ORPHUSBOT_STT_URL`, `ORPHUSBOT_STT_TOKEN`, `ORPHUSBOT_ELEVENLABS_KEY` and `ORPHUSBOT_ELEVENLABS_VOICE` are no longer used.

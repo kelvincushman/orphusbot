@@ -11,6 +11,14 @@ Format:
 
 ---
 
+## D-052: The Ideas Room talks through Grok's realtime voice, with the Orchestrator behind it (2026-10-22)
+
+**Decided:** The room's default is a live conversation with xAI's realtime voice model, instructed to speak for the Orchestrator and to call it (`ask_orchestrator`, `save_idea`) for anything about Kelvin's own work. The app connects to xAI with a five-minute token minted by the server. The Orchestrator-with-ElevenLabs path stays as a toggle.
+
+**Why:** It supersedes D-050's default because speed was the deciding factor in use. The Orchestrator path took 24 to 26 s per turn at first and about 2 to 3 s at best, while Grok's voice begins in about 1 s, takes turns by itself and can be talked over. Keeping the Orchestrator behind it as a tool keeps his wiki, team and tickets one call away. The cost is about $0.05 a minute, and the owner's speech goes to xAI in this mode, which he chose.
+
+---
+
 ## D-051: Bots ask the owner to install a skill, every time (2026-10-22)
 
 **Decided:** Bots get an `install_skill` tool that carries the whole SKILL.md. The gate always asks the owner, whatever the approval rules say, and the card shows the full text without an "always allow" button. Only on Allow does the bridge write it into the node's user skills folder.

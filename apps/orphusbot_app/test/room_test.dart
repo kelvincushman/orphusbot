@@ -1,4 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
+
+import 'dart:typed_data';
+
+import 'package:orphusbot_app/live_voice.dart';
 import 'package:orphusbot_app/room.dart';
 
 void main() {
@@ -23,5 +27,20 @@ void main() {
       min: 20,
     );
     expect(joined, ['Yes. Good. Now the plan is set.']);
+  });
+
+  test('the orb follows Grok and the mic from raw PCM', () {
+    Uint8List pcm(int amplitude) {
+      final b = ByteData(480 * 2);
+      for (var i = 0; i < 480; i++) {
+        b.setInt16(i * 2, i.isEven ? amplitude : -amplitude, Endian.little);
+      }
+      return b.buffer.asUint8List();
+    }
+
+    expect(pcmLevel(pcm(0)), 0);
+    expect(pcmLevel(Uint8List(0)), 0);
+    expect(pcmLevel(pcm(1000)), closeTo(0.153, 0.01));
+    expect(pcmLevel(pcm(32000)), 1);
   });
 }

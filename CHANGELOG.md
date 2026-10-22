@@ -8,6 +8,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- Ideas Room **fast voice** (the default): a live, hands-free conversation with Grok's realtime voice, which answers in about a second, lets you talk over it, searches the web, and asks your Orchestrator for anything about your own work. The Orchestrator's own voice is a toggle. New settings `ORPHUSBOT_XAI_KEY`, `ORPHUSBOT_XAI_VOICE`.
 - Ideas Room is much quicker: room turns use a fast model with thinking off, and the reply is spoken sentence by sentence while it's being written.
 - Bots can ask to install a skill they wrote: you get a card with the whole skill and choose Allow or Deny, every time.
 - **Ideas Room** (in the menu): brainstorm with the Orchestrator by voice. Tap the microphone and talk; your words are written down on the box (qwen-stt), the Orchestrator answers conversationally and can send Researcher to search the web, and the reply is spoken (ElevenLabs) while a colour orb listens, thinks and speaks with you. New settings `ORPHUSBOT_STT_URL`, `ORPHUSBOT_STT_TOKEN`, `ORPHUSBOT_ELEVENLABS_KEY`, `ORPHUSBOT_ELEVENLABS_VOICE`.

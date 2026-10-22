@@ -37,7 +37,8 @@ use crate::auth::{digest, random_token};
 use crate::{Answer, App, Shared, internal, lock, resolve_dialog, tickets};
 
 /// A button press makes the next transcript a deliberate capture for this long.
-const EXPLICIT_GRACE: Duration = Duration::from_secs(90);
+/// The phone listens in 30 s windows and can take another 90 s to transcribe one.
+const EXPLICIT_GRACE: Duration = Duration::from_secs(180);
 /// After a tap on a question, the next transcript is its spoken answer for this long.
 const ANSWER_WINDOW: Duration = Duration::from_secs(120);
 const QUEUE_MAX: usize = 32;
@@ -273,7 +274,7 @@ pub async fn event(
             }
         }
         // Newer firmware: a tap answers the ask if there is one, otherwise it's
-        // push-to-talk; a double tap says no, or drops a press.
+        // push-to-talk; a double tap says no. Like the app, it leaves a press open.
         ("button", Some("CAPTURE_TOGGLE")) => {
             match answer(&app, &device, true).await {
                 Ok(true) => {}
@@ -288,7 +289,6 @@ pub async fn event(
             if let Err(e) = answer(&app, &device, false).await {
                 warn!("answering on the badge: {e}");
             }
-            lock(&app.devices.intent).remove(&device);
         }
         // Hold is power and a triple tap re-links; the firmware handles them.
         (
@@ -948,13 +948,21 @@ mod tests {
         let (_, r) = device(&app, "/api/device/text", me, None, say("Thursday works")).await;
         assert_ne!(r["filed"], "ignored", "the spoken answer is deliberate");
 
-        // A double tap drops a press.
+        // A double tap with nothing to answer leaves the press open, as the app does.
+        sqlx::query!("update habitat_message set state = 'answered' where kind = 'ask'")
+            .execute(&db)
+            .await
+            .unwrap();
         device(&app, "/api/device/event", me, None, press("CAPTURE_TOGGLE")).await;
         device(&app, "/api/device/event", me, None, press("CANCEL")).await;
-        let (_, r) = device(&app, "/api/device/text", me, None, say("never mind")).await;
-        assert_eq!(r["filed"], "ignored");
+        let (_, r) = device(&app, "/api/device/text", me, None, say("order cable clips")).await;
+        assert_eq!(r["filed"], "task");
 
         // Sent to the Ideas Room, a press keeps an idea instead of making a task.
+        sqlx::query!("update habitat_message set state = 'answered' where kind = 'ask'")
+            .execute(&db)
+            .await
+            .unwrap();
         sqlx::query!("update device set captures_to = 'room'")
             .execute(&db)
             .await

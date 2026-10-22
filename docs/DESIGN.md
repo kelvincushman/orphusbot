@@ -414,7 +414,7 @@ Endpoints and auth are as in the wearable's `docs/SERVER.md`:
 
 Wire constants (`OP`, `PATTERN`, `HABITAT_CUE` ids, button codes 1–11) live in `device::wire`, generated from one table. A CI contract test checks them against `wearable/firmware/.../agent_commands.h` and `wearable/app/.../command_codec.dart` (§9.6).
 
-**Built (M3.5):** `crates/device` holds the ops, patterns, the 12 habitat cue ids and the alert table (as the JSON command objects the app's poll decodes); its test reads the firmware header and the app codec and fails on any drift. `server::device` implements register (a one-time pairing code from Settings → Wearable, sent as the app's bearer, D-025), event, text (8 KB limit, ~10 then 1 per 6 s per device; a transcript is deliberate only within 90 s of a button press, and overheard text is not kept until capture lands in M4), command poll (`POST`) and hands-free. The audio WebSocket and voice profiles arrive with capture (M4).
+**Built (M3.5):** `crates/device` holds the ops, patterns, the 12 habitat cue ids and the alert table (as the JSON command objects the app's poll decodes); its test reads the firmware header and the app codec and fails on any drift. `server::device` implements register (a one-time pairing code from Settings → Wearable, sent as the app's bearer, D-025), event, text (8 KB limit, ~10 then 1 per 6 s per device; a transcript is deliberate only within 3 minutes of a button press, and overheard text is not kept until capture lands in M4), command poll (`POST`) and hands-free. The audio WebSocket and voice profiles arrive with capture (M4).
 
 ### 9.3 Duplex habitat (the wearable conversation)
 
@@ -484,7 +484,7 @@ Every transition is an event on the wearable thread, so the Wearable view in the
 
 #### 9.3.5 Button → agent (the uplink task path)
 
-Button codes from the app: older firmware sends `AGENT_REQUEST` (or `NOTE`, `REPLY`) for a capture and `SINGLE` / `DOUBLE` for yes and no. Newer firmware with always-on capture sends `CAPTURE_TOGGLE` for a tap and `CANCEL` for a double tap. On the server a `CAPTURE_TOGGLE` answers the ask on the badge if there is one, and otherwise opens a press, so the next transcript is deliberate (push-to-talk). A `CANCEL` says no to the ask, or else drops the open press. `LINK_RECOVER` and the `POWER_OFF_*` codes are accepted and left to the firmware.
+Button codes from the app: older firmware sends `AGENT_REQUEST` (or `NOTE`, `REPLY`) for a capture and `SINGLE` / `DOUBLE` for yes and no. Newer firmware with always-on capture sends `CAPTURE_TOGGLE` for a tap and `CANCEL` for a double tap. On the server a `CAPTURE_TOGGLE` answers the ask on the badge if there is one, and otherwise opens a press, so the next transcript is deliberate (push-to-talk). A `CANCEL` says no to the ask; like the app in always-on capture, it leaves an open press alone. A press holds for 3 minutes, because the phone listens in 30 s windows and can take another 90 s to transcribe one. `LINK_RECOVER` and the `POWER_OFF_*` codes are accepted and left to the firmware.
 
 1. **Tap in IDLE** → capture opens (white, steady, non-suppressible) → the wearer speaks → **tap** → the app files it. The transcript arrives at `/api/device/text` with `overheard = false` and a capture id.
 2. The server runs `intake(source = wearable, …)`. There is no gesture for "which bot": intent comes from the words.

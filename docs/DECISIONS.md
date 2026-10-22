@@ -11,6 +11,14 @@ Format:
 
 ---
 
+## D-049: A job can't be handed back to the bot that asked for it (2026-10-22)
+
+**Decided:** `ask_bot` refuses when the asking bot's current run is a ticket that the named teammate asked for. The refusal tells the bot to answer with what it has, or to say it can't and why; that answer reaches the asker by the usual route.
+
+**Why:** On 20 October PA had no Google tool for a moment, asked Orchestrator for a calendar check, and Orchestrator, knowing Google is PA's job, handed it straight back. Each then read the other's "it's with them" as an empty answer, and only the three-deep limit stopped it. Refusing the bounce turns that into one honest "I can't" at the first step. A deeper cycle (A to B to C to A) is still caught by the depth limit.
+
+---
+
 ## D-048: The app follows Grok's layout, with our own bots (2026-10-22)
 
 **Decided:** The Flutter app copies the layout and visual style of xAI's Grok mobile app: monochrome, one full-screen conversation, a side menu, a round button at each end of the top bar, a card-shaped composer, and replies as plain text. Where Grok shows its mark, the app shows the bot's own animated face or robot. No Grok assets are used.

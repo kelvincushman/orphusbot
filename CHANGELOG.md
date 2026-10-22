@@ -8,6 +8,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- Bots can no longer pass a job back to the teammate who asked for it (the Orchestrator and PA loop); they answer, or say why they can't.
 - New server setting `ORPHUSBOT_PUSH_HOSTS`: phones can only register for pushes through your own ntfy server, never a public one.
 - The app has a new look, after Grok's app: black or white, the bot's face in a pill at the top, the menu behind a button (beside the chat on wide screens), replies as plain text, and a rounded composer with attach, model and send. The bots' own faces and robots stay.
 - **Schedules** in the app (the clock icon): have a bot do something on its own every day, on weekdays, weekly, every few hours, once, by cron or by webhook, with Run now, pause and edit.

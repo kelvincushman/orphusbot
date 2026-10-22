@@ -8,6 +8,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- **Shared vault:** the bots' team folder is now also your Obsidian vault, synced over WebDAV at `/vault/` (Remotely Save plugin) on the laptop and phone. New settings `ORPHUSBOT_VAULT_DIR`, `ORPHUSBOT_VAULT_PASSWORD`.
 - Ideas Room remembers: each conversation starts with a recap of your last few, the ideas you've saved and how you rated past sessions. The Orchestrator chimes in every five minutes, reviews each conversation in its chat when you end it, Grok checks in on how it's going, and you can rate each session.
 - Ideas Room: Grok is no longer cut off by its own echo and the thinking sound no longer loops; on a computer, tap the orb to stop it talking.
 - Ideas Room: the thinking and research sounds no longer cut Grok off; they wait until it has finished speaking.

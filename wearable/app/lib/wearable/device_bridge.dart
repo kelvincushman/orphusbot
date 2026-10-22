@@ -424,14 +424,30 @@ class WearableDeviceBridge {
   /// the scan found the device, connected to it, and then refused with "Bridge
   /// attach failed". Audio, transcription and the button all work with no
   /// server at all; the server calls below are individually optional.
-  static Future<WearableDeviceBridge?> attach(ble.BluetoothDevice device) async {
-    final client = WearableClient.instance;
-    if (_current != null) {
-      await _current!.dispose();
-    }
-    final bridge = WearableDeviceBridge._(device, client);
-    await bridge._start();
+  ///
+  /// Attaches run one at a time, and a bridge is [current] from before it
+  /// starts: two overlapping attaches (an auto-reconnect and the scan page),
+  /// or a start that failed half-way and was retried, used to leave a second
+  /// bridge subscribed to the same notifications, so every frame, press and
+  /// transcript was handled twice.
+  static Future<WearableDeviceBridge?> attach(ble.BluetoothDevice device) {
+    final next = _attaching.then((_) => _attachNow(device));
+    _attaching = next.then((_) {}, onError: (_) {});
+    return next;
+  }
+
+  static Future<void> _attaching = Future<void>.value();
+
+  static Future<WearableDeviceBridge?> _attachNow(ble.BluetoothDevice device) async {
+    await _current?.dispose();
+    final bridge = WearableDeviceBridge._(device, WearableClient.instance);
     _current = bridge;
+    try {
+      await bridge._start();
+    } catch (_) {
+      await bridge.dispose();
+      rethrow;
+    }
     return bridge;
   }
 

@@ -43,6 +43,8 @@ const EXPLICIT_GRACE: Duration = Duration::from_secs(180);
 const ANSWER_WINDOW: Duration = Duration::from_secs(120);
 const QUEUE_MAX: usize = 32;
 const MAX_TEXT_CHARS: usize = 4_000;
+/// The same transcript from the same device within this long is a resend.
+const RESEND_WINDOW: Duration = Duration::from_secs(60);
 
 /// Commands waiting for a device's next poll, each with the message it belongs to.
 type Queue = Vec<(Option<i64>, Value)>;
@@ -58,6 +60,8 @@ pub struct Devices {
     answering: Mutex<HashMap<String, (i64, String, Instant)>>,
     /// Token bucket for `/text`: (tokens, last refill).
     text_rate: Mutex<HashMap<String, (f64, Instant)>>,
+    /// Each device's last transcript and when, to drop one sent twice.
+    last_text: Mutex<HashMap<String, (String, Instant)>>,
 }
 
 fn error(status: StatusCode, message: &str) -> Response {
@@ -339,6 +343,11 @@ pub async fn text(
         return error(StatusCode::BAD_REQUEST, "text is empty");
     }
     let chat_id = format!("device:{device}");
+    if resent(&app, &device, &text) {
+        info!(%device, chars = text.chars().count(), "badge text: resent, dropped");
+        return Json(json!({ "ok": true, "chatId": chat_id, "filed": "duplicate" }))
+            .into_response();
+    }
     // The client may say it's ambient, but can't make it deliberate: that needs a recent press.
     let pressed = lock(&app.devices.intent)
         .get(&device)
@@ -413,6 +422,16 @@ pub async fn text(
             error(StatusCode::INTERNAL_SERVER_ERROR, "server error")
         }
     }
+}
+
+/// Whether `device` sent this same text within [RESEND_WINDOW]; remembers it either way.
+fn resent(app: &App, device: &str, text: &str) -> bool {
+    let mut last = lock(&app.devices.last_text);
+    let again = last
+        .get(device)
+        .is_some_and(|(t, at)| t == text && at.elapsed() < RESEND_WINDOW);
+    last.insert(device.to_owned(), (text.to_owned(), Instant::now()));
+    again
 }
 
 /// ~10 at once, then one every 6 s (the reference server's limit).
@@ -924,6 +943,9 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         let (_, r) = device(&app, "/api/device/text", me, None, say("book the dentist")).await;
         assert_eq!(r["filed"], "task");
+        // The phone sending the same words again makes no second ticket.
+        let (_, r) = device(&app, "/api/device/text", me, None, say("book the dentist")).await;
+        assert_eq!(r["filed"], "duplicate");
 
         // With "should I start?" on the badge, a tap answers it and opens nothing.
         device(&app, "/api/device/event", me, None, press("CAPTURE_TOGGLE")).await;

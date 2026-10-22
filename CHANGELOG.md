@@ -8,6 +8,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- The badge no longer sends everything twice. The wearable app could run two copies of its badge link at once; it now runs one, and the server drops a transcript the badge resends within a minute. The wearable app's Chat tab says to chat in the OrphusBot app instead of showing "Chat stream error — reconnecting…".
 - The badge's taps now reach your bots with the current firmware. A tap asks a task (or answers the question on the badge) and a double tap says no. What you say counts for 3 minutes after a tap, since the phone can take that long to transcribe it. Before, the server rejected these presses, so spoken tasks were treated as background speech and dropped.
 - The wearable is called a badge in the app and web page: it's worn as a pin badge, not on the wrist.
 - **Wearable** page in the app's menu: your paired wearables and when each was last seen, pairing a new one, hands-free listening, what it overheard (accept, dismiss or undo), and the signals sent to the badge. Each wearable has a switch for where its button captures go: the **Inbox** as a task, or the **Ideas Room** as an idea it remembers, which the Orchestrator files in your vault under `wiki/ideas`.

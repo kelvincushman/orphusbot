@@ -38,6 +38,8 @@ pub struct Spec<'a> {
     pub bot: &'a str,
     /// Also mount the shared team folder at `/shared` (DESIGN §4.4, Team vs Private).
     pub team: bool,
+    /// The memory limit, such as `2g`; set when the computer is created.
+    pub memory: &'a str,
 }
 
 impl Spec<'_> {
@@ -96,6 +98,7 @@ impl Spec<'_> {
                 let label = format!("orphusbot.team={team}");
                 let home = format!("orphusbot-home-{}:{HOME}", self.bot);
                 let env = format!("HOME={HOME}");
+                let memory = format!("--memory={}", self.memory);
                 let mut args = vec![
                     "run",
                     "--detach",
@@ -110,7 +113,7 @@ impl Spec<'_> {
                     "--read-only",
                     "--tmpfs=/tmp:size=512m",
                     "--pids-limit=512",
-                    "--memory=2g",
+                    &memory,
                     "--cpus=2",
                     "--volume",
                     &home,
@@ -205,6 +208,7 @@ mod tests {
             image: "docker.io/library/debian:trixie-slim",
             bot: "fence-test",
             team: true,
+            memory: "2g",
         };
         let name = spec.ensure().await.unwrap();
         let ok = |args: &[&str]| {

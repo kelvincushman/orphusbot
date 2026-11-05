@@ -8,6 +8,8 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- **Reverse-engineering bots:** a bot's computer can now be **Reverse engineering (REA and Ghidra)**, picked under the bot's desktop in Settings. The bot decompiles and studies binaries with REA and Ghidra inside its own computer, never on the box itself, and loads only the tools and results each step needs, so a small local model's context isn't flooded. REABOT is the first, on the box's local Qwen. Operators: build `images/rea` (after `images/desktop`); the new setting `ORPHUSBOT_REA_IMAGE` picks the image.
+
 - When a bot working on a task from your wearable needs something from you, the wearable buzzes amber: tap, say your answer, and the bot carries on. Bots now have an `ask_owner` tool for this, and a reply that ends with a question also counts.
 - A task you capture with the wearable now starts straight away. Pressing the button is your go-ahead, so nothing asks "should I start?" any more, on the wearable or the phone. If the bot is busy, the task starts as soon as it's free. Anything irreversible still waits for your approval. When a question on the wearable goes unanswered, the phone notification now says what it was about and opens the right bot.
 - The wearable no longer sends everything twice. The wearable app could run two copies of its link to the wearable at once; it now runs one, and the server drops a transcript the badge resends within a minute. The wearable app's Chat tab says to chat in the OrphusBot app instead of showing "Chat stream error — reconnecting…".

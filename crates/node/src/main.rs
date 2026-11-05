@@ -37,6 +37,8 @@ struct Config {
     image: String,
     /// For bots whose desktop is Omarchy (`ORPHUSBOT_OMARCHY_IMAGE`, built from images/omarchy).
     omarchy_image: String,
+    /// For bots whose desktop is REA (`ORPHUSBOT_REA_IMAGE`, built from images/rea, D-058).
+    rea_image: String,
     /// `START-END` local hours when this node takes no new work, such as `22-7`.
     quiet_hours: Option<String>,
     /// Programs this node may run as MCP servers (`ORPHUSBOT_MCP_COMMANDS=npx,uvx`); none by default.
@@ -70,6 +72,8 @@ async fn main() -> anyhow::Result<()> {
             .unwrap_or_else(|_| "docker.io/library/debian:trixie-slim".into()),
         omarchy_image: std::env::var("ORPHUSBOT_OMARCHY_IMAGE")
             .unwrap_or_else(|_| "localhost/orphusbot-omarchy:latest".into()),
+        rea_image: std::env::var("ORPHUSBOT_REA_IMAGE")
+            .unwrap_or_else(|_| "localhost/orphusbot-rea:latest".into()),
         mcp_commands: std::env::var("ORPHUSBOT_MCP_COMMANDS")
             .unwrap_or_default()
             .split(',')
@@ -322,6 +326,7 @@ async fn open_screen(
         bot,
         // Unused: opening a screen never creates or changes the computer.
         team: false,
+        memory: "2g",
     };
     let mut child = spec.open_screen().await?;
     let pipe = child.stdin.take().context("screen stdin")?;
@@ -563,43 +568,86 @@ impl Engine {
         if !bot.exclude_tools.is_empty() {
             command.args(["--exclude-tools", &bot.exclude_tools.join(",")]);
         }
-        if !bot.mcp.is_empty() {
-            // Orphus's MCP adapter reads this file; tokens go in through the
-            // environment so they're never written to disk.
-            let mut servers = serde_json::Map::new();
-            for (i, server) in bot.mcp.iter().enumerate() {
-                let var = format!("ORPHUSBOT_MCP_TOKEN_{i}");
-                let mut entry = match &server.command {
-                    // A command runs here, outside the bot's computer: only programs this
-                    // node's owner listed in ORPHUSBOT_MCP_COMMANDS.
-                    Some(program) if !cfg.mcp_commands.iter().any(|p| p == program) => {
-                        warn!(server = %server.name, %program, "not on ORPHUSBOT_MCP_COMMANDS; leaving this MCP server out");
-                        continue;
-                    }
-                    Some(program) => {
-                        let mut entry = serde_json::json!({ "command": program, "args": server.args, "lifecycle": "lazy" });
-                        if let (Some(name), Some(_)) = (&server.token_env, &server.token) {
-                            // The adapter fills ${…} from the engine's environment.
-                            entry["env"] = serde_json::json!({ name: format!("${{{var}}}") });
-                        }
-                        entry
-                    }
-                    None => {
-                        let mut entry =
-                            serde_json::json!({ "url": server.url, "lifecycle": "lazy" });
-                        if server.token.is_some() {
-                            entry["auth"] = "bearer".into();
-                            entry["bearerTokenEnv"] = var.clone().into();
-                        }
-                        entry
-                    }
-                };
-                if let Some(token) = &server.token {
-                    command.env(&var, token);
-                }
-                entry["lifecycle"] = "lazy".into();
-                servers.insert(server.name.clone(), entry);
+        // The REA desktop's own MCP server, set once its computer is ready.
+        let mut rea = None;
+        if let Some(sandbox) = &bot.e2b {
+            // The computer is an E2B sandbox: the bridge reaches its envd over HTTPS.
+            command
+                .env("ORPHUSBOT_COMPUTER", format!("e2b:{}", sandbox.sandbox))
+                .env("ORPHUSBOT_E2B_URL", &sandbox.url)
+                .env("ORPHUSBOT_COMPUTER_HOME", "/home/user");
+            if let Some(token) = &sandbox.token {
+                command.env("ORPHUSBOT_E2B_TOKEN", token);
             }
+        } else if let Some(runtime) = &cfg.runtime {
+            let (image, memory) = match bot.desktop.as_deref() {
+                Some("omarchy") => (&cfg.omarchy_image, "2g"),
+                // Ghidra's analysis wants more than the 2 GB other computers get.
+                Some("rea") => (&cfg.rea_image, "6g"),
+                _ => (&cfg.image, "2g"),
+            };
+            let spec = computer::Spec {
+                runtime,
+                image,
+                bot: &bot.slug,
+                team: bot.team,
+                memory,
+            };
+            let name = spec.ensure().await?;
+            // REA's MCP server runs inside the computer, next to the files it reads,
+            // so a binary under analysis never touches this machine (D-058).
+            if bot.desktop.as_deref() == Some("rea") {
+                rea = Some(serde_json::json!({
+                    "command": runtime,
+                    "args": ["exec", "-i", &name, "rea", "mcp"],
+                    "lifecycle": "lazy",
+                }));
+            }
+            // The bridge maps the work folder onto the computer's home and runs every tool there.
+            command
+                .env("ORPHUSBOT_COMPUTER", name)
+                .env("ORPHUSBOT_RUNTIME", runtime)
+                .env("ORPHUSBOT_COMPUTER_HOME", computer::HOME);
+        }
+        // Orphus's MCP adapter reads this file; tokens go in through the
+        // environment so they're never written to disk.
+        let mut servers = serde_json::Map::new();
+        if let Some(rea) = rea {
+            servers.insert("rea".into(), rea);
+        }
+        for (i, server) in bot.mcp.iter().enumerate() {
+            let var = format!("ORPHUSBOT_MCP_TOKEN_{i}");
+            let mut entry = match &server.command {
+                // A command runs here, outside the bot's computer: only programs this
+                // node's owner listed in ORPHUSBOT_MCP_COMMANDS.
+                Some(program) if !cfg.mcp_commands.iter().any(|p| p == program) => {
+                    warn!(server = %server.name, %program, "not on ORPHUSBOT_MCP_COMMANDS; leaving this MCP server out");
+                    continue;
+                }
+                Some(program) => {
+                    let mut entry = serde_json::json!({ "command": program, "args": server.args, "lifecycle": "lazy" });
+                    if let (Some(name), Some(_)) = (&server.token_env, &server.token) {
+                        // The adapter fills ${…} from the engine's environment.
+                        entry["env"] = serde_json::json!({ name: format!("${{{var}}}") });
+                    }
+                    entry
+                }
+                None => {
+                    let mut entry = serde_json::json!({ "url": server.url, "lifecycle": "lazy" });
+                    if server.token.is_some() {
+                        entry["auth"] = "bearer".into();
+                        entry["bearerTokenEnv"] = var.clone().into();
+                    }
+                    entry
+                }
+            };
+            if let Some(token) = &server.token {
+                command.env(&var, token);
+            }
+            entry["lifecycle"] = "lazy".into();
+            servers.insert(server.name.clone(), entry);
+        }
+        if !servers.is_empty() {
             let file = format!("{dir}/mcp.json");
             let config = serde_json::json!({ "mcpServers": servers });
             std::fs::write(&file, config.to_string()).with_context(|| format!("writing {file}"))?;
@@ -629,33 +677,6 @@ impl Engine {
         command.env_remove("ORPHUSBOT_KIE_KEY");
         if let (true, Ok(key)) = (bot.media, std::env::var("ORPHUSBOT_KIE_KEY")) {
             command.env("ORPHUSBOT_KIE_KEY", key);
-        }
-        if let Some(sandbox) = &bot.e2b {
-            // The computer is an E2B sandbox: the bridge reaches its envd over HTTPS.
-            command
-                .env("ORPHUSBOT_COMPUTER", format!("e2b:{}", sandbox.sandbox))
-                .env("ORPHUSBOT_E2B_URL", &sandbox.url)
-                .env("ORPHUSBOT_COMPUTER_HOME", "/home/user");
-            if let Some(token) = &sandbox.token {
-                command.env("ORPHUSBOT_E2B_TOKEN", token);
-            }
-        } else if let Some(runtime) = &cfg.runtime {
-            let image = match bot.desktop.as_deref() {
-                Some("omarchy") => &cfg.omarchy_image,
-                _ => &cfg.image,
-            };
-            let spec = computer::Spec {
-                runtime,
-                image,
-                bot: &bot.slug,
-                team: bot.team,
-            };
-            let name = spec.ensure().await?;
-            // The bridge maps the work folder onto the computer's home and runs every tool there.
-            command
-                .env("ORPHUSBOT_COMPUTER", name)
-                .env("ORPHUSBOT_RUNTIME", runtime)
-                .env("ORPHUSBOT_COMPUTER_HOME", computer::HOME);
         }
         let mut child = command
             .args([

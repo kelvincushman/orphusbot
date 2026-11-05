@@ -11,6 +11,14 @@ Format:
 
 ---
 
+## D-058: Reverse engineering runs in its own computer, with REA's MCP server inside it (2026-11-05)
+
+**Decided:** A third bot desktop, `rea` (`images/rea`): the Debian desktop plus REA 6.8.0, Ghidra 12.1.4, JDK 21 and Node 24, with 6 GB of memory instead of 2. For such a bot, the node starts REA's MCP server inside the computer (`podman exec -i <computer> rea mcp`) as an extra MCP server named `rea`. The first such bot is REABOT, on the box's local Qwen (`local/qwen3.8-27b-abl`, 64k context). Context is kept small in the way REA is built for: the bot reaches REA's tools only through Orphus's `mcp` tool, which searches them and describes one at a time, so the 229 schemas (about 300 KB) never enter its context; its replies are summaries, with the detail retained in REA under an Evidence ID that the bot pages with `inspect_analysis_view`; compact input schemas and no output schemas; and instructions that tell it to load only what each step needs.
+
+**Why:** Kelvin wants a reverse-engineering bot on a local model, and he wants bots to choose what context they load rather than have it pushed at them. A binary under analysis is untrusted, and REA can also run targets (debuggers, Frida, process capture), so it must run inside the fenced computer, never on the node; it also needs the files the bot is working on, which are there. Ghidra is the free, Linux-native engine REA supports ("gilta" in his request read as Ghidra). **Alternatives:** REA as an MCP command on the node (`ORPHUSBOT_MCP_COMMANDS`; outside the sandbox, and it can't see the computer's files); a general "MCP inside the computer" option on every connection (more surface for one bot so far); REA's tool families (`REA_MCP_TOOL_FAMILIES`) to hide runtime tools (only on REA's main branch, not in 6.8.0). **Revisit if:** another bot needs an MCP server inside its computer (generalise the option), or a REA release ships tool families (set them in the image).
+
+---
+
 ## D-057: Bots ask the owner with a tool, and a closing question still reaches the wearable (2026-10-22)
 
 **Decided:** The bridge gains `ask_owner {question}`, a plain input dialog that the gate treats as read-only. On a run from the wearable it becomes an ask that the owner answers aloud. As a fallback, a wearable run whose last reply ends with a question mark sends "needs you" instead of "done", and the spoken answer becomes the owner's next message to that bot.

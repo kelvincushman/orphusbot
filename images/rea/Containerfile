@@ -1,0 +1,52 @@
+# A reverse-engineering computer (D-058): the Debian desktop (images/desktop) plus
+# REA (github.com/morluto/rea, MIT) and Ghidra, so a bot decompiles binaries inside
+# its own fenced container, never on the node. The node starts REA's MCP server in
+# here with `podman exec -i <computer> rea mcp`.
+#
+# Build images/desktop first, then:
+#   podman build -t localhost/orphusbot-rea images/rea
+ARG BASE=localhost/orphusbot-desktop:latest
+FROM $BASE
+
+# Ghidra 12.1.x declares JDK 21 (12.2 wants 25, which trixie doesn't ship). REA
+# compiles its Ghidra bridge, so the full JDK, not just a runtime.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openjdk-21-jdk-headless unzip xz-utils file binutils \
+ && rm -rf /var/lib/apt/lists/*
+
+# REA needs Node 22.23+ or 24.22+; trixie has 20. Pinned and checked by SHA-256.
+ARG NODE_VERSION=24.22.1
+ARG NODE_SHA256=6c172a9ab6718f7b801fb5a7bd486af2ee5e32758086a04b84fcce2aa77095e6
+RUN curl -fsSL "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.xz" -o /tmp/node.tar.xz \
+ && echo "$NODE_SHA256  /tmp/node.tar.xz" | sha256sum -c - \
+ && tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 \
+      --exclude='*/include' --exclude='*/share/doc' --exclude='*/share/man' \
+ && rm /tmp/node.tar.xz \
+ && node --version
+
+ARG GHIDRA_VERSION=12.1.4
+ARG GHIDRA_DATE=20260921
+ARG GHIDRA_SHA256=ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db
+RUN curl -fsSL "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_${GHIDRA_VERSION}_build/ghidra_${GHIDRA_VERSION}_PUBLIC_${GHIDRA_DATE}.zip" -o /tmp/ghidra.zip \
+ && echo "$GHIDRA_SHA256  /tmp/ghidra.zip" | sha256sum -c - \
+ && unzip -q /tmp/ghidra.zip -d /opt \
+ && rm /tmp/ghidra.zip \
+ && ln -s "/opt/ghidra_${GHIDRA_VERSION}_PUBLIC" /opt/ghidra \
+ && rm -rf /opt/ghidra/docs
+
+ARG REA_VERSION=6.8.0
+RUN npm install --global --no-fund --no-audit "rea-agents@$REA_VERSION" \
+ && npm cache clean --force \
+ && rea --version
+
+# Keep REA's context use small (Kelvin: the bot chooses what it reads). The bot
+# never gets REA's 229 tool schemas (about 300 KB): Orphus's `mcp` tool searches
+# them and describes one at a time. On top of that, compact input schemas, and no
+# output schemas in what a description returns.
+# ponytail: REA's main branch can also hide whole tool families
+# (REA_MCP_TOOL_FAMILIES); 6.8.0 ignores it. Set it when a release has it, and
+# check the family ids, since an unknown one stops REA's server from starting.
+ENV GHIDRA_INSTALL_DIR=/opt/ghidra \
+    JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 \
+    REA_MCP_INPUT_SCHEMA_PROFILE=compact \
+    REA_MCP_OUTPUT_SCHEMA_PROFILE=off

@@ -8,6 +8,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- **"Always allow" on a phone approval now sticks.** It allows that exact phone action from then on, such as a routine tapping LinkedIn's notifications tab, so the bot can do it again on its own. A different tap, such as Post, still asks you once.
 - **Reverse-engineering bots:** a bot's computer can now be **Reverse engineering (REA and Ghidra)**, picked under the bot's desktop in Settings. The bot decompiles and studies binaries with REA and Ghidra inside its own computer, never on the box itself, and loads only the tools and results each step needs, so a small local model's context isn't flooded. Its REA steps need your approval only if bash does, so it can work through a job on its own. REABOT is the first, on the box's local Qwen. Operators: build `images/rea` (after `images/desktop`); the new setting `ORPHUSBOT_REA_IMAGE` picks the image.
 
 - When a bot working on a task from your wearable needs something from you, the wearable buzzes amber: tap, say your answer, and the bot carries on. Bots now have an `ask_owner` tool for this, and a reply that ends with a question also counts.

@@ -327,6 +327,7 @@ rule  = most_specific(user_rules, tool)  // allow | ask | deny, ties → ask
 if class == exempt                                     → allow
 if rule == deny                                        → deny
 if rule == allow and class != always_ask               → allow
+if class == phone commit and exact_rule(tool, input)   → allow      // "always" on that exact action (D-059)
 if class in {always_ask, irreversible}                 → ask        // System 1 never approves these
 ans = decide(gate)                                     // receipted
 if ans.abstained or ans.verdict == ask                 → ask
@@ -690,7 +691,7 @@ Orphus's answer to multi-agent work is a context-window contract: a discussion l
   - lets through looking, queueing, opening apps, typing, swiping, and the keys that only move (`BACK`, `HOME`, `PAGE_DOWN`, …);
   - treats `ENTER`, `DPAD_CENTER`, taps by id alone, and any tap whose text, description or id has a word starting with a commit stem as a commit. The stems include post, repl, tweet, like, follow, connect, share, send, delete, confirm, done and more (`COMMIT_STEMS`).
 
-  A commit asks the owner every time: approval rules are skipped for it, so an earlier "always" can't wave a post through, and System 1 is never asked. The effect ledger still stops a repeat after an interrupted attempt.
+  A commit skips the per-tool approval rules, so an "always" given for one tap can't wave a different one (a post) through, and System 1 is never asked. **"Always" on a phone card remembers that exact action (D-059):** the answer adds an `action_rule` row (tool plus `jsonb`-equal input), and the same tap later passes without asking, so a routine that taps the same tab every day runs on its own. Any other commit still asks once. The effect ledger still stops a repeat after an interrupted attempt.
 - **The bots:** **Phone** (`operate`) reads notifications and comments on the phone and queues replies; **Content** (`draft`) writes posts in the owner's voice from each account's soul, memory and past reviews. Both only queue; ContentSwarm's worker posts approved items.
 - **Next:**
   - verified LinkedIn delivery and reply delivery in ContentSwarm;

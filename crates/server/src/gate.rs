@@ -211,8 +211,9 @@ pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Re
     }
 
     // Installing a skill changes what every bot is told, so the owner sees and
-    // approves each one; no "always" rule waves it through (D-051).
-    let always_ask = phone_commit || call.tool == "install_skill";
+    // approves each one; no "always" rule waves it through (D-051). A phone tap that
+    // could commit skips the per-tool rule too (D-045), but passes if the owner said
+    // "always" to this exact action before (D-059).
     // REA's tools on a reverse-engineering bot run inside its own computer (D-058),
     // as its bash does, so they follow the owner's rule for bash instead of each of
     // REA's 229 tools needing its own "always".
@@ -222,8 +223,16 @@ pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Re
         } else {
             call.tool
         };
-    let rule = if always_ask {
+    let rule = if call.tool == "install_skill" {
         None
+    } else if phone_commit {
+        sqlx::query_scalar!(
+            r#"select 'allow' as "effect!" from action_rule where tool = $1 and input = $2"#,
+            call.tool,
+            Json(call.input) as _
+        )
+        .fetch_optional(db)
+        .await?
     } else {
         sqlx::query_scalar!(
             r#"select effect::text as "effect!" from approval_rule where tool = $1"#,
@@ -295,7 +304,9 @@ async fn record(
     Ok(())
 }
 
-/// The owner's answer to an approval card. `always` also adds an allow rule.
+/// The owner's answer to an approval card. `always` also adds an allow rule: for
+/// the phone, for this exact action only (D-059), since its cards are the taps
+/// that could commit and a rule for the whole tool would allow every one of them.
 pub async fn owner_decides(
     db: &PgPool,
     attempt: Attempt,
@@ -304,10 +315,10 @@ pub async fn owner_decides(
     always: bool,
 ) -> sqlx::Result<()> {
     let mut tx = db.begin().await?;
-    let tool = sqlx::query_scalar!(
-        "update effect set state = $4::text::effect_state, decided_by = 'owner', updated_at = now()
-         where run_id = $1 and fence = $2 and tool_call_id = $3 and state = 'pending'
-         returning tool",
+    let decided = sqlx::query!(
+        r#"update effect set state = $4::text::effect_state, decided_by = 'owner', updated_at = now()
+           where run_id = $1 and fence = $2 and tool_call_id = $3 and state = 'pending'
+           returning tool, input as "input: Json<Value>""#,
         attempt.run,
         attempt.fence,
         tool_call_id,
@@ -315,14 +326,26 @@ pub async fn owner_decides(
     )
     .fetch_optional(&mut *tx)
     .await?;
-    if let (Some(tool), true) = (tool, allow && always) {
-        sqlx::query!(
-            "insert into approval_rule (tool, effect) values ($1, 'allow')
-             on conflict (tool) do update set effect = 'allow'",
-            tool
-        )
-        .execute(&mut *tx)
-        .await?;
+    match decided {
+        Some(d) if allow && always && d.tool == "phone" => {
+            sqlx::query!(
+                "insert into action_rule (tool, input) values ($1, $2) on conflict do nothing",
+                d.tool,
+                d.input as _
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+        Some(d) if allow && always => {
+            sqlx::query!(
+                "insert into approval_rule (tool, effect) values ($1, 'allow')
+                 on conflict (tool) do update set effect = 'allow'",
+                d.tool
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+        _ => {}
     }
     tx.commit().await
 }
@@ -701,6 +724,17 @@ mod tests {
         );
         assert_eq!(
             decide(&db, &call(a, "p5", "phone", &post)).await.unwrap(),
+            Verdict::Ask { uncertain: false }
+        );
+        // "Always" on that card allows the same action again, and only that (D-059).
+        owner_decides(&db, a, "p5", true, true).await.unwrap();
+        assert_eq!(
+            decide(&db, &call(a, "p6", "phone", &post)).await.unwrap(),
+            Verdict::Allow
+        );
+        let tab = json!({"action": "tap", "id": "com.example:id/tab_notifications"});
+        assert_eq!(
+            decide(&db, &call(a, "p7", "phone", &tab)).await.unwrap(),
             Verdict::Ask { uncertain: false }
         );
     }

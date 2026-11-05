@@ -438,6 +438,20 @@ export default function (pi: ExtensionAPI) {
       if (!on) throw new Error("No phone is connected to ContentSwarm.");
       return encodeURIComponent(on.name);
     };
+    /**
+     * Security and sign-in prompts (Google's "Are you trying to sign in?", verify-it's-you
+     * screens, codes, passwords). Kelvin's rule: a bot never touches them, not even to
+     * dismiss one, because a wrong tap can block his own sign-in.
+     */
+    const SECURITY_TEXT =
+      /trying to sign in|sign-in attempt|verify it.?s you|confirm it.?s you|(is|was) (this|it) you|security (alert|check|code)|2-step|two-step|verification code|one-time (code|password)|\bpasskey|\bpassword\b/i;
+    const security = (elements: any[]) =>
+      elements.some((e) =>
+        (typeof e.id === "string" && e.id.startsWith("com.google.android.gms:")) ||
+        [e.text, e.desc].some((t) => typeof t === "string" && SECURITY_TEXT.test(t)));
+    /** What the bot last saw, so an action that waited long for approval can be checked. */
+    let lastLook: { at: number; app: string } | undefined;
+    const STALE_MS = 2 * 60_000;
     const account = async (key: string) => {
       const { accounts } = await json("/social/accounts");
       const a = (accounts as any[]).find((x) => x.id === key || x.handle === key || x.name === key);
@@ -537,6 +551,7 @@ export default function (pi: ExtensionAPI) {
               .map(({ text, desc, id, clickable, scrollable, center }) =>
                 ({ ...(text ? { text } : {}), ...(desc ? { desc } : {}), ...(id ? { id } : {}),
                    ...(clickable ? { clickable } : {}), ...(scrollable ? { scrollable } : {}), center }));
+            lastLook = { at: Date.now(), app: String(now.current_app) };
             return text(UNTRUSTED + `App: ${now.current_app}\n` + JSON.stringify(shown));
           }
           case "screenshot": {
@@ -550,6 +565,25 @@ export default function (pi: ExtensionAPI) {
           case "key":
           case "type":
           case "swipe": {
+            // Check the screen as it is now, not as it was when the bot looked: the
+            // owner's approval can take hours, and the phone moves on meanwhile.
+            const [{ elements }, now] = await Promise.all([
+              json(`/phones/${n}/ui`, undefined, signal), json(`/phones/${n}/current_app`, undefined, signal),
+            ]);
+            if (security(elements as any[])) {
+              lastLook = undefined;
+              throw new Error(
+                "A security or sign-in prompt is on the phone's screen. Never touch these, not even to dismiss one: " +
+                "leave it, tell Kelvin with ask_owner what it says, and stop until he has dealt with it.");
+            }
+            const waited = lastLook ? Date.now() - lastLook.at : 0;
+            if (lastLook && waited > STALE_MS && String(now.current_app) !== lastLook.app) {
+              const was = lastLook.app;
+              lastLook = undefined;
+              throw new Error(
+                `This ${p.action} waited ${Math.round(waited / 60_000)} min and the phone has moved on ` +
+                `(you looked at ${was}, it now shows ${now.current_app}), so it wasn't done. Look again and decide afresh.`);
+            }
             const body: Record<string, unknown> = { action: p.action };
             if (p.action === "tap") Object.assign(body, { confirm: true, text: p.text, desc: p.desc, id: p.id });
             if (p.action === "key") Object.assign(body, { confirm: true, key: need(p.key, "key") });

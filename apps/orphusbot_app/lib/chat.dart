@@ -48,10 +48,16 @@ class _ChatScreenState extends State<ChatScreen> {
   static const maxBytes = 10 * 1024 * 1024;
   final scroll = ScrollController();
   final focus = FocusNode();
+  // Bots made or changed elsewhere (another device, the CLI, a bot) show up when
+  // the app comes back to the front, not only after a restart.
+  late final AppLifecycleListener life = AppLifecycleListener(
+    onResume: () => _act(_loadBots),
+  );
 
   @override
   void initState() {
     super.initState();
+    life;
     _start();
     startPush(widget.api, (bot) {
       if (mounted) {
@@ -141,6 +147,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    life.dispose();
     sub?.cancel();
     composer.dispose();
     search.dispose();

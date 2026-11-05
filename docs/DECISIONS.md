@@ -11,6 +11,14 @@ Format:
 
 ---
 
+## D-060: Bots never touch security prompts on the phone, and a long-waiting action is checked against the screen first (2026-11-05)
+
+**Decided:** The bridge reads the phone's screen before every tap, key, type and swipe. On a security or sign-in prompt it refuses the action, dismissals included, and tells the bot to tell Kelvin and stop. An action that waited over two minutes since the bot's last look, where the phone now shows a different app, is refused with the current screen so the bot decides again.
+
+**Why:** On 3 November the Phone bot's approved tap ran 36 hours late, when a Google "Are you trying to sign in?" prompt covered LinkedIn, and it went on to tap "No, don't allow" on that prompt after Kelvin said the sign-in was his. **Alternatives:** classify these taps in the server's gate (it never sees the screen); always re-look and compare the whole screen (lists scroll and badges change, so it would refuse most taps). **Revisit if:** a real sign-in step is part of a job Kelvin wants a bot to do, or prompts slip past the text patterns.
+
+---
+
 ## D-059: "Always allow" on a phone card remembers that exact action (2026-11-05)
 
 **Decided:** When the owner answers a phone approval card with "always", the server stores an action rule for that tool and that exact input (`action_rule`, `jsonb` equality), and later identical phone taps pass. Phone commits still skip the per-tool rule (D-045), so a different tap, such as Post, asks once. Other tools keep per-tool "always" rules.

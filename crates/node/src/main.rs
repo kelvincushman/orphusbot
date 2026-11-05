@@ -616,6 +616,11 @@ impl Engine {
             servers.insert("rea".into(), rea);
         }
         for (i, server) in bot.mcp.iter().enumerate() {
+            // The server's gate trusts `rea` as the one inside the computer (D-058).
+            if server.name == "rea" && servers.contains_key("rea") {
+                warn!("a connection named rea can't replace the REA desktop's own; leaving it out");
+                continue;
+            }
             let var = format!("ORPHUSBOT_MCP_TOKEN_{i}");
             let mut entry = match &server.command {
                 // A command runs here, outside the bot's computer: only programs this

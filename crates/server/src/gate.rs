@@ -213,12 +213,21 @@ pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Re
     // Installing a skill changes what every bot is told, so the owner sees and
     // approves each one; no "always" rule waves it through (D-051).
     let always_ask = phone_commit || call.tool == "install_skill";
+    // REA's tools on a reverse-engineering bot run inside its own computer (D-058),
+    // as its bash does, so they follow the owner's rule for bash instead of each of
+    // REA's 229 tools needing its own "always".
+    let rule_tool =
+        if call.tool.starts_with("mcp:rea_") && rea_desktop(db, call.attempt.run).await? {
+            "bash"
+        } else {
+            call.tool
+        };
     let rule = if always_ask {
         None
     } else {
         sqlx::query_scalar!(
             r#"select effect::text as "effect!" from approval_rule where tool = $1"#,
-            call.tool
+            rule_tool
         )
         .fetch_optional(db)
         .await?
@@ -250,6 +259,17 @@ pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Re
             Ok(Verdict::Ask { uncertain: false })
         }
     }
+}
+
+/// Whether the run's bot has the reverse-engineering desktop, whose `rea` MCP
+/// server the node runs inside the bot's computer.
+async fn rea_desktop(db: &PgPool, run: i64) -> sqlx::Result<bool> {
+    sqlx::query_scalar!(
+        r#"select b.desktop = 'rea' as "rea!" from run r join thread t on t.id = r.thread_id join bot b on b.id = t.bot_id where r.id = $1"#,
+        run
+    )
+    .fetch_one(db)
+    .await
 }
 
 async fn record(
@@ -484,6 +504,29 @@ mod tests {
                 .unwrap(),
             Verdict::Ask { uncertain: false }
         );
+    }
+
+    #[sqlx::test]
+    async fn rea_tools_on_a_rea_bot_follow_the_bash_rule(db: PgPool) {
+        let (_, a) = run_with_attempts(&db).await;
+        let open = json!({"tool": "rea_open_binary", "args": "{}"});
+        let rea = |id| call(a, id, "mcp:rea_open_binary", &open);
+        sqlx::query!("insert into approval_rule (tool, effect) values ('bash', 'allow')")
+            .execute(&db)
+            .await
+            .unwrap();
+        // Not a REA bot: a tool from some other server named like REA's still asks.
+        assert_eq!(
+            decide(&db, &rea("r1")).await.unwrap(),
+            Verdict::Ask { uncertain: false }
+        );
+        sqlx::query!(
+            "update bot set desktop = 'rea' where id = (select bot_id from thread where id = 1)"
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        assert_eq!(decide(&db, &rea("r2")).await.unwrap(), Verdict::Allow);
     }
 
     #[sqlx::test]

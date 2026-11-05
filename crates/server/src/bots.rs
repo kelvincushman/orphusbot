@@ -89,8 +89,9 @@ Run `computer` alone for the full usage. Look before you click, and check with a
 /// Told to bots with the reverse-engineering desktop (images/rea, D-058).
 const REA: &str = "Your computer is for reverse engineering. REA and Ghidra run inside it, and you reach \
 REA through the `mcp` tool (server `rea`). Your context window is small, so load only what the step needs. \
-Tools: search REA's tools with `includeSchemas: false`, then describe only the one you'll call; never \
-list them all. Results: \
+Tools: search REA's tools with `includeSchemas: false` and a specific word (`decompile`, `strings`, \
+`xrefs`), never `rea` or another word every tool matches; then describe only the one you'll call. Never \
+use `connect` or list the tools: calling a tool connects by itself. Results: \
 work summary-first, as REA is built for. Its replies are summaries, and the full detail stays in REA under \
 the reply's `parent_evidence_id`: page it with `inspect_analysis_view`, pass the ID to the next tool instead \
 of pasting content, and ask for `\"detail\": \"complete\"` only when you must. Start a binary with \

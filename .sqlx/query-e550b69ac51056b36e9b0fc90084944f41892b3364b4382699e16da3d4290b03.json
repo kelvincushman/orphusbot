@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update bot set desktop = 'rea' where id = (select bot_id from thread where id = 1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "e550b69ac51056b36e9b0fc90084944f41892b3364b4382699e16da3d4290b03"
+}

@@ -194,6 +194,7 @@ All settings are environment variables.
 | `ORPHUSBOT_RUNTIME` | `podman` | The container runtime for bots' computers, or `none` to run tools on this machine (not isolated) |
 | `ORPHUSBOT_COMPUTER_IMAGE` | `docker.io/library/debian:trixie-slim` | Image for a bot's computer |
 | `ORPHUSBOT_OMARCHY_IMAGE` | `localhost/orphusbot-omarchy:latest` | Image for bots whose desktop is Omarchy |
+| `ORPHUSBOT_REA_IMAGE` | `localhost/orphusbot-rea:latest` | Image for bots whose desktop is REA (reverse engineering, D-058) |
 | `ORPHUSBOT_NODE_KEY` | `~/.config/orphusbot/node.json` | The node's name and private key, written by `enrol` |
 | `ORPHUSBOT_SERVER` | `ws://127.0.0.1:7480/node` | The server's node endpoint; `wss://` when the server is behind HTTPS ([DEPLOY.md](DEPLOY.md)) |
 | `ORPHUSBOT_NODE_NAME` | the host name | The name to enrol under (letters, digits, `.`, `_`, `-`). After enrolling, the name comes from the key file |

@@ -143,6 +143,7 @@ Priority: **P0** = v1 blocker, **P1** = v1 target, **P2** = later.
 | B-CMP-07 | **Placement**, in order: untrusted work → E2B; needs GPU → GPU box (queue, never E2B); live Private home → same node; else least-loaded online node (laptop only on AC power and outside quiet hours); else E2B if allowed; else queue | P0 |
 | B-CMP-08 | A Private home can move between nodes or to E2B via export/import | P2 |
 | B-CMP-09 | Optional gVisor runtime for semi-trusted local work; GPU passthrough only for bots marked trusted | P2 |
+| B-CMP-10 | A reverse-engineering desktop: REA and Ghidra in the bot's own computer, with REA's MCP server run there, and the bot loading only the tools and results each step needs (D-058) | P1 |
 
 ### 7.5 Nodes
 

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into approval_rule (tool, effect) values ('bash', 'allow')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "cf8eb56b4ee30ed8f4f5ed660dbc27261293e610d83f8ba4d3399d7a2d9a1341"
+}

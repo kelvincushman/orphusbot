@@ -809,6 +809,10 @@ class _BotEditorState extends State<BotEditor> {
                       value: 'omarchy',
                       child: Text('Omarchy (Arch, Wayland)'),
                     ),
+                    DropdownMenuItem(
+                      value: 'rea',
+                      child: Text('Reverse engineering (REA and Ghidra)'),
+                    ),
                   ],
                   onChanged: (d) => bot['desktop'] = d,
                 ),

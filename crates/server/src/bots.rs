@@ -65,7 +65,7 @@ pub struct Bot {
     /// Its face from the library; none keeps its own style or the default.
     #[serde(default)]
     pub face: Option<String>,
-    /// Its computer's desktop on a node: `debian` or `omarchy` (images/omarchy).
+    /// Its computer's desktop on a node: `debian`, `omarchy` (images/omarchy) or `rea` (images/rea).
     #[serde(default = "debian")]
     pub desktop: String,
     /// The owner's phone and social accounts (DESIGN §11.6): none, draft or operate.
@@ -86,6 +86,21 @@ alacritty and a launcher. Drive it from bash with `computer`: `computer screensh
 the picture), `computer click X Y`, `computer type TEXT`, `computer key ctrl+l`, `computer open browser URL`. \
 Run `computer` alone for the full usage. Look before you click, and check with a screenshot after.";
 
+/// Told to bots with the reverse-engineering desktop (images/rea, D-058).
+const REA: &str = "Your computer is for reverse engineering. REA and Ghidra run inside it, and you reach \
+REA through the `mcp` tool (server `rea`). Your context window is small, so load only what the step needs. \
+Tools: search REA's tools with `includeSchemas: false` and a specific word (`decompile`, `strings`, \
+`xrefs`), never `rea` or another word every tool matches; then describe only the one you'll call. Never \
+use `connect` or list the tools: calling a tool connects by itself. Results: \
+work summary-first, as REA is built for. Its replies are summaries, and the full detail stays in REA under \
+the reply's `parent_evidence_id`: page it with `inspect_analysis_view`, pass the ID to the next tool instead \
+of pasting content, and ask for `\"detail\": \"complete\"` only when you must. Start a binary with \
+`binary_overview`, then decompile only the functions that matter, one at a time; never dump whole sections, \
+string tables or listings, and never repeat a call that already answered. Work on copies in your home folder. Name what \
+you learn as you go (`set_address_name`, `set_comment`) so it's kept with the binary, and export an \
+Evidence bundle when you finish. Write findings to the team wiki as short notes that say how you know \
+each claim (the function and address). Running a target is out of scope unless the owner asks.";
+
 fn debian() -> String {
     "debian".into()
 }
@@ -102,10 +117,10 @@ impl Bot {
     pub fn spec(&self) -> BotSpec {
         BotSpec {
             slug: self.slug.clone(),
-            instructions: if self.desktop == "omarchy" {
-                format!("{}\n\n{OMARCHY}", self.instructions)
-            } else {
-                self.instructions.clone()
+            instructions: match self.desktop.as_str() {
+                "omarchy" => format!("{}\n\n{OMARCHY}", self.instructions),
+                "rea" => format!("{}\n\n{REA}", self.instructions),
+                _ => self.instructions.clone(),
             },
             model: self.model.clone(),
             thinking: self.thinking.clone(),
@@ -178,11 +193,11 @@ impl Bot {
             {
                 Err("A face is a style name from the library")
             }
-            _ if !["debian", "omarchy"].contains(&self.desktop.as_str()) => {
-                Err("The desktop is Debian or Omarchy")
+            _ if !["debian", "omarchy", "rea"].contains(&self.desktop.as_str()) => {
+                Err("The desktop is Debian, Omarchy or REA")
             }
-            _ if self.desktop == "omarchy" && self.computer == "e2b" => {
-                Err("The Omarchy desktop runs on a node, not in E2B")
+            _ if self.desktop != "debian" && self.computer == "e2b" => {
+                Err("The Omarchy and REA desktops run on a node, not in E2B")
             }
             _ if !["none", "draft", "operate"].contains(&self.phone.as_str()) => {
                 Err("Phone is none, draft or operate")
@@ -467,6 +482,10 @@ mod tests {
         );
         assert_eq!(desktop("debian", "node").unwrap().spec().desktop, None);
         assert!(desktop("hyprland", "node").is_err() && desktop("omarchy", "e2b").is_err());
+        let rea = desktop("rea", "node").unwrap().spec();
+        assert_eq!(rea.desktop.as_deref(), Some("rea"));
+        assert!(rea.instructions.contains("server `rea`"));
+        assert!(desktop("rea", "e2b").is_err());
         let phone = |p: &str| {
             Bot {
                 phone: p.into(),

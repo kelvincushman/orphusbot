@@ -15,7 +15,9 @@ Format:
 
 **Decided:** A mic button in the Orchestrator's chat opens the room's live Grok voice as a panel inside the chat, reusing `IdeasRoom`, with instructions for getting work moving rather than brainstorming. Grok is told the team's state and the last eight messages; the transcript goes back to the Orchestrator when the talk ends.
 
-**Why:** Kelvin wants to talk to the Orchestrator where the work is, not in a separate room. Reusing the room keeps one voice path (D-053). **Alternatives:** a second copy of the room (two things to keep right); Grok acting directly (it stays a voice, the Orchestrator acts). **Revisit if:** sending chat text to xAI matters more than the context it gives Grok.
+The Ideas Room moves to its own engine session (`orchestrator-ideas`), so the chat's conversation can't reach it.
+
+**Why:** Kelvin wants to talk to the Orchestrator where the work is, not in a separate room, and that talk must not leak into the room's memory. All the Orchestrator's runs shared one session before, room turns included. The room gives up the chat's context, keeping its own recall, the wiki and the team. Reusing the room keeps one voice path (D-053). **Alternatives:** a second copy of the room (two things to keep right); Grok acting directly (it stays a voice, the Orchestrator acts). **Revisit if:** sending chat text to xAI matters more than the context it gives Grok.
 
 ---
 

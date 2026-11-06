@@ -437,9 +437,13 @@ struct NewMessage {
     /// Uploaded first with `POST /api/attachments`.
     #[serde(default)]
     attachments: Vec<i64>,
-    /// Said in the Ideas Room: the bot is told it's a spoken conversation.
+    /// Said in the Ideas Room: the bot is told it's a spoken conversation, and
+    /// it runs in the room's own session.
     #[serde(default)]
     room: bool,
+    /// Said by voice in the bot's own chat: spoken too, but in the chat's session.
+    #[serde(default)]
+    voice: bool,
 }
 
 fn inbox() -> String {
@@ -505,6 +509,8 @@ async fn send_message(
     let mut run_text = format!("{text}{}", tickets::referenced(&app.db, &text).await);
     if msg.room {
         run_text.push_str(room::ROOM_NOTE);
+    } else if msg.voice {
+        run_text.push_str(room::VOICE_NOTE);
     }
     if !files.is_empty() {
         let list: Vec<String> = files
@@ -1060,9 +1066,10 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
         Err(e) => return warn!("finding the run's thread: {e}"),
     };
     let mut spec = bot.spec();
-    if claimed.prompt.contains(room::ROOM_NOTE) {
+    if claimed.prompt.contains(room::ROOM_NOTE) || claimed.prompt.contains(room::VOICE_NOTE) {
         room::quick(&mut spec);
     }
+    spec.session = room::ideas_session(&claimed.prompt, &bot.slug);
     if let Some((session, name)) = discussions::session(&app.db, run, &bot.slug).await {
         spec.session = Some(session);
         spec.name = Some(name);

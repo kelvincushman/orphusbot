@@ -18,10 +18,23 @@ static HTTP: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::new(req
 
 /// Added to the Orchestrator's prompt for a message said in the room. Kept out
 /// of the recorded message, so the chat shows only what the owner said.
-pub const ROOM_NOTE: &str = "\n\n(This comes from a live voice conversation: Grok is talking \
+pub const ROOM_NOTE: &str = "\n\n(This comes from the Ideas Room: Grok's live voice is talking \
 with Kelvin and asked you this. Your reply goes back to Grok, who passes it on aloud, so answer \
 plainly and briefly in a few sentences, with no Markdown, tables or links. Use your wiki, notes and \
 team as needed. If he asked to save an idea brief, write it into the team wiki under wiki/ideas/.)";
+
+/// The same for the voice in the Orchestrator's own chat (D-063): that talk
+/// belongs to the chat's session, not the Ideas Room's.
+pub const VOICE_NOTE: &str = "\n\n(This comes from your chat: Grok's live voice is talking with \
+Kelvin and asked you this. Your reply goes back to Grok, who passes it on aloud, so answer plainly \
+and briefly in a few sentences, with no Markdown, tables or links. Use your wiki, notes and team as \
+needed.)";
+
+/// The Ideas Room keeps its own engine session (D-063), so what's said in the
+/// bot's chat, by voice or typed, isn't in the room's memory.
+pub fn ideas_session(prompt: &str, slug: &str) -> Option<String> {
+    prompt.contains(ROOM_NOTE).then(|| format!("{slug}-ideas"))
+}
 
 /// A room turn is a conversation, so it runs on a quick model with thinking
 /// off (`ORPHUSBOT_ROOM_MODEL`); the Orchestrator's own model and its deep
@@ -398,6 +411,21 @@ fn idea_title(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_ideas_room_has_its_own_session_and_chat_voice_does_not() {
+        assert_eq!(
+            super::ideas_session(&format!("an idea{}", super::ROOM_NOTE), "orchestrator")
+                .as_deref(),
+            Some("orchestrator-ideas")
+        );
+        let said = format!("what's the team doing{}", super::VOICE_NOTE);
+        assert_eq!(super::ideas_session(&said, "orchestrator"), None);
+        assert_eq!(
+            super::ideas_session("typed in the chat", "orchestrator"),
+            None
+        );
+    }
+
     use super::*;
 
     #[test]

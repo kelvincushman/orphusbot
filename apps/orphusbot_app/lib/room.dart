@@ -58,7 +58,7 @@ class _IdeasRoomState extends State<IdeasRoom>
     duration: const Duration(seconds: 12),
   )..repeat();
   final typed = TextEditingController();
-  final orchestrator = OrchestratorLine();
+  late final orchestrator = OrchestratorLine(inChat: inChat);
   LiveVoice? live;
   Phase phase = Phase.idle;
   double level = 0;
@@ -487,6 +487,10 @@ class _IdeasRoomState extends State<IdeasRoom>
 /// Grok's line to the Orchestrator: a function call becomes a room message
 /// in the Orchestrator's thread, and its reply is the function's answer.
 class OrchestratorLine {
+  OrchestratorLine({this.inChat = false});
+
+  /// Grok is talking inside the bot's chat, not in the Ideas Room.
+  final bool inChat;
   final thread = t.ThreadView();
   StreamSubscription<Map<String, dynamic>>? _events;
   Completer<String>? _waiting;
@@ -532,7 +536,8 @@ class OrchestratorLine {
     final done = Completer<String>();
     _waiting = done;
     _from = thread.items.length;
-    await api.send(bot, request, room: true);
+    // The chat's voice stays in the chat's session, the room's in its own (D-063).
+    await api.send(bot, request, room: !inChat, voice: inChat);
     return done.future.timeout(
       const Duration(seconds: 90),
       onTimeout: () {

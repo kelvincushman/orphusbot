@@ -19,13 +19,18 @@ use serde_json::{Value, json};
 use sqlx::PgPool;
 use tracing::warn;
 
-use crate::{ApiError, App, Shared, db, internal, record, runs, submit};
+use crate::{
+    ApiError, App, Shared, db, dialog_closed, gate, internal, lock, record, respond, runs, submit,
+    ui_response,
+};
 
 /// Title of the bridge's `ask_bot` dialog.
 pub const ASK_TITLE: &str = "orphusbot-ask";
 /// Title of the bridge's `team_status` dialog.
 pub const STATUS_TITLE: &str = "orphusbot-team";
 const MAX_DEPTH: i32 = 3;
+/// Title of the bridge's `accept_card` dialog.
+pub const ACCEPT_TITLE: &str = "orphusbot-accept";
 /// The owner's main bot, told about every stuck hand-off (D-037).
 const ORCHESTRATOR: &str = "orchestrator";
 
@@ -88,9 +93,61 @@ pub async fn open_list(State(app): State<Shared>) -> Result<Json<Value>, ApiErro
     Ok(Json(json!({ "open": list })))
 }
 
+/// May the Orchestrator accept this open card?
+fn safe(app: &App, card: &str) -> bool {
+    lock(&app.rt).dialogs.get(card).is_some_and(|p| p.safe)
+}
+
+/// The Orchestrator accepts a teammate's safe card (D-062). The server decides
+/// what's safe, so nothing a bot reads can widen this.
+pub async fn accept(app: &App, asker: &str, request: &Value) -> String {
+    if asker != ORCHESTRATOR {
+        return "error:only the Orchestrator can accept a card".into();
+    }
+    let Some(id) = request["card"].as_str() else {
+        return "error:give the card's id, from team_status".into();
+    };
+    let pending = {
+        let mut rt = lock(&app.rt);
+        match rt.dialogs.get(id) {
+            None => return "error:that card is no longer open".into(),
+            Some(p) if p.thread.bot == asker => {
+                return "error:you can't accept your own card".into();
+            }
+            Some(p) if !p.safe || p.tool_call_id.is_none() => {
+                return "error:that card is Kelvin's to answer; tell him what's needed".into();
+            }
+            Some(_) => rt.dialogs.remove(id),
+        }
+    };
+    let Some(pending) = pending else {
+        return "error:that card is no longer open".into();
+    };
+    let call = pending.tool_call_id.clone().unwrap_or_default();
+    if let Err(e) = gate::orchestrator_accepts(&app.db, pending.attempt, &call).await {
+        warn!("accepting a card: {e}");
+        lock(&app.rt).dialogs.insert(id.to_owned(), pending);
+        return "error:couldn't record that, so the card stays open".into();
+    }
+    respond(
+        app,
+        pending.attempt,
+        ui_response(id, "value", json!("allow")),
+    )
+    .await;
+    dialog_closed(
+        app,
+        &pending.thread,
+        id.to_owned(),
+        "Allowed by the Orchestrator".into(),
+    )
+    .await;
+    "ok:Accepted; they carry on.".into()
+}
+
 /// What the `team_status` tool answers: each hand-off in a line.
-pub async fn status(db: &PgPool) -> String {
-    let open = match open(db).await {
+pub async fn status(app: &App) -> String {
+    let open = match open(&app.db).await {
         Ok(open) => open,
         Err(e) => return format!("Couldn't read the team's work: {e}"),
     };
@@ -101,7 +158,15 @@ pub async fn status(db: &PgPool) -> String {
         .iter()
         .map(|t| {
             let state = match (&t.card_text, t.status.as_str()) {
-                (Some(card), _) => format!("blocked, waiting for Kelvin: {}", short(card)),
+                (Some(text), _) => {
+                    let card = t.card.as_deref().unwrap_or_default();
+                    let who = if safe(app, card) {
+                        format!("safe for the Orchestrator to accept, card {card}")
+                    } else {
+                        "only Kelvin can answer".to_owned()
+                    };
+                    format!("blocked, {who}: {}", short(text))
+                }
                 (None, "todo") => "not started; it starts when they're free".to_owned(),
                 _ => "working".to_owned(),
             };
@@ -176,10 +241,18 @@ pub async fn check(app: &App) {
             short(&t.title),
             short(text)
         );
-        tell(app, &t.asker, &note).await;
+        let for_orchestrator = if safe(app, card) {
+            format!(
+                "{note}\nThis call is safe for you to accept: if it serves the job, use accept_card \
+                 with card {card} instead of asking Kelvin."
+            )
+        } else {
+            note.clone()
+        };
         if t.asker != ORCHESTRATOR {
-            tell(app, ORCHESTRATOR, &note).await;
+            tell(app, &t.asker, &note).await;
         }
+        tell(app, ORCHESTRATOR, &for_orchestrator).await;
     }
 }
 
@@ -408,7 +481,12 @@ pub fn roster_note(
              need can go in /shared.\n\nYour teammates and what each can do:\n{}",
             mine.unwrap_or_default(),
             mates.join("\n")
-        ) + if google_ready {
+        ) + if me == ORCHESTRATOR {
+            "\n\nYou may accept a teammate's safe card with accept_card; team_status shows which. \
+             Send, pay, delete, merge and publish stay Kelvin's."
+        } else {
+            ""
+        } + if google_ready {
             ""
         } else {
             "\n\nGoogle (Gmail, Calendar, Tasks, Drive) isn't set up yet, so no bot can use it. If a task needs it, \
@@ -506,7 +584,7 @@ mod tests {
         check(&app).await;
         assert_eq!(told(researcher.id).await, 0);
         assert!(
-            status(&db)
+            status(&app)
                 .await
                 .contains("permission to use mcp:github_search_code")
         );
@@ -537,6 +615,80 @@ mod tests {
         .await
         .unwrap();
         assert!(open(&db).await.unwrap()[0].card.is_none());
+    }
+
+    #[sqlx::test]
+    async fn the_orchestrator_accepts_only_a_teammates_safe_card(db: PgPool) {
+        let app = crate::auth::tests::app(db.clone());
+        bot(&db, "coder", "x").await;
+        let coder = db::bot_thread(&db, "coder").await.unwrap().unwrap();
+        let mine = db::bot_thread(&db, ORCHESTRATOR).await.unwrap().unwrap();
+        let Submitted::Queued(run) = runs::submit(&db, coder.id, "go", runs::Source::default())
+            .await
+            .unwrap()
+        else {
+            panic!("expected a run")
+        };
+        sqlx::query!(
+            "insert into effect (run_id, fence, tool_call_id, tool, input, state)
+             values ($1, 0, 'call', 'mcp:github_search_code', '{}', 'pending')",
+            run
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        let attempt = orphusbot_proto::Attempt { run, fence: 0 };
+        let card = |thread: &db::Thread, safe: bool| crate::Pending {
+            attempt,
+            thread: thread.clone(),
+            tool_call_id: Some("call".into()),
+            takeover: false,
+            safe,
+        };
+        let put = |id: &str, pending| {
+            lock(&app.rt).dialogs.insert(id.to_owned(), pending);
+        };
+        put("safe", card(&coder, true));
+        put("kelvins", card(&coder, false));
+        put("own", card(&mine, true));
+
+        let accept = |bot: &'static str, id: &'static str| {
+            let app = &app;
+            async move { accept(app, bot, &json!({ "card": id })).await }
+        };
+        assert!(
+            accept("coder", "safe")
+                .await
+                .starts_with("error:only the Orchestrator")
+        );
+        assert!(
+            accept(ORCHESTRATOR, "kelvins")
+                .await
+                .contains("Kelvin's to answer")
+        );
+        assert!(accept(ORCHESTRATOR, "own").await.contains("your own card"));
+        assert!(
+            accept(ORCHESTRATOR, "gone")
+                .await
+                .contains("no longer open")
+        );
+        assert!(accept(ORCHESTRATOR, "safe").await.starts_with("ok:"));
+
+        let who = sqlx::query_scalar!("select decided_by from effect")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(
+            who.as_deref(),
+            Some("orchestrator"),
+            "it never counts as the owner"
+        );
+        let rules: i64 = sqlx::query_scalar!(r#"select count(*) as "n!" from approval_rule"#)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(rules, 0, "accepting adds no rule");
+        assert!(!lock(&app.rt).dialogs.contains_key("safe"));
     }
 
     #[sqlx::test]

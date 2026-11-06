@@ -11,6 +11,22 @@ Format:
 
 ---
 
+## D-063: The Orchestrator's chat gets the Ideas Room's voice, as a panel (2026-11-06)
+
+**Decided:** A mic button in the Orchestrator's chat opens the room's live Grok voice as a panel inside the chat, reusing `IdeasRoom`, with instructions for getting work moving rather than brainstorming. Grok is told the team's state and the last eight messages; the transcript goes back to the Orchestrator when the talk ends.
+
+**Why:** Kelvin wants to talk to the Orchestrator where the work is, not in a separate room. Reusing the room keeps one voice path (D-053). **Alternatives:** a second copy of the room (two things to keep right); Grok acting directly (it stays a voice, the Orchestrator acts). **Revisit if:** sending chat text to xAI matters more than the context it gives Grok.
+
+---
+
+## D-062: The Orchestrator may accept a teammate's safe card, and nothing else (2026-11-06)
+
+**Decided:** The server marks a card safe when it opens: a tool that only looks, by its name, or a file change inside the bot's computer. The Orchestrator can accept those once with `accept_card`. Everything else, including any name it can't classify, stays Kelvin's.
+
+**Why:** Kelvin chose this. Teammates were stalling on harmless reads. Rule 5 keeps irreversible actions for a human tap, and the Orchestrator reads text from repos and web pages, so a planted instruction must not be able to approve one; the check is on the server, out of its reach. It's recorded as the Orchestrator's decision, never the owner's, and doesn't train System 1. **Alternatives:** bash in computers too (a command can reach the network); every card (needs rule 5 rewritten). **Revisit if:** an MCP server names a changing tool like a read: names are all this goes on, and a connection is the owner's choice to trust.
+
+---
+
 ## D-061: The server checks on hand-offs, instead of bots polling (2026-11-06)
 
 **Decided:** `team::check` runs on the reconcile tick. It tells the asker and the Orchestrator once per card when a teammate has been blocked for two minutes, and starts hand-offs left waiting for a busy bot. Bots can also look with a read-only `team_status` tool.

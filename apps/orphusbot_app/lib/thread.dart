@@ -55,7 +55,11 @@ class ThreadView {
   // The last run failed and nothing has happened since.
   bool failed = false;
 
-  /// The avatar's state (design/bot-avatar): 0 idle, 1 thinking (queued),
+  /// Unfinished hand-offs this bot is waiting on (`/api/team/open`).
+  int waitingOn = 0;
+
+  /// The avatar's state (design/bot-avatar): 0 idle, 1 thinking (queued, or
+  /// waiting on teammates),
   /// 2 working, 3 needs you, 4 done, 5 failed (it blows itself up, then
   /// stays dizzy).
   int get mood => waiting > 0
@@ -63,7 +67,7 @@ class ThreadView {
       : switch (run) {
           RunState.queued => 1,
           RunState.running => 2,
-          RunState.idle => failed ? 5 : (done ? 4 : 0),
+          RunState.idle => waitingOn > 0 ? 1 : (failed ? 5 : (done ? 4 : 0)),
         };
 
   int get waiting =>

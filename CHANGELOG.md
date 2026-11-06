@@ -8,6 +8,8 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- **Talk to the Orchestrator in its chat:** the mic button opens the Ideas Room's live voice right there, and it knows what the team is doing. Its chat's recent messages go to xAI while you talk.
+- **The Orchestrator can accept safe cards:** a teammate's read-only tool calls and file changes in its computer, marked "Allowed by the Orchestrator". Send, pay, delete, merge and publish still come to you.
 - **Bots check on each other:** if a teammate is stuck waiting on a card for two minutes, the bot that asked and the Orchestrator hear about it, once per card. A job handed to a busy bot now starts when that bot is free, and bots can look at the team with `team_status`. In the bar, a bot waiting on teammates shows its thinking face.
 - **Safer phone use:** bots no longer touch security or sign-in prompts on your phone (such as Google's "Are you trying to sign in?"). They leave them and tell you. A phone action that waited a long time for your approval is checked against the screen first, and if the phone has moved on, the bot looks again instead of tapping blind.
 - The app now picks up new or changed bots when you come back to it, instead of only after a restart.

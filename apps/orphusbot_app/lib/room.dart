@@ -35,9 +35,17 @@ String? cueFor(Phase p) => switch (p) {
 };
 
 class IdeasRoom extends StatefulWidget {
-  const IdeasRoom({super.key, required this.api, this.bot = 'orchestrator'});
+  const IdeasRoom({
+    super.key,
+    required this.api,
+    this.bot = 'orchestrator',
+    this.onClose,
+  });
   final Api api;
   final String bot;
+
+  /// Set when it's a panel inside the bot's chat, not the room itself (D-063).
+  final VoidCallback? onClose;
 
   @override
   State<IdeasRoom> createState() => _IdeasRoomState();
@@ -72,7 +80,10 @@ class _IdeasRoomState extends State<IdeasRoom>
   void initState() {
     super.initState();
     orchestrator.start(widget.api, widget.bot);
+    if (inChat) WidgetsBinding.instance.addPostFrameCallback((_) => _start());
   }
+
+  bool get inChat => widget.onClose != null;
 
   @override
   void dispose() {
@@ -130,6 +141,7 @@ class _IdeasRoomState extends State<IdeasRoom>
     });
     final voice = LiveVoice(
       api: widget.api,
+      path: inChat ? '/api/room/voice/chat' : '/api/room/voice',
       ask: (name, args) {
         if (name == 'save_idea') {
           widget.api
@@ -166,7 +178,9 @@ class _IdeasRoomState extends State<IdeasRoom>
       await voice.start();
       sessionId = voice.sessionId;
       // Every few minutes of a longer talk, the Orchestrator gives its view.
-      chimeIn = Timer.periodic(const Duration(minutes: 5), (_) => _chimeIn());
+      if (!inChat) {
+        chimeIn = Timer.periodic(const Duration(minutes: 5), (_) => _chimeIn());
+      }
     } catch (e) {
       await voice.stop();
       if (mounted) {
@@ -186,6 +200,7 @@ class _IdeasRoomState extends State<IdeasRoom>
     if (mounted) setState(() => live = null);
     _setPhase(Phase.idle);
     await _wrapUp();
+    widget.onClose?.call();
   }
 
   /// The Orchestrator's view of the conversation so far, for Grok to pass on.
@@ -222,6 +237,21 @@ class _IdeasRoomState extends State<IdeasRoom>
   /// After a conversation: keep it as memory, ask the Orchestrator for its
   /// review in its chat, and ask Kelvin how it went.
   Future<void> _wrapUp() async {
+    if (inChat) {
+      // The chat is the record: the Orchestrator picks up what was said.
+      if (transcript.length >= 2) {
+        await widget.api
+            .send(
+              widget.bot,
+              'We just talked by voice. Here is what was said. Act on anything '
+              'still open, and reply in a line or two.\n\n${_recent()}',
+            )
+            .catchError((Object e) {
+              if (mounted) setState(() => note = explain(e));
+            });
+      }
+      return;
+    }
     final id = sessionId;
     if (id == null || transcript.isEmpty) return;
     final text = transcript.join('\n');
@@ -267,10 +297,91 @@ class _IdeasRoomState extends State<IdeasRoom>
     }
   }
 
+  /// The orb; tapping it stops Grok (on a computer, the only way to cut in,
+  /// since its voice reaches the mic).
+  Widget _orb() => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap:
+        phase == Phase.speaking ||
+            phase == Phase.thinking ||
+            phase == Phase.researching
+        ? () => live?.interrupt()
+        : null,
+    child: AnimatedBuilder(
+      animation: spin,
+      builder: (_, _) => CustomPaint(
+        painter: Orb(time: spin.value, phase: phase, level: level),
+        size: Size.infinite,
+      ),
+    ),
+  );
+
+  /// The same conversation as a panel above the chat's composer.
+  Widget _panel(TextStyle caption, TextStyle quiet) => Theme(
+    data: ThemeData.dark(useMaterial3: true),
+    child: Container(
+      color: Colors.black,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: Row(
+        children: [
+          SizedBox.square(dimension: 96, child: _orb()),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_status, style: quiet),
+                if (heard.isNotEmpty)
+                  Text(
+                    'You: $heard',
+                    style: quiet,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                if (reply.isNotEmpty)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 72),
+                    child: SingleChildScrollView(
+                      reverse: true,
+                      child: Text(reply, style: caption),
+                    ),
+                  ),
+                if (note != null)
+                  Text(note!, style: const TextStyle(color: Colors.redAccent)),
+              ],
+            ),
+          ),
+          IconButton.filled(
+            tooltip: 'End',
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.black,
+            ),
+            onPressed: phase == Phase.connecting
+                ? null
+                : (live == null ? widget.onClose : _end),
+            icon: Icon(live == null ? Icons.close : Icons.call_end),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  String get _status => switch (phase) {
+    Phase.idle => 'Tap to start a conversation',
+    Phase.connecting => 'Connecting…',
+    Phase.listening => 'Listening… just talk; tap to end',
+    Phase.thinking => 'Thinking…',
+    Phase.researching => 'Looking into it…',
+    Phase.speaking => 'Tap the orb to stop it',
+  };
+
   @override
   Widget build(BuildContext context) {
     final caption = TextStyle(color: Colors.white.withValues(alpha: 0.9));
     final quiet = TextStyle(color: Colors.white.withValues(alpha: 0.55));
+    if (inChat) return _panel(caption, quiet);
     return Theme(
       data: ThemeData.dark(useMaterial3: true),
       child: AnnotatedRegion<SystemUiOverlayStyle>(
@@ -284,42 +395,12 @@ class _IdeasRoomState extends State<IdeasRoom>
           body: SafeArea(
             child: Column(
               children: [
-                Expanded(
-                  child: GestureDetector(
-                    // Tapping the orb stops Grok (on a computer, the only
-                    // way to cut in, since its voice reaches the mic).
-                    behavior: HitTestBehavior.opaque,
-                    onTap:
-                        phase == Phase.speaking ||
-                            phase == Phase.thinking ||
-                            phase == Phase.researching
-                        ? () => live?.interrupt()
-                        : null,
-                    child: AnimatedBuilder(
-                      animation: spin,
-                      builder: (_, _) => CustomPaint(
-                        painter: Orb(
-                          time: spin.value,
-                          phase: phase,
-                          level: level,
-                        ),
-                        size: Size.infinite,
-                      ),
-                    ),
-                  ),
-                ),
+                Expanded(child: _orb()),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Column(
                     children: [
-                      Text(switch (phase) {
-                        Phase.idle => 'Tap to start a conversation',
-                        Phase.connecting => 'Connecting…',
-                        Phase.listening => 'Listening… just talk; tap to end',
-                        Phase.thinking => 'Thinking…',
-                        Phase.researching => 'Looking into it…',
-                        Phase.speaking => 'Tap the orb to stop it',
-                      }, style: quiet),
+                      Text(_status, style: quiet),
                       if (heard.isNotEmpty) ...[
                         const SizedBox(height: 10),
                         Text(

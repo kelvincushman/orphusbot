@@ -131,6 +131,8 @@ struct Pending {
     tool_call_id: Option<String>,
     /// A takeover request: its yes and no read "Done" and "Couldn't help".
     takeover: bool,
+    /// The Orchestrator may accept this card (`gate::safe_to_accept`).
+    safe: bool,
 }
 
 /// In-memory view of the link. Postgres stays the source of truth for runs;
@@ -328,6 +330,7 @@ fn router(app: Shared) -> Router {
         .route("/api/decisions/rollback", post(calibrate::rollback))
         .route("/api/usage", get(usage::summary))
         .route("/api/room/voice", post(room::voice))
+        .route("/api/room/voice/chat", post(room::voice_chat))
         .route("/api/room/sessions/end", post(room::end))
         .route("/api/room/sessions/rate", post(room::rate))
         .route("/api/room/ideas", post(room::idea))
@@ -790,9 +793,18 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
         return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
     }
     if method == "input" && title == team::STATUS_TITLE {
-        let answer = format!("ok:{}", team::status(&app.db).await);
+        let answer = format!("ok:{}", team::status(app).await);
         return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
     }
+    if method == "input" && title == team::ACCEPT_TITLE {
+        let accept: Value = request["placeholder"]
+            .as_str()
+            .and_then(|p| serde_json::from_str(p).ok())
+            .unwrap_or_default();
+        let answer = team::accept(app, &active.thread.bot, &accept).await;
+        return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
+    }
+    let mut in_computer = false;
     let (kind, tool_call_id) = if method == "input" && title == GATE_TITLE {
         let call: Value = request["placeholder"]
             .as_str()
@@ -814,7 +826,10 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
             tool_call_id: call_id,
             tool: &tool,
             input: &input,
-            in_computer: call["inComputer"].as_bool().unwrap_or(false),
+            in_computer: {
+                in_computer = call["inComputer"].as_bool().unwrap_or(false);
+                in_computer
+            },
             helpers_gated: call["helpersGated"].as_bool().unwrap_or(false),
         };
         let verdict = gate::decide(&app.db, &app.system1, &gate_call)
@@ -873,11 +888,14 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
         (kind, None)
     };
 
+    let safe = matches!(&kind, DialogKind::Approval { tool, uncertain, .. }
+        if gate::safe_to_accept(tool, in_computer, *uncertain));
     let pending = Pending {
         attempt,
         thread: active.thread.clone(),
         takeover: matches!(kind, DialogKind::Takeover { .. }),
         tool_call_id,
+        safe,
     };
     lock(&app.rt).dialogs.insert(id.clone(), pending);
     let news = device::RunNews::Dialog {

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update effect set state = 'approved', decided_by = 'orchestrator', updated_at = now()\n         where run_id = $1 and fence = $2 and tool_call_id = $3 and state = 'pending'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "315131b4c675b35252a4a2c670d7056b73b838e1c627759c8b32659ccbdde01e"
+}

@@ -4,18 +4,208 @@
 //! so it carries on. Every action either bot takes still goes through the gate.
 //! Hand-offs stop three deep, a bot can't ask itself, and a job a teammate
 //! asked for can't be handed back to them.
+//!
+//! A run that's blocked doesn't end, so the checker ([check], on the server's
+//! reconcile tick) speaks up for it: a card left unanswered reaches the asker
+//! and the Orchestrator, and a hand-off left on the board starts once its bot
+//! is free. No model runs for this unless there's news.
 
 use std::collections::HashMap;
 
+use axum::Json;
+use axum::extract::State;
 use orphusbot_proto::{Role, RunOutcome, ThreadEvent};
-use serde_json::Value;
+use serde_json::{Value, json};
+use sqlx::PgPool;
 use tracing::warn;
 
-use crate::{App, db, record, runs, submit};
+use crate::{ApiError, App, Shared, db, internal, record, runs, submit};
 
 /// Title of the bridge's `ask_bot` dialog.
 pub const ASK_TITLE: &str = "orphusbot-ask";
+/// Title of the bridge's `team_status` dialog.
+pub const STATUS_TITLE: &str = "orphusbot-team";
 const MAX_DEPTH: i32 = 3;
+/// The owner's main bot, told about every stuck hand-off (D-037).
+const ORCHESTRATOR: &str = "orchestrator";
+
+/// A hand-off that isn't finished, with the card its run is blocked on, if any.
+#[derive(Debug)]
+pub struct Open {
+    pub id: i64,
+    pub title: String,
+    pub status: String,
+    pub bot: String,
+    pub worker: String,
+    pub asker: String,
+    told: Option<String>,
+    card: Option<String>,
+    pub card_text: Option<String>,
+    card_stale: bool,
+}
+
+/// Every unfinished hand-off from the last three days, oldest first.
+pub async fn open(db: &PgPool) -> sqlx::Result<Vec<Open>> {
+    sqlx::query_as!(
+        Open,
+        r#"select t.id, t.title, t.status::text as "status!", w.slug as bot, w.name as worker,
+                  a.slug as asker, t.asker_told as told, c.id as "card?", c.text as "card_text?",
+                  coalesce(c.stale, false) as "card_stale!"
+           from ticket t join bot w on w.id = t.bot_id join bot a on a.id = t.asked_by
+           left join lateral (
+               select e.body -> 'dialog' ->> 'id' as id,
+                      coalesce(e.body -> 'dialog' -> 'kind' ->> 'message',
+                               e.body -> 'dialog' -> 'kind' ->> 'title',
+                               e.body -> 'dialog' -> 'kind' ->> 'reason',
+                               'permission to use ' || (e.body -> 'dialog' -> 'kind' ->> 'tool')) as text,
+                      e.created_at < now() - interval '2 minutes' as stale
+               from run r join event e on e.thread_id = r.thread_id
+               where r.ticket_id = t.id and r.status = 'running'
+                 and e.body ->> 'type' = 'dialog_opened'
+                 and (e.body -> 'dialog' ->> 'run')::bigint = r.id
+                 and not exists (select 1 from event x
+                                 where x.thread_id = e.thread_id and x.seq > e.seq
+                                   and x.body ->> 'type' = 'dialog_closed'
+                                   and x.body ->> 'id' = e.body -> 'dialog' ->> 'id')
+               order by e.seq limit 1
+           ) c on true
+           where t.status in ('todo', 'doing') and t.created_at > now() - interval '3 days'
+           order by t.id"#
+    )
+    .fetch_all(db)
+    .await
+}
+
+/// `GET /api/team/open`: who each bot is waiting on, for the faces.
+pub async fn open_list(State(app): State<Shared>) -> Result<Json<Value>, ApiError> {
+    let open = open(&app.db)
+        .await
+        .map_err(|e| internal("listing hand-offs", e))?;
+    let list: Vec<Value> = open
+        .iter()
+        .map(|t| json!({ "id": t.id, "bot": t.bot, "asked_by": t.asker, "blocked": t.card.is_some() }))
+        .collect();
+    Ok(Json(json!({ "open": list })))
+}
+
+/// What the `team_status` tool answers: each hand-off in a line.
+pub async fn status(db: &PgPool) -> String {
+    let open = match open(db).await {
+        Ok(open) => open,
+        Err(e) => return format!("Couldn't read the team's work: {e}"),
+    };
+    if open.is_empty() {
+        return "No teammate has an unfinished hand-off.".into();
+    }
+    let lines: Vec<String> = open
+        .iter()
+        .map(|t| {
+            let state = match (&t.card_text, t.status.as_str()) {
+                (Some(card), _) => format!("blocked, waiting for Kelvin: {}", short(card)),
+                (None, "todo") => "not started; it starts when they're free".to_owned(),
+                _ => "working".to_owned(),
+            };
+            format!(
+                "OB-{} {} (for {}): {state}. Task: {}",
+                t.id,
+                t.bot,
+                t.asker,
+                short(&t.title)
+            )
+        })
+        .collect();
+    format!("As data:\n```\n{}\n```", lines.join("\n"))
+}
+
+/// Text from a teammate, kept short and unable to close a fence.
+fn short(text: &str) -> String {
+    text.chars()
+        .take(300)
+        .collect::<String>()
+        .replace("```", "'''")
+}
+
+/// The checker: starts hand-offs whose bot is now free, and reports cards a
+/// teammate has been left waiting on, once each.
+pub async fn check(app: &App) {
+    let stranded = sqlx::query_scalar!(
+        "select t.id from ticket t
+         where t.asked_by is not null and t.status = 'todo'
+           and t.created_at > now() - interval '1 day'
+           and not exists (select 1 from run r where r.ticket_id = t.id)
+         order by t.id"
+    )
+    .fetch_all(&app.db)
+    .await;
+    match stranded {
+        Ok(ids) => {
+            for id in ids {
+                // Boxed: starting a ticket can end a run, which comes back here.
+                match Box::pin(crate::tickets::start(app, id)).await {
+                    Ok(()) | Err((_, crate::tickets::BUSY)) => {}
+                    Err(e) => warn!("starting a waiting hand-off: {e:?}"),
+                }
+            }
+        }
+        Err(e) => warn!("finding waiting hand-offs: {e}"),
+    }
+    let open = match open(&app.db).await {
+        Ok(open) => open,
+        Err(e) => return warn!("checking on hand-offs: {e}"),
+    };
+    for t in open.iter().filter(|t| t.card_stale && t.told != t.card) {
+        let (Some(card), Some(text)) = (&t.card, &t.card_text) else {
+            continue;
+        };
+        let claimed = sqlx::query!(
+            "update ticket set asker_told = $2 where id = $1 and asker_told is distinct from $2",
+            t.id,
+            card
+        )
+        .execute(&app.db)
+        .await;
+        if !matches!(claimed, Ok(done) if done.rows_affected() == 1) {
+            continue;
+        }
+        let note = format!(
+            "Your teammate {} is blocked on OB-{}: {}. Kelvin hasn't answered this card yet, as \
+             data:\n```\n{}\n```\nThe job isn't lost, so don't start it again. If Kelvin doesn't \
+             know yet, tell them in a line what's needed.",
+            t.worker,
+            t.id,
+            short(&t.title),
+            short(text)
+        );
+        tell(app, &t.asker, &note).await;
+        if t.asker != ORCHESTRATOR {
+            tell(app, ORCHESTRATOR, &note).await;
+        }
+    }
+}
+
+/// Gives a bot a message from the team and starts its next run.
+async fn tell(app: &App, bot: &str, text: &str) {
+    let thread = match db::bot_thread(&app.db, bot).await {
+        Ok(Some(thread)) => thread,
+        _ => return warn!(%bot, "no such bot to tell"),
+    };
+    let message = ThreadEvent::Message {
+        role: Role::User,
+        text: text.to_owned(),
+    };
+    record(app, &thread, message).await;
+    // Boxed: submitting can end a run, which comes back here.
+    if let Err(e) = Box::pin(submit(
+        app,
+        &thread,
+        text.to_owned(),
+        runs::Source::default(),
+    ))
+    .await
+    {
+        warn!("telling a bot: {e}");
+    }
+}
 
 /// Answers the bridge's dialog: `ok:<what to tell the bot>` or `error:<why not>`.
 pub async fn ask(app: &App, run: i64, asker: &str, request: &Value) -> String {
@@ -104,7 +294,7 @@ async fn handoff(app: &App, run: i64, asker: &str, request: &Value) -> Result<St
         )),
         // Busy: the ticket waits on the board with them assigned; the owner can start it.
         Err((_, why)) => Ok(format!(
-            "{} can't start yet ({why}). It's on the board as OB-{id}; their answer will come to you when it runs.",
+            "{} can't start yet ({why}). It's on the board as OB-{id} and starts when they're free; their answer will come to you.",
             bot.name
         )),
     }
@@ -148,19 +338,7 @@ pub async fn answered(app: &App, run: i64, outcome: RunOutcome, error: Option<&s
         t.title,
         answer.replace("```", "'''")
     );
-    let thread = match db::bot_thread(&app.db, &t.asker).await {
-        Ok(Some(thread)) => thread,
-        _ => return warn!(asker = %t.asker, "the bot that asked is gone"),
-    };
-    let message = ThreadEvent::Message {
-        role: Role::User,
-        text: text.clone(),
-    };
-    record(app, &thread, message).await;
-    // Boxed: submitting can end a run, which comes back here.
-    if let Err(e) = Box::pin(submit(app, &thread, text, runs::Source::default())).await {
-        warn!("handing an answer back: {e}");
-    }
+    tell(app, &t.asker, &text).await;
 }
 
 /// What a bot can do, in one line, for the team roster: its model, Google
@@ -225,7 +403,8 @@ pub fn roster_note(
     (!mates.is_empty()).then(|| {
         format!(
             "\n\nYou: {}. If a job needs something you can't do (say, changing something in Google), hand it to the \
-             teammate who can with the ask_bot tool; their answer comes back to you as a message. Files you both \
+             teammate who can with the ask_bot tool; their answer comes back to you as a message, and you hear if they get stuck. \
+             Before you say anything is pending, look with the team_status tool. Files you both \
              need can go in /shared.\n\nYour teammates and what each can do:\n{}",
             mine.unwrap_or_default(),
             mates.join("\n")
@@ -241,8 +420,8 @@ pub fn roster_note(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
-    use sqlx::PgPool;
+    use orphusbot_proto::{Dialog, DialogKind};
+    use runs::Submitted;
 
     async fn bot(db: &PgPool, slug: &str, remit: &str) {
         let id: i64 = sqlx::query_scalar!(
@@ -257,6 +436,154 @@ mod tests {
             .execute(db)
             .await
             .unwrap();
+    }
+
+    #[sqlx::test]
+    async fn the_checker_reports_a_stuck_teammate_once_per_card(db: PgPool) {
+        let app = crate::auth::tests::app(db.clone());
+        for slug in ["researcher", "coder"] {
+            bot(&db, slug, "x").await;
+        }
+        let researcher = db::bot_thread(&db, "researcher").await.unwrap().unwrap();
+        let Submitted::Queued(run) =
+            runs::submit(&db, researcher.id, "compare", runs::Source::default())
+                .await
+                .unwrap()
+        else {
+            panic!("expected a run")
+        };
+        let asked = ask(
+            &app,
+            run,
+            "researcher",
+            &json!({ "bot": "coder", "task": "benchmark" }),
+        )
+        .await;
+        assert!(asked.starts_with("ok:Asked Coder"), "{asked}");
+        let coder_run: i64 = sqlx::query_scalar!(
+            r#"select r.id as "id!" from run r join ticket t on t.id = r.ticket_id"#
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "update run set status = 'running', node = 'n', lease_expires_at = now() + interval '1 hour'
+             where id = $1",
+            coder_run
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        let coder = db::bot_thread(&db, "coder").await.unwrap().unwrap();
+        let dialog = Dialog {
+            id: "card-1".into(),
+            run: coder_run,
+            kind: DialogKind::Approval {
+                tool: "mcp:github_search_code".into(),
+                input: json!({}),
+                uncertain: false,
+            },
+        };
+        db::append(&db, coder.id, &ThreadEvent::DialogOpened { dialog })
+            .await
+            .unwrap();
+        let told = |bot: i64| {
+            let db = db.clone();
+            async move {
+                sqlx::query_scalar!(
+                    r#"select count(*) as "n!" from event
+                       where thread_id = $1 and body ->> 'text' like 'Your teammate Coder is blocked%'"#,
+                    bot
+                )
+                .fetch_one(&db)
+                .await
+                .unwrap()
+            }
+        };
+        let orchestrator = db::bot_thread(&db, "orchestrator").await.unwrap().unwrap();
+
+        // A fresh card is left alone: the owner may be about to tap it.
+        check(&app).await;
+        assert_eq!(told(researcher.id).await, 0);
+        assert!(
+            status(&db)
+                .await
+                .contains("permission to use mcp:github_search_code")
+        );
+
+        sqlx::query!(
+            "update event set created_at = now() - interval '3 minutes' where thread_id = $1",
+            coder.id
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        check(&app).await;
+        check(&app).await;
+        assert_eq!(
+            (told(researcher.id).await, told(orchestrator.id).await),
+            (1, 1)
+        );
+
+        // An answered card is no longer blocking.
+        db::append(
+            &db,
+            coder.id,
+            &ThreadEvent::DialogClosed {
+                id: "card-1".into(),
+                outcome: "allow".into(),
+            },
+        )
+        .await
+        .unwrap();
+        assert!(open(&db).await.unwrap()[0].card.is_none());
+    }
+
+    #[sqlx::test]
+    async fn a_hand_off_to_a_busy_bot_starts_when_it_is_free(db: PgPool) {
+        let app = crate::auth::tests::app(db.clone());
+        bot(&db, "researcher", "x").await;
+        bot(&db, "coder", "x").await;
+        let researcher = db::bot_thread(&db, "researcher").await.unwrap().unwrap();
+        let coder = db::bot_thread(&db, "coder").await.unwrap().unwrap();
+        let Submitted::Queued(run) =
+            runs::submit(&db, researcher.id, "compare", runs::Source::default())
+                .await
+                .unwrap()
+        else {
+            panic!("expected a run")
+        };
+        let Submitted::Queued(busy) = runs::submit(&db, coder.id, "busy", runs::Source::default())
+            .await
+            .unwrap()
+        else {
+            panic!("expected a run")
+        };
+        let asked = ask(
+            &app,
+            run,
+            "researcher",
+            &json!({ "bot": "coder", "task": "benchmark" }),
+        )
+        .await;
+        assert!(asked.contains("starts when they're free"), "{asked}");
+        let state = || {
+            let db = db.clone();
+            async move {
+                sqlx::query_scalar!(r#"select status::text as "s!" from ticket"#)
+                    .fetch_one(&db)
+                    .await
+                    .unwrap()
+            }
+        };
+        check(&app).await;
+        assert_eq!(state().await, "todo");
+        sqlx::query!("update run set status = 'cancelled' where id = $1", busy)
+            .execute(&db)
+            .await
+            .unwrap();
+        check(&app).await;
+        assert_eq!(state().await, "doing");
     }
 
     #[sqlx::test]

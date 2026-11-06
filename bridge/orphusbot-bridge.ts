@@ -42,6 +42,7 @@ export const GATE_TITLE = "orphusbot-gate";
 export const TAKEOVER_TITLE = "orphusbot-takeover";
 /** Title of the dialog that hands a teammate a task (DESIGN §5.3). */
 export const ASK_TITLE = "orphusbot-ask";
+export const TEAM_TITLE = "orphusbot-team";
 /** Title of the dialog that starts a discussion among teammates (DESIGN §11.4). */
 export const DISCUSS_TITLE = "orphusbot-discuss";
 
@@ -67,7 +68,7 @@ const HELPER_TOOLS = ["subagent", "fleet", "roundtable"];
 // Plus `mcp`, Orphus's MCP gateway, when the owner granted the bot a connection:
 // it only talks to those servers, so it is safe to run outside the computer.
 const COMPUTER_TOOLS = [
-  "read", "write", "edit", "bash", "request_takeover", "ask_owner", "share_file", "ask_bot", "discuss", "install_skill",
+  "read", "write", "edit", "bash", "request_takeover", "ask_owner", "share_file", "ask_bot", "team_status", "discuss", "install_skill",
   ...(process.env.ORPHUSBOT_MCP ? ["mcp"] : []),
   // Fleets: helpers whose calls come back through this gate and into the computer.
   ...(process.env.ORPHUSBOT_HELPERS_GATED === "1" ? HELPER_TOOLS : []),
@@ -333,6 +334,22 @@ export default function (pi: ExtensionAPI) {
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const ui = dialogs(ctx as unknown as { mode: string; ui: Dialogs }) ?? ctx.ui;
       const answer = String((await ui.input(ASK_TITLE, JSON.stringify({ bot: params.bot, task: params.task }))) ?? "error:no answer");
+      if (answer.startsWith("error:")) throw new Error(answer.slice("error:".length));
+      return { content: [{ type: "text", text: answer.replace(/^ok:/, "") }], details: {} };
+    },
+  });
+
+  // What the team's hand-offs are doing right now, so a bot looks instead of guessing.
+  pi.registerTool({
+    name: "team_status",
+    label: "Check on the team",
+    description:
+      "See every unfinished hand-off: who has it, and whether it's working, not started, or blocked waiting for Kelvin. Use it before saying anything is pending.",
+    promptSnippet: "See what teammates are doing",
+    parameters: Type.Object({}),
+    async execute(_id, _params, _signal, _onUpdate, ctx) {
+      const ui = dialogs(ctx as unknown as { mode: string; ui: Dialogs }) ?? ctx.ui;
+      const answer = String((await ui.input(TEAM_TITLE, "{}")) ?? "error:the server didn't answer");
       if (answer.startsWith("error:")) throw new Error(answer.slice("error:".length));
       return { content: [{ type: "text", text: answer.replace(/^ok:/, "") }], details: {} };
     },

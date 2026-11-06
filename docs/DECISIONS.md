@@ -11,6 +11,14 @@ Format:
 
 ---
 
+## D-061: The server checks on hand-offs, instead of bots polling (2026-11-06)
+
+**Decided:** `team::check` runs on the reconcile tick. It tells the asker and the Orchestrator once per card when a teammate has been blocked for two minutes, and starts hand-offs left waiting for a busy bot. Bots can also look with a read-only `team_status` tool.
+
+**Why:** On 5 and 6 November the Orchestrator told Kelvin it didn't know why Coder hadn't returned, while Coder was waiting on an approval card; later two bots waited on cards while it sat idle. An answer only came back when a run ended, and a blocked run doesn't end. A bot polling would spend a model run each time to learn nothing; the server already knows, so a model runs only when there's news.
+
+**Revisit if:** two minutes proves too eager or too slow, or several cards on one job wake the Orchestrator too often.
+
 ## D-060: Bots never touch security prompts on the phone, and a long-waiting action is checked against the screen first (2026-11-05)
 
 **Decided:** The bridge reads the phone's screen before every tap, key, type and swipe. On a security or sign-in prompt it refuses the action, dismissals included, and tells the bot to tell Kelvin and stop. An action that waited over two minutes since the bot's last look, where the phone now shows a different app, is refused with the current screen so the bot decides again.

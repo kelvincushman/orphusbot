@@ -30,6 +30,8 @@ const READ_ONLY: &[&str] = &[
     // teammates do is gated itself.
     "ask_bot",
     "discuss",
+    // Reads what the team's hand-offs are doing.
+    "team_status",
     // A fleet's blueprints, read only; and its rooms, where the bot's own
     // helpers talk to each other (DESIGN §11.2).
     "fleet",

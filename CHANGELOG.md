@@ -8,6 +8,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- **Bots check on each other:** if a teammate is stuck waiting on a card for two minutes, the bot that asked and the Orchestrator hear about it, once per card. A job handed to a busy bot now starts when that bot is free, and bots can look at the team with `team_status`. In the bar, a bot waiting on teammates shows its thinking face.
 - **Safer phone use:** bots no longer touch security or sign-in prompts on your phone (such as Google's "Are you trying to sign in?"). They leave them and tell you. A phone action that waited a long time for your approval is checked against the screen first, and if the phone has moved on, the bot looks again instead of tapping blind.
 - The app now picks up new or changed bots when you come back to it, instead of only after a restart.
 - **"Always allow" on a phone approval now sticks.** It allows that exact phone action from then on, such as a routine tapping LinkedIn's notifications tab, so the bot can do it again on its own. A different tap, such as Post, still asks you once.

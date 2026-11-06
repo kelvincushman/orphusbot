@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update run set status = 'running', node = 'n', lease_expires_at = now() + interval '1 hour'\n             where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4fb1781b80c780f570cbab6c0bd0861966349ea4ca5dd2b69aff3ba35a8b2edf"
+}

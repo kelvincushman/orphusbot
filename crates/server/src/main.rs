@@ -278,6 +278,7 @@ fn router(app: Shared) -> Router {
         .route("/api/passkeys/remove", post(auth::remove_passkey))
         .route("/api/logout", post(auth::logout))
         .route("/api/bots", get(bots::list).post(bots::create))
+        .route("/api/team/open", get(team::open_list))
         .route("/api/models", get(models))
         .route("/api/bots/update", post(bots::update))
         .route("/api/decisions", get(system1::list))
@@ -788,6 +789,10 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
         let answer = team::ask(app, attempt.run, &active.thread.bot, &ask).await;
         return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
     }
+    if method == "input" && title == team::STATUS_TITLE {
+        let answer = format!("ok:{}", team::status(&app.db).await);
+        return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
+    }
     let (kind, tool_call_id) = if method == "input" && title == GATE_TITLE {
         let call: Value = request["placeholder"]
             .as_str()
@@ -1146,6 +1151,7 @@ async fn reconcile_forever(app: Shared) {
             Ok(_) => {}
             Err(e) => warn!("sweeping leases: {e}"),
         }
+        team::check(&app).await;
     }
 }
 

@@ -258,7 +258,7 @@ Panel {
                   source: "faces/" + (ownStyle ? (modelData.face || modelData.slug) : "default") + "-"
                     + (modelData.waiting > 0 ? 3
                     : modelData.state === "running" ? 2
-                    : modelData.state === "queued" ? 1 : 0) + ".webp"
+                    : (modelData.state === "queued" || modelData.waiting_on > 0) ? 1 : 0) + ".webp"
                   onStatusChanged: if (status === Image.Error && ownStyle) ownStyle = false
                   playing: root.opened
                   smooth: true
@@ -330,6 +330,7 @@ Panel {
                   text: !root.chosen ? ""
                     : (root.chosen.state === "running" || root.chosen.state === "queued")
                       ? root.chosen.name + " is working…"
+                      : root.chosen.waiting_on > 0 ? root.chosen.name + " is waiting on teammates…"
                       : (root.chosen.reply ? root.chosen.name + ": " + root.chosen.reply : "Say hello to " + root.chosen.name + ".")
                   textFormat: Text.PlainText
                   color: root.chosen && root.chosen.state === "idle" && root.chosen.reply ? root.foreground : root.dim

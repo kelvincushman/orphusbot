@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-064: A new piece of work gets a mission with its own Chief of Staff (2026-11-07)
+
+**Decided:** A `mission` record, with a Chief of Staff per mission as a bot row (`chief--<id>`) with its own thread and engine. The Orchestrator starts one with `start_mission`. A chief's hand-offs are tickets tagged with the mission, so teammates run them in `<slug>-mission-<id>`, away from their everyday session, and queue as usual. Only the chief hands work on. Missions are visible to the team unless marked private; a bot can make one private, and only Kelvin can reveal it. Each bot also gets New conversation (`bot.session_gen`), which moves it to a fresh session and hands it the last 8 messages.
+**Why:** Each bot has one thread with one active run, and new messages merge into it, so several missions on one shared chief bot could mix. A bot row reuses threads, engines, hand-offs, the checker and the app's bot list as they are, and chiefs run side by side. Keeping hand-offs to the chief means every answer returns to a thread that belongs to the mission.
+**Alternatives:** one chief bot with a session per mission (mixes messages unless runs and threads are reworked); several threads per bot (`thread.bot_id` is unique, and the app folds events by bot); a full bot per mission with Google and connections (more than a coordinator needs).
+**Revisit if:** the cost of a computer per open mission matters, or specialists queuing behind each other is too slow. Pi's RPC `switch_session` could replace the engine restart between sessions.
+
 ## D-063: The Orchestrator's chat gets the Ideas Room's voice, as a panel (2026-11-06)
 
 **Decided:** A mic button in the Orchestrator's chat opens the room's live Grok voice as a panel inside the chat, reusing `IdeasRoom`, with instructions for getting work moving rather than brainstorming. Grok is told the team's state and the last eight messages; the transcript goes back to the Orchestrator when the talk ends.

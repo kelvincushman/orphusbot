@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select team from mission",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "mission",
+            "name": "team"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f7bcb758a3a0b4901b8e0c6ca46a3bba5535f03ab6a909d556e615a8ce22f9fe"
+}

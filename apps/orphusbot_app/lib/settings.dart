@@ -59,7 +59,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       api.get('/api/fleets'),
     ]);
     setState(() {
-      bots = (got[0] as List).cast<Map<String, dynamic>>();
+      bots = (got[0] as List)
+          .cast<Map<String, dynamic>>()
+          // A closed mission's chief isn't a bot to manage.
+          .where(
+            (b) =>
+                !(b['disabled'] == true &&
+                    (b['slug'] as String).startsWith('chief--')),
+          )
+          .toList();
       passkeys = got[1] as List;
       nodes = got[2] as List;
       connections = got[3] as Map<String, dynamic>;

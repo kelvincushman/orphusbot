@@ -44,6 +44,8 @@ export const TAKEOVER_TITLE = "orphusbot-takeover";
 export const ASK_TITLE = "orphusbot-ask";
 export const TEAM_TITLE = "orphusbot-team";
 export const ACCEPT_TITLE = "orphusbot-accept";
+export const MISSION_TITLE = "orphusbot-mission";
+export const MISSION_UPDATE_TITLE = "orphusbot-mission-update";
 /** Title of the dialog that starts a discussion among teammates (DESIGN §11.4). */
 export const DISCUSS_TITLE = "orphusbot-discuss";
 
@@ -69,7 +71,7 @@ const HELPER_TOOLS = ["subagent", "fleet", "roundtable"];
 // Plus `mcp`, Orphus's MCP gateway, when the owner granted the bot a connection:
 // it only talks to those servers, so it is safe to run outside the computer.
 const COMPUTER_TOOLS = [
-  "read", "write", "edit", "bash", "request_takeover", "ask_owner", "share_file", "ask_bot", "team_status", "accept_card", "discuss", "install_skill",
+  "read", "write", "edit", "bash", "request_takeover", "ask_owner", "share_file", "ask_bot", "team_status", "accept_card", "start_mission", "update_mission", "discuss", "install_skill",
   ...(process.env.ORPHUSBOT_MCP ? ["mcp"] : []),
   // Fleets: helpers whose calls come back through this gate and into the computer.
   ...(process.env.ORPHUSBOT_HELPERS_GATED === "1" ? HELPER_TOOLS : []),
@@ -369,6 +371,47 @@ export default function (pi: ExtensionAPI) {
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const ui = dialogs(ctx as unknown as { mode: string; ui: Dialogs }) ?? ctx.ui;
       const answer = String((await ui.input(ACCEPT_TITLE, JSON.stringify({ card: params.card }))) ?? "error:the server didn't answer");
+      if (answer.startsWith("error:")) throw new Error(answer.slice("error:".length));
+      return { content: [{ type: "text", text: answer.replace(/^ok:/, "") }], details: {} };
+    },
+  });
+
+  // A new piece of work gets its own Chief of Staff (DESIGN §5.5).
+  pi.registerTool({
+    name: "start_mission",
+    label: "Start a mission",
+    description:
+      "Orchestrator only: give a big new piece of work its own Chief of Staff, with a clean context and a team. Not for everyday jobs like blog posts or social media. The team can see it unless it's private.",
+    promptSnippet: "Give a new piece of work its own Chief of Staff",
+    parameters: Type.Object({
+      title: Type.String({ description: "A short title" }),
+      goal: Type.String({ description: "What done looks like, with everything the chief needs" }),
+      team: Type.Optional(Type.Array(Type.String(), { description: "Teammates' short names, such as coder" })),
+      private: Type.Optional(Type.Boolean({ description: "True only if Kelvin says it's private" })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const ui = dialogs(ctx as unknown as { mode: string; ui: Dialogs }) ?? ctx.ui;
+      const answer = String((await ui.input(MISSION_TITLE, JSON.stringify(params))) ?? "error:the server didn't answer");
+      if (answer.startsWith("error:")) throw new Error(answer.slice("error:".length));
+      return { content: [{ type: "text", text: answer.replace(/^ok:/, "") }], details: {} };
+    },
+  });
+
+  pi.registerTool({
+    name: "update_mission",
+    label: "Update a mission",
+    description:
+      "A Chief of Staff records its mission's progress in one line, and closes it when finished. The Orchestrator can do the same for a mission it names, or mark one private.",
+    promptSnippet: "Record a mission's progress, or close it",
+    parameters: Type.Object({
+      update: Type.Optional(Type.String({ description: "Where things stand, in one line; the result when closing" })),
+      status: Type.Optional(Type.String({ description: "done or dropped, to close the mission" })),
+      private: Type.Optional(Type.Boolean({ description: "True to mark it private" })),
+      mission: Type.Optional(Type.Number({ description: "Orchestrator only: the mission's number" })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const ui = dialogs(ctx as unknown as { mode: string; ui: Dialogs }) ?? ctx.ui;
+      const answer = String((await ui.input(MISSION_UPDATE_TITLE, JSON.stringify(params))) ?? "error:the server didn't answer");
       if (answer.startsWith("error:")) throw new Error(answer.slice("error:".length));
       return { content: [{ type: "text", text: answer.replace(/^ok:/, "") }], details: {} };
     },

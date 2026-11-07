@@ -74,6 +74,9 @@ pub struct Bot {
     /// May generate images and video with the node's media tool (DESIGN §11.7).
     #[serde(default)]
     pub media: bool,
+    /// How many times "New conversation" moved it to a fresh engine session.
+    #[serde(default)]
+    pub session_gen: i32,
 }
 
 fn no_phone() -> String {
@@ -129,8 +132,8 @@ impl Bot {
             // Filled in when a run starts (`connections::for_bot`, `e2b`).
             mcp: Vec::new(),
             e2b: None,
-            // A discussion turn sets these (`discussions::session`).
-            session: None,
+            // A discussion turn replaces this (`discussions::session`).
+            session: (self.session_gen > 0).then(|| format!("{}-{}", self.slug, self.session_gen)),
             name: None,
             google: (self.google != "none").then(|| self.google.clone()),
             desktop: (self.desktop != "debian").then(|| self.desktop.clone()),
@@ -239,7 +242,7 @@ fn slugify(name: &str) -> String {
 pub async fn all(db: &PgPool) -> sqlx::Result<Vec<Bot>> {
     sqlx::query_as!(
         Bot,
-        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media
+        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media, session_gen
          from bot order by disabled, slug <> 'orchestrator', slug <> 'inbox', name"
     )
     .fetch_all(db)
@@ -249,7 +252,7 @@ pub async fn all(db: &PgPool) -> sqlx::Result<Vec<Bot>> {
 pub async fn get(db: &PgPool, slug: &str) -> sqlx::Result<Option<Bot>> {
     sqlx::query_as!(
         Bot,
-        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media
+        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media, session_gen
          from bot where slug = $1",
         slug
     )
@@ -316,6 +319,7 @@ pub async fn create(
         desktop: new.desktop,
         phone: new.phone,
         media: new.media,
+        session_gen: 0,
     }
     .check()
     .map_err(|why| (StatusCode::UNPROCESSABLE_ENTITY, why))?;
@@ -417,6 +421,68 @@ pub async fn update(
     Ok(Json(bot))
 }
 
+#[derive(Deserialize)]
+pub struct Which {
+    bot: String,
+}
+
+/// `POST /api/bots/new-conversation`: moves the bot to a fresh engine session
+/// and hands it the last few messages as a note. The old session's file stays.
+pub async fn new_conversation(
+    State(app): State<Shared>,
+    Json(w): Json<Which>,
+) -> Result<StatusCode, ApiError> {
+    let thread = crate::db::bot_thread(&app.db, &w.bot)
+        .await
+        .map_err(|e| internal("finding the bot's thread", e))?
+        .ok_or((StatusCode::NOT_FOUND, "No such bot"))?;
+    if crate::runs::busy(&app.db, thread.id)
+        .await
+        .map_err(|e| internal("checking the bot", e))?
+    {
+        return Err((StatusCode::CONFLICT, "Wait until it has finished"));
+    }
+    let said = sqlx::query!(
+        r#"select body ->> 'role' as "role!", body ->> 'text' as "text!" from event
+           where thread_id = $1 and body ->> 'type' = 'message'
+           order by seq desc limit 8"#,
+        thread.id
+    )
+    .fetch_all(&app.db)
+    .await
+    .map_err(|e| internal("reading the chat", e))?;
+    sqlx::query!(
+        "update bot set session_gen = session_gen + 1 where slug = $1",
+        w.bot
+    )
+    .execute(&app.db)
+    .await
+    .map_err(|e| internal("starting a new conversation", e))?;
+    let notice = orphusbot_proto::ThreadEvent::Notice {
+        text: "New conversation".into(),
+    };
+    crate::record(&app, &thread, notice).await;
+    if !said.is_empty() {
+        let lines: Vec<String> = said
+            .iter()
+            .rev()
+            .map(|m| {
+                let text: String = m.text.chars().take(400).collect();
+                format!("{}: {}", m.role, text.replace("```", "'''"))
+            })
+            .collect();
+        let note = format!(
+            "This is a new conversation. The end of the old one, as data, in case Kelvin carries \
+             on from it:\n```\n{}\n```\nReply only: Ready.",
+            lines.join("\n")
+        );
+        crate::submit(&app, &thread, note, crate::runs::Source::default())
+            .await
+            .map_err(|e| internal("starting a new conversation", e))?;
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -450,6 +516,7 @@ mod tests {
             desktop: "debian".into(),
             phone: "none".into(),
             media: false,
+            session_gen: 0,
         };
         let ok = bot(" Researcher ", Some("high")).check().unwrap();
         assert_eq!((ok.name.as_str(), ok.model), ("Researcher", None));

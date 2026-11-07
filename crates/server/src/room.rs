@@ -120,7 +120,7 @@ pub async fn voice_chat(State(app): State<Shared>) -> Result<Json<Value>, ApiErr
             format!("{who}: {}", m.text.chars().take(400).collect::<String>())
         })
         .collect();
-    let team = crate::team::status(&app).await;
+    let team = crate::team::status(&app, None).await;
     let instructions = format!(
         "{CHAT_INSTRUCTIONS}\n\nThe team now: {team}\n\nThe chat so far:\n{}",
         said.join("\n")

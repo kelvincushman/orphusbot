@@ -223,6 +223,8 @@ pub enum ToNode {
     },
     /// Stop the run if it is still going.
     Abort { attempt: Attempt },
+    /// A closed mission's chief: drop its engine and stop its computer.
+    Retire { bot: String },
     /// Answer to a dialog the engine opened: a complete Orphus
     /// `extension_ui_response` object, written to the engine as is.
     DialogResponse { attempt: Attempt, response: Value },

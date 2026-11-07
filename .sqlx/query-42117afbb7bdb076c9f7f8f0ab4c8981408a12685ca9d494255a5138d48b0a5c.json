@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update mission set retired = true where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "42117afbb7bdb076c9f7f8f0ab4c8981408a12685ca9d494255a5138d48b0a5c"
+}

@@ -259,6 +259,12 @@ async fn session(cfg: &Config, key: &NodeKey) -> anyhow::Result<()> {
                             e.command(r#"{"type":"abort"}"#).await.ok();
                         }
                     }
+                    Ok(ToNode::Retire { bot }) => {
+                        engines.remove(&bot);
+                        if let Some(runtime) = &cfg.runtime {
+                            computer::stop(runtime, &bot).await;
+                        }
+                    }
                     Ok(ToNode::ScreenOpen { stream, bot }) => {
                         match open_screen(cfg, stream, &bot, screen_tx.clone(), out_tx.clone()).await {
                             Ok(pipe) => { screens.insert(stream, pipe); }

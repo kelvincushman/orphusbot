@@ -24,6 +24,9 @@ const READ_ONLY: &[&str] = &[
     "glob",
     "request_takeover",
     "ask_owner",
+    // Set a Chief of Staff going, or note its progress; the work is gated itself.
+    "start_mission",
+    "update_mission",
     // Only gives the owner a copy of a file (an artifact).
     "share_file",
     // Hands a teammate a ticket, or starts a discussion; everything the

@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select id from mission",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "mission",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "539ea258c54435669382e50e76db862c25a799381dd26b43b50969eae4eb6034"
+}

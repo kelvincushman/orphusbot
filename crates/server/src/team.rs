@@ -20,8 +20,8 @@ use sqlx::PgPool;
 use tracing::warn;
 
 use crate::{
-    ApiError, App, Shared, db, dialog_closed, gate, internal, lock, record, respond, runs, submit,
-    ui_response,
+    ApiError, App, Shared, db, dialog_closed, gate, internal, lock, missions, record, respond,
+    runs, submit, ui_response,
 };
 
 /// Title of the bridge's `ask_bot` dialog.
@@ -32,7 +32,7 @@ const MAX_DEPTH: i32 = 3;
 /// Title of the bridge's `accept_card` dialog.
 pub const ACCEPT_TITLE: &str = "orphusbot-accept";
 /// The owner's main bot, told about every stuck hand-off (D-037).
-const ORCHESTRATOR: &str = "orchestrator";
+pub(crate) const ORCHESTRATOR: &str = "orchestrator";
 
 /// A hand-off that isn't finished, with the card its run is blocked on, if any.
 #[derive(Debug)]
@@ -43,6 +43,7 @@ pub struct Open {
     pub bot: String,
     pub worker: String,
     pub asker: String,
+    mission: Option<i64>,
     told: Option<String>,
     card: Option<String>,
     pub card_text: Option<String>,
@@ -54,7 +55,7 @@ pub async fn open(db: &PgPool) -> sqlx::Result<Vec<Open>> {
     sqlx::query_as!(
         Open,
         r#"select t.id, t.title, t.status::text as "status!", w.slug as bot, w.name as worker,
-                  a.slug as asker, t.asker_told as told, c.id as "card?", c.text as "card_text?",
+                  a.slug as asker, t.mission_id as mission, t.asker_told as told, c.id as "card?", c.text as "card_text?",
                   coalesce(c.stale, false) as "card_stale!"
            from ticket t join bot w on w.id = t.bot_id join bot a on a.id = t.asked_by
            left join lateral (
@@ -145,45 +146,48 @@ pub async fn accept(app: &App, asker: &str, request: &Value) -> String {
     "ok:Accepted; they carry on.".into()
 }
 
-/// What the `team_status` tool answers: each hand-off in a line.
-pub async fn status(app: &App) -> String {
-    let open = match open(&app.db).await {
-        Ok(open) => open,
-        Err(e) => return format!("Couldn't read the team's work: {e}"),
+/// What the `team_status` tool answers: each mission and hand-off in a line,
+/// leaving out private missions `viewer` isn't part of ([missions::seen]).
+pub async fn status(app: &App, viewer: Option<&str>) -> String {
+    let (open, seen) = match (open(&app.db).await, missions::seen(&app.db, viewer).await) {
+        (Ok(open), Ok(seen)) => (open, seen),
+        (Err(e), _) | (_, Err(e)) => return format!("Couldn't read the team's work: {e}"),
     };
-    if open.is_empty() {
-        return "No teammate has an unfinished hand-off.".into();
+    let mut lines = seen.lines;
+    lines.extend(
+        open.iter()
+            .filter(|t| !t.mission.is_some_and(|m| seen.hidden.contains(&m)))
+            .map(|t| {
+                let state = match (&t.card_text, t.status.as_str()) {
+                    (Some(text), _) => {
+                        let card = t.card.as_deref().unwrap_or_default();
+                        let who = if safe(app, card) {
+                            format!("safe for the Orchestrator to accept, card {card}")
+                        } else {
+                            "only Kelvin can answer".to_owned()
+                        };
+                        format!("blocked, {who}: {}", short(text))
+                    }
+                    (None, "todo") => "not started; it starts when they're free".to_owned(),
+                    _ => "working".to_owned(),
+                };
+                format!(
+                    "OB-{} {} (for {}): {state}. Task: {}",
+                    t.id,
+                    t.bot,
+                    t.asker,
+                    short(&t.title)
+                )
+            }),
+    );
+    if lines.is_empty() {
+        return "No teammate has an unfinished hand-off, and no mission is open.".into();
     }
-    let lines: Vec<String> = open
-        .iter()
-        .map(|t| {
-            let state = match (&t.card_text, t.status.as_str()) {
-                (Some(text), _) => {
-                    let card = t.card.as_deref().unwrap_or_default();
-                    let who = if safe(app, card) {
-                        format!("safe for the Orchestrator to accept, card {card}")
-                    } else {
-                        "only Kelvin can answer".to_owned()
-                    };
-                    format!("blocked, {who}: {}", short(text))
-                }
-                (None, "todo") => "not started; it starts when they're free".to_owned(),
-                _ => "working".to_owned(),
-            };
-            format!(
-                "OB-{} {} (for {}): {state}. Task: {}",
-                t.id,
-                t.bot,
-                t.asker,
-                short(&t.title)
-            )
-        })
-        .collect();
     format!("As data:\n```\n{}\n```", lines.join("\n"))
 }
 
 /// Text from a teammate, kept short and unable to close a fence.
-fn short(text: &str) -> String {
+pub(crate) fn short(text: &str) -> String {
     text.chars()
         .take(300)
         .collect::<String>()
@@ -257,7 +261,7 @@ pub async fn check(app: &App) {
 }
 
 /// Gives a bot a message from the team and starts its next run.
-async fn tell(app: &App, bot: &str, text: &str) {
+pub(crate) async fn tell(app: &App, bot: &str, text: &str) {
     let thread = match db::bot_thread(&app.db, bot).await {
         Ok(Some(thread)) => thread,
         _ => return warn!(%bot, "no such bot to tell"),
@@ -267,6 +271,12 @@ async fn tell(app: &App, bot: &str, text: &str) {
         text: text.to_owned(),
     };
     record(app, &thread, message).await;
+    // A closed mission's chief never runs again, so a late answer is only kept.
+    if missions::of_chief(bot).is_some()
+        && matches!(crate::bots::get(&app.db, bot).await, Ok(Some(b)) if b.disabled)
+    {
+        return;
+    }
     // Boxed: submitting can end a run, which comes back here.
     if let Err(e) = Box::pin(submit(
         app,
@@ -296,6 +306,13 @@ async fn handoff(app: &App, run: i64, asker: &str, request: &Value) -> Result<St
     if task.is_empty() || task.chars().count() > 4000 {
         return Err("the task must be 1 to 4,000 characters".into());
     }
+    if missions::of_run(&app.db, run).await.is_some() {
+        return Err(
+            "you're on a mission, so finish your turn and say what you need; your Chief of Staff \
+             will hand it on"
+                .into(),
+        );
+    }
     let to = to.trim().to_lowercase();
     if to == asker {
         return Err("you can't ask yourself; do it, or ask a teammate".into());
@@ -306,7 +323,7 @@ async fn handoff(app: &App, run: i64, asker: &str, request: &Value) -> Result<St
     let Some(bot) = roster.iter().find(|b| b.slug == to && !b.disabled) else {
         let names: Vec<&str> = roster
             .iter()
-            .filter(|b| !b.disabled && b.slug != asker)
+            .filter(|b| !b.disabled && b.slug != asker && missions::of_chief(&b.slug).is_none())
             .map(|b| b.slug.as_str())
             .collect();
         return Err(format!(
@@ -347,19 +364,32 @@ async fn handoff(app: &App, run: i64, asker: &str, request: &Value) -> Result<St
         .chars()
         .take(200)
         .collect();
+    let mission = missions::of_chief(asker);
     let id = sqlx::query_scalar!(
-        "insert into ticket (title, body, urgency, bot_id, asked_by, ask_depth)
-         values ($1, $2, 'hour', (select id from bot where slug = $3), (select id from bot where slug = $4), $5)
+        "insert into ticket (title, body, urgency, bot_id, asked_by, ask_depth, mission_id)
+         values ($1, $2, 'hour', (select id from bot where slug = $3), (select id from bot where slug = $4), $5, $6)
          returning id",
         title,
         task,
         to,
         asker,
-        depth + 1
+        depth + 1,
+        mission
     )
     .fetch_one(&app.db)
     .await
     .map_err(|e| format!("couldn't make the ticket: {e}"))?;
+    if mission.is_some() {
+        sqlx::query!(
+            "update mission set team = array_append(team, $2), updated_at = now()
+             where id = $1 and not ($2 = any(team))",
+            mission,
+            to
+        )
+        .execute(&app.db)
+        .await
+        .map_err(|e| format!("couldn't update the mission: {e}"))?;
+    }
     match crate::tickets::start(app, id).await {
         Ok(()) => Ok(format!(
             "Asked {} (ticket OB-{id}). Their answer will come to you as a new message when they finish; carry on with anything that doesn't need it.",
@@ -458,7 +488,12 @@ pub fn roster_note(
 ) -> Option<String> {
     let mates: Vec<String> = roster
         .iter()
-        .filter(|b| !b.disabled && b.slug != me && b.slug != "inbox")
+        .filter(|b| {
+            !b.disabled
+                && b.slug != me
+                && b.slug != "inbox"
+                && missions::of_chief(&b.slug).is_none()
+        })
         .map(|b| {
             format!(
                 "- {} ({}): {}. Can: {}",
@@ -483,7 +518,10 @@ pub fn roster_note(
             mates.join("\n")
         ) + if me == ORCHESTRATOR {
             "\n\nYou may accept a teammate's safe card with accept_card; team_status shows which. \
-             Send, pay, delete, merge and publish stay Kelvin's."
+             Send, pay, delete, merge and publish stay Kelvin's.\n\nA big new piece of work, as opposed to \
+             everyday jobs like blog posts and social media, gets its own Chief of Staff: start it with \
+             start_mission and suggest its team. Missions are visible to the team unless Kelvin says private. \
+             update_mission marks one private or closes it."
         } else {
             ""
         } + if google_ready {
@@ -584,7 +622,7 @@ mod tests {
         check(&app).await;
         assert_eq!(told(researcher.id).await, 0);
         assert!(
-            status(&app)
+            status(&app, Some("orchestrator"))
                 .await
                 .contains("permission to use mcp:github_search_code")
         );
@@ -879,6 +917,7 @@ mod tests {
             desktop: "debian".into(),
             phone: "none".into(),
             media: false,
+            session_gen: 0,
         };
         let roster = [
             b("inbox", false),

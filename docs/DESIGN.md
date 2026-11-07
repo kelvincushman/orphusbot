@@ -246,6 +246,15 @@ Model credentials stay in the engine process on the host. Nothing in the bridge 
 
 - **Built (M9.5, D-037):** a team bot, `orchestrator`, seeded by migration 0027, is the owner's main bot: listed first, opened by default in the app and the bar panel, with a crowned silver face. Its instructions say how to handle a request: answer small things itself; hand a clear specialist job to a teammate with `ask_bot`; split a bigger job across teammates and combine their answers; start a discussion with the `discuss` tool when a decision has real trade-offs (§11.4); run a fleet when a job needs a fixed team of helpers (§11.2); and keep the owner's load low, saying what it has set going. `discuss` is a bridge tool (dialog `orphusbot-discuss`, passed by the gate like `ask_bot`): the server starts the discussion (`discussions::ask`; the bot can't take part itself, and every chosen bot must be free), records `discussion.asked_by`, and when the chair's verdict is in, posts it to the asking bot's thread as data and queues a run there, so it can relay the decision. Inbox stays as the catch-all that System 1 routes from.
 
+### 5.5 Missions
+
+- **Built (D-064):** a `mission` (migration 0041) is a new piece of work: title, goal, `open`/`done`/`dropped`, `private`, the chief's `latest` line and its `team`. The Orchestrator starts one with `start_mission` (`orphusbot-mission` dialog, `server::missions`).
+- **The Chief of Staff:** a bot row, `chief--<id>` (`slugify` can't make a double hyphen), with its own thread, engine and computer, on the Orchestrator's model, with no Google or connections. It's in the app's bot list, not in any bot's roster. `update_mission` records its progress and closes it.
+- **Teammates:** a chief's `ask_bot` tags the ticket with `mission_id` and adds the bot to `team`. That ticket's run uses session `<slug>-mission-<id>`. A bot has one engine, so changing session restarts it, and hand-offs queue behind each other as usual. A bot on a mission can't hand work on: it says what it needs and the chief does, so answers always reach the chief's thread.
+- **Who sees what:** `team_status` lists open missions and those closed in the last three days. A private mission and its hand-offs are shown only to the Orchestrator, its chief and its team, and never to the voice model. A bot may mark a mission private; only the owner can reverse that (`POST /api/missions/update`, or the chief's chat menu). `GET /api/missions` lists them for the owner.
+- **Closing:** the chief is disabled, its queued runs are cancelled, and the Orchestrator is told if the chief closed it. A late answer stays in the thread without starting a run. Once idle, the reconcile tick sends `ToNode::Retire`: the node drops the engine and stops the computer, keeping the home volume and session.
+- **New conversation:** `POST /api/bots/new-conversation` bumps `bot.session_gen`, so the bot's session becomes `<slug>-<gen>`, and starts a run carrying the last 8 messages as data. It's refused while the bot is busy. The old session file stays.
+
 ## 6. Computers and placement
 
 ### 6.1 Trait

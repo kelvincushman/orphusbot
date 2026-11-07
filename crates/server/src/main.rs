@@ -21,6 +21,7 @@ mod gallery;
 mod gate;
 mod google;
 mod links;
+mod missions;
 mod nodes;
 mod notify;
 mod oauth;
@@ -281,6 +282,9 @@ fn router(app: Shared) -> Router {
         .route("/api/logout", post(auth::logout))
         .route("/api/bots", get(bots::list).post(bots::create))
         .route("/api/team/open", get(team::open_list))
+        .route("/api/missions", get(missions::list))
+        .route("/api/missions/update", post(missions::set))
+        .route("/api/bots/new-conversation", post(bots::new_conversation))
         .route("/api/models", get(models))
         .route("/api/bots/update", post(bots::update))
         .route("/api/decisions", get(system1::list))
@@ -799,7 +803,7 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
         return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
     }
     if method == "input" && title == team::STATUS_TITLE {
-        let answer = format!("ok:{}", team::status(app).await);
+        let answer = format!("ok:{}", team::status(app, Some(&active.thread.bot)).await);
         return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
     }
     if method == "input" && title == team::ACCEPT_TITLE {
@@ -808,6 +812,18 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
             .and_then(|p| serde_json::from_str(p).ok())
             .unwrap_or_default();
         let answer = team::accept(app, &active.thread.bot, &accept).await;
+        return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
+    }
+    if method == "input" && (title == missions::START_TITLE || title == missions::UPDATE_TITLE) {
+        let mission: Value = request["placeholder"]
+            .as_str()
+            .and_then(|p| serde_json::from_str(p).ok())
+            .unwrap_or_default();
+        let answer = if title == missions::START_TITLE {
+            missions::start(app, &active.thread.bot, &mission).await
+        } else {
+            missions::update(app, &active.thread.bot, &mission).await
+        };
         return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
     }
     let mut in_computer = false;
@@ -1069,11 +1085,15 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
     if claimed.prompt.contains(room::ROOM_NOTE) || claimed.prompt.contains(room::VOICE_NOTE) {
         room::quick(&mut spec);
     }
-    spec.session = room::ideas_session(&claimed.prompt, &bot.slug);
+    if let Some(session) = room::ideas_session(&claimed.prompt, &bot.slug) {
+        spec.session = Some(session);
+    }
     if let Some((session, name)) = discussions::session(&app.db, run, &bot.slug).await {
         spec.session = Some(session);
         spec.name = Some(name);
     } else if let Some(session) = fleets::session(&claimed.prompt, &bot.slug, run) {
+        spec.session = Some(session);
+    } else if let Some(session) = missions::session(&app.db, run, &bot.slug).await {
         spec.session = Some(session);
     }
     if bot.computer == "e2b" {
@@ -1177,6 +1197,7 @@ async fn reconcile_forever(app: Shared) {
             Err(e) => warn!("sweeping leases: {e}"),
         }
         team::check(&app).await;
+        missions::retire(&app).await;
     }
 }
 

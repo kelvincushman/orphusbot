@@ -594,7 +594,9 @@ class _ChatScreenState extends State<ChatScreen> {
         subtitle: Text(
           waiting > 0
               ? 'Needs you'
-              : (working ? 'Working…' : (b['remit'] as String? ?? '')),
+              : (working
+                    ? '${v.doing ?? 'Working'}…'
+                    : (b['remit'] as String? ?? '')),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(color: waiting > 0 ? scheme.error : scheme.outline),
@@ -624,7 +626,8 @@ class _ChatScreenState extends State<ChatScreen> {
       switch (v.run) {
         t.RunState.idle => 'Ready',
         t.RunState.queued => 'Waiting${v.where == null ? '' : ': ${v.where}'}',
-        t.RunState.running => 'Working${v.where == null ? '' : ' ${v.where}'}',
+        t.RunState.running =>
+          '${v.doing ?? 'Working'}${v.where == null ? '' : ' ${v.where}'}',
       },
       _usageLine(chosen),
     ].where((p) => p.isNotEmpty).join(' · ');
@@ -829,6 +832,45 @@ class _ChatScreenState extends State<ChatScreen> {
     t.Artifact() => _artifact(item, scheme),
     t.Attached() => _attached(item, scheme),
     t.Card() => _card(item, scheme, name),
+    // One grey line that opens to the list of steps.
+    t.Steps(:final steps, :final open, :final line) => ExpansionTile(
+      dense: true,
+      shape: const Border(),
+      collapsedShape: const Border(),
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(bottom: 6),
+      expandedAlignment: Alignment.centerLeft,
+      title: Text(line, style: TextStyle(color: scheme.outline)),
+      children: [
+        for (final s in steps)
+          Row(
+            children: [
+              switch (s.done) {
+                true => Icon(
+                  Icons.check,
+                  size: 16,
+                  color: scheme.outline,
+                  semanticLabel: 'Done',
+                ),
+                false => Icon(
+                  Icons.close,
+                  size: 16,
+                  color: scheme.error,
+                  semanticLabel: "Didn't work",
+                ),
+                null => Icon(
+                  open ? Icons.more_horiz : Icons.remove,
+                  size: 16,
+                  color: scheme.outline,
+                  semanticLabel: open ? 'In progress' : 'Not finished',
+                ),
+              },
+              const SizedBox(width: 8),
+              Text(s.label, style: TextStyle(color: scheme.outline)),
+            ],
+          ),
+      ],
+    ),
   };
 
   /// The owner's words in a grey bubble on the right; a bot's reply as plain

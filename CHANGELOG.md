@@ -8,6 +8,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- **Steps:** while a bot works, its chat says what it's doing ("Reading a file", "Checking with Coder") in place of "Working". Each run of tool calls is one grey line in the conversation that becomes "Worked for 2m 10s · 7 steps" and opens to the list, with a tick or a cross on each. A step never shows a file name, a command or an address. In the app and the web page.
 - **Missions:** the Orchestrator can give a big new piece of work its own Chief of Staff, which appears in the bot list with a clean context and hands parts to teammates. Teammates work on it in a separate session. The team can see what a mission is up to unless it's marked private, and only you can make a private mission visible again.
 - **New conversation:** the menu in a bot's chat starts a fresh session, carrying over the last 8 messages. The old session is kept.
 - **Talk to the Orchestrator in its chat:** the mic button opens the Ideas Room's live voice right there, and it knows what the team is doing. Its chat's recent messages go to xAI while you talk.

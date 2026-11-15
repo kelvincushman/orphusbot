@@ -85,4 +85,110 @@ void main() {
     v.apply({'type': 'run_queued', 'run': 3});
     expect(v.mood, 1, reason: 'and pulls itself together for the next go');
   });
+
+  // The same cases as crates/proto/src/view.rs.
+  group('steps', () {
+    Map<String, dynamic> start(int run, String id, String label, int at) => {
+      'type': 'step_started',
+      'run': run,
+      'id': id,
+      'label': label,
+      'kind': 'other',
+      'at': at,
+    };
+    Map<String, dynamic> end(int run, String id, bool ok, int at) => {
+      'type': 'step_ended',
+      'run': run,
+      'id': id,
+      'ok': ok,
+      'at': at,
+    };
+
+    test('steps in a row fold into one line', () {
+      final v = ThreadView()
+        ..apply(start(1, 'a', 'Reading a file', 1000))
+        ..apply(end(1, 'a', true, 2000))
+        ..apply(start(1, 'b', 'Running a command', 3000));
+      expect(v.items, hasLength(1));
+      expect(v.doing, 'Running a command');
+      final steps = v.items.single as Steps;
+      expect(steps.line, 'Running a command · 2 steps');
+      v.apply(end(1, 'b', false, 4000));
+      expect(v.doing, isNull);
+      expect(steps.steps.map((s) => s.done), [true, false]);
+      expect(steps.open, isTrue);
+    });
+
+    test('another item closes the fold-up; the next step starts a new one', () {
+      final v = ThreadView()
+        ..apply(start(1, 'a', 'Reading a file', 1000))
+        ..apply(end(1, 'a', true, 2000))
+        ..apply({
+          'type': 'message',
+          'role': 'assistant',
+          'text': 'Found it.',
+          'at': 3000,
+        })
+        ..apply(start(1, 'b', 'Writing a file', 4000));
+      expect(v.items, hasLength(3));
+      expect((v.items[0] as Steps).line, 'Worked for 2s · 1 step');
+      expect((v.items[2] as Steps).line, 'Writing a file · 1 step');
+    });
+
+    test('a step that needed approval ends behind its card', () {
+      final v = ThreadView()
+        ..apply(start(1, 'a', 'Running a command', 1000))
+        ..apply({
+          'type': 'dialog_opened',
+          'at': 2000,
+          'dialog': {
+            'id': 'd',
+            'run': 1,
+            'kind': {'kind': 'approval', 'tool': 'bash', 'input': {}},
+          },
+        });
+      final steps = v.items.first as Steps;
+      expect(v.doing, 'Running a command');
+      // The same call id in another run is another step.
+      v.apply(end(2, 'a', true, 3000));
+      expect(steps.steps.single.done, isNull);
+      v.apply(end(1, 'a', true, 131000));
+      expect(v.doing, isNull);
+      expect(steps.steps.single.done, isTrue);
+      expect(steps.line, 'Worked for 2m 10s · 1 step');
+    });
+
+    test('a denied call fails and the step before it shows again', () {
+      final v = ThreadView()
+        ..apply(start(1, 'a', 'Reading a file', 1000))
+        ..apply(start(1, 'b', 'Running a command', 2000))
+        ..apply(end(1, 'b', false, 3000));
+      expect(v.doing, 'Reading a file');
+      expect((v.items.single as Steps).steps[1].done, isFalse);
+    });
+
+    test('a run that ends mid-step closes the fold-up', () {
+      final v = ThreadView()
+        ..apply(start(1, 'a', 'Running a command', 1000))
+        ..apply({
+          'type': 'run_ended',
+          'run': 1,
+          'outcome': 'completed',
+          'at': 2000,
+        });
+      expect(v.doing, isNull);
+      final steps = v.items.single as Steps;
+      expect(steps.steps.single.done, isNull);
+      expect(steps.line, 'Worked for 1s · 1 step');
+      v.apply(start(2, 'a', 'Reading a file', 9000));
+      expect(v.items, hasLength(2));
+    });
+
+    test('long work is told in hours', () {
+      final v = ThreadView()
+        ..apply(start(1, 'a', 'Working', 0))
+        ..apply({'type': 'notice', 'text': 'x', 'at': 3725000});
+      expect((v.items.first as Steps).line, 'Worked for 1h 2m · 1 step');
+    });
+  });
 }

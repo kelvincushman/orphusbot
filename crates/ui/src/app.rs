@@ -6,7 +6,7 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use std::collections::HashMap;
 
-use orphusbot_proto::view::{Item, RunState, ThreadView};
+use orphusbot_proto::view::{Item, RunState, ThreadView, steps_line};
 use orphusbot_proto::{Dialog, DialogKind, Envelope, NodeView, Role, ThreadEvent};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -214,7 +214,7 @@ fn connect(desk: Desk, ctx: Ctx) {
             .data()
             .as_string()
             .and_then(|d| serde_json::from_str::<Envelope>(&d).ok());
-        let Some(Envelope { bot, event }) = envelope else {
+        let Some(Envelope { bot, at, event }) = envelope else {
             return;
         };
         match (bot, event) {
@@ -228,7 +228,7 @@ fn connect(desk: Desk, ctx: Ctx) {
                     desk.load_bots(ctx);
                 }
                 desk.threads
-                    .update(|t| t.entry(bot).or_default().apply(event));
+                    .update(|t| t.entry(bot).or_default().apply_at(event, at));
             }
             (None, _) => {}
         }
@@ -709,6 +709,30 @@ fn item(item: Item) -> AnyView {
                 format!("{name} ({kb} KB)")
             };
             view! { <p class="artifact">"Shared a file: " <a href=format!("/api/artifacts/{id}") download=name>{label}</a></p> }.into_any()
+        }
+        // One grey line that opens to the list (DESIGN §12.6).
+        Item::Steps {
+            steps,
+            open,
+            from,
+            to,
+        } => {
+            let line = steps_line(&steps, open, from, to);
+            let list = steps
+                .into_iter()
+                .map(|s| {
+                    let (mark, said) = match s.done {
+                        Some(true) => ("✓", "done"),
+                        Some(false) => ("✗", "didn't work"),
+                        None if open => ("…", "in progress"),
+                        None => ("·", "not finished"),
+                    };
+                    let said = format!("{}: {said}", s.label);
+                    view! { <li aria-label=said><span aria-hidden="true">{mark}</span>" "{s.label}</li> }
+                })
+                .collect_view();
+            view! { <details class="steps"><summary>{line}</summary><ul>{list}</ul></details> }
+                .into_any()
         }
     }
 }

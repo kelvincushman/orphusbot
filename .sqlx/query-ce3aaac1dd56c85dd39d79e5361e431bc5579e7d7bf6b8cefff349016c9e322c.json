@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "update memory_fact set replaced_by = $1 where id = $2 and replaced_by is null",
+  "query": "update memory_fact set replaced_by = $1 where id = $2",
   "describe": {
     "columns": [],
     "parameters": {
@@ -11,5 +11,5 @@
     },
     "nullable": []
   },
-  "hash": "d2409997c835c889fe8205017d8ae0cabfa33866348be47d51b692be37ba3aea"
+  "hash": "ce3aaac1dd56c85dd39d79e5361e431bc5579e7d7bf6b8cefff349016c9e322c"
 }

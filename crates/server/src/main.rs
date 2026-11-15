@@ -505,8 +505,10 @@ async fn send_message(
             text: text.clone(),
         });
         // Private bots' conversations aren't learned from.
+        // In the background: the note for memory mustn't hold up the message.
         if let (ThreadEvent::Message { text, .. }, "team") = (&event, bot.scope.as_str()) {
-            memory::heard(&app, thread.id, text).await;
+            let (app, thread, text) = (app.clone(), thread.id, text.clone());
+            tokio::spawn(async move { memory::heard(&app, thread, &text).await });
         }
         record(&app, &thread, event).await;
     }

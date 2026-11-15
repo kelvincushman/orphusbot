@@ -41,6 +41,20 @@ const FACT_CHARS: usize = 400;
 /// The bot's previous reply, given as context for answers like "yes, the first one".
 const CONTEXT_CHARS: usize = 600;
 
+/// The model answered, but with something that can't be used for these
+/// messages. Only this counts against them: a server or database that is down
+/// says nothing about the messages, which then simply wait.
+#[derive(Debug)]
+struct Unusable(String);
+
+impl std::fmt::Display for Unusable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "the model's reply can't be used: {}", self.0)
+    }
+}
+
+impl std::error::Error for Unusable {}
+
 pub struct Memory {
     http: reqwest::Client,
     /// An OpenAI-compatible server, up to and including `/v1`.
@@ -120,13 +134,18 @@ impl Memory {
             }))
             .timeout(Duration::from_secs(180))
             .send()
-            .await?
-            .error_for_status()?;
-        let body: Value = res.json().await?;
+            .await?;
+        // A refusal of this request (too long, say) won't change on a retry;
+        // a busy or broken server will.
+        let status = res.status();
+        if status.is_client_error() && status.as_u16() != 408 && status.as_u16() != 429 {
+            return Err(Unusable(format!("the model server answered {status}")).into());
+        }
+        let body: Value = res.error_for_status()?.json().await?;
         let content = body["choices"][0]["message"]["content"]
             .as_str()
-            .ok_or_else(|| anyhow::anyhow!("the model sent no reply"))?;
-        Ok(serde_json::from_str(content)?)
+            .ok_or_else(|| Unusable("no text in it".into()))?;
+        serde_json::from_str(content).map_err(|e| Unusable(e.to_string()).into())
     }
 
     async fn embed(&self, texts: &[String], query: bool) -> anyhow::Result<Vec<Vec<f32>>> {
@@ -239,10 +258,10 @@ async fn learn_due(memory: &Memory, db: &PgPool) -> anyhow::Result<bool> {
     let plan = match plan(memory, db, thread, &batch).await {
         Ok(plan) => plan,
         Err(e) => {
-            // A model server that is down or timing out says nothing about
+            // A server or database that is down or slow says nothing about
             // these messages: they wait, however long. Only a reply that
             // can't be used counts against them.
-            if !e.chain().any(|c| c.is::<reqwest::Error>()) {
+            if e.chain().any(|c| c.is::<Unusable>()) {
                 sqlx::query!(
                     "update memory_heard set attempts = attempts + 1,
                             learned_at = case when attempts + 1 >= $2 then now() end
@@ -256,8 +275,33 @@ async fn learn_due(memory: &Memory, db: &PgPool) -> anyhow::Result<bool> {
             return Err(e);
         }
     };
+    file(db, plan, &ids).await?;
+    Ok(true)
+}
+
+/// Writes a batch's facts and marks its messages read, in one transaction.
+async fn file(
+    db: &PgPool,
+    plan: Vec<(Found, Vec<f32>, Verdict)>,
+    heard: &[i64],
+) -> sqlx::Result<()> {
     let mut tx = db.begin().await?;
     for (fact, vector, verdict) in plan {
+        // The model was asked outside this transaction. If the fact it
+        // compared with was forgotten (or replaced) meanwhile, this one is
+        // dropped: filing it would bring a forgotten fact back with no new
+        // message from the owner.
+        if let Verdict::Same(target) | Verdict::Replaces(target) = verdict {
+            let still = sqlx::query_scalar!(
+                "select id from memory_fact where id = $1 and replaced_by is null for update",
+                target
+            )
+            .fetch_optional(&mut *tx)
+            .await?;
+            if still.is_none() {
+                continue;
+            }
+        }
         let id = match verdict {
             Verdict::Same(id) => {
                 sqlx::query!(
@@ -278,7 +322,7 @@ async fn learn_due(memory: &Memory, db: &PgPool) -> anyhow::Result<bool> {
                 .await?;
                 if let Verdict::Replaces(old) = verdict {
                     sqlx::query!(
-                        "update memory_fact set replaced_by = $1 where id = $2 and replaced_by is null",
+                        "update memory_fact set replaced_by = $1 where id = $2",
                         id,
                         old
                     )
@@ -299,12 +343,11 @@ async fn learn_due(memory: &Memory, db: &PgPool) -> anyhow::Result<bool> {
     }
     sqlx::query!(
         "update memory_heard set learned_at = now() where id = any($1)",
-        &ids
+        heard
     )
     .execute(&mut *tx)
     .await?;
-    tx.commit().await?;
-    Ok(true)
+    tx.commit().await
 }
 
 /// Works out what a batch adds to memory, without writing anything.
@@ -426,7 +469,8 @@ async fn extract(
         text: String,
         sources: Vec<i64>,
     }
-    let out: Out = serde_json::from_value(memory.ask(&system, lines, "facts", schema).await?)?;
+    let out: Out = serde_json::from_value(memory.ask(&system, lines, "facts", schema).await?)
+        .map_err(|e| Unusable(e.to_string()))?;
     Ok(out
         .facts
         .into_iter()
@@ -860,6 +904,37 @@ mod tests {
             current(&db).await,
             [("Sam prefers appointments after 11:00.".to_owned(), 1)],
             "the tea fact waits for the whole batch"
+        );
+    }
+
+    #[sqlx::test]
+    async fn a_fact_forgotten_while_a_batch_is_read_does_not_come_back(db: PgPool) {
+        let (memory, _) = fake(vec![
+            facts(&[("Sam prefers appointments after 11:00.", &[1])]),
+            facts(&[("Sam prefers appointments before 11:00.", &[1])]),
+            json!({ "relation": "replaces", "number": 1 }),
+        ])
+        .await;
+        say(&db, "appointments after 11 please").await;
+        learn_due(&memory, &db).await.unwrap();
+        let heard = say(&db, "actually before 11").await;
+        let batch = [Heard {
+            id: heard,
+            text: "actually before 11".into(),
+            heard_at: Utc::now(),
+        }];
+        let planned = plan(&memory, &db, 1, &batch).await.unwrap();
+        assert!(matches!(planned[0].2, Verdict::Replaces(_)));
+        // Forgotten after the model was asked, before the batch is filed.
+        sqlx::query!("delete from memory_fact")
+            .execute(&db)
+            .await
+            .unwrap();
+        file(&db, planned, &[heard]).await.unwrap();
+        assert!(current(&db).await.is_empty(), "it stays forgotten");
+        assert!(
+            !learn_due(&memory, &db).await.unwrap(),
+            "the message counts as read"
         );
     }
 

@@ -50,6 +50,9 @@ class _MemoryScreenState extends State<MemoryScreen> {
   String? note;
   final search = TextEditingController();
   Timer? typing;
+  // Counts requests, so an answer that was overtaken (by a newer search, or by
+  // a Forget) is dropped instead of putting old facts back on the screen.
+  int asked = 0;
 
   @override
   void initState() {
@@ -66,12 +69,12 @@ class _MemoryScreenState extends State<MemoryScreen> {
 
   Future<void> _load() async {
     final q = search.text.trim();
+    final mine = ++asked;
     try {
       final got = await widget.api.get(
         '/api/memory${q.isEmpty ? '' : '?q=${Uri.encodeQueryComponent(q)}'}',
       ) as Map<String, dynamic>;
-      // An answer to an older search mustn't replace a newer one.
-      if (!mounted || q != search.text.trim()) return;
+      if (!mounted || mine != asked) return;
       setState(() {
         facts = (got['facts'] as List).cast<Map<String, dynamic>>();
         enabled = got['enabled'] == true;
@@ -79,7 +82,7 @@ class _MemoryScreenState extends State<MemoryScreen> {
         note = null;
       });
     } catch (e) {
-      if (mounted) {
+      if (mounted && mine == asked) {
         setState(() {
           loading = false;
           note = explain(e);
@@ -114,7 +117,10 @@ class _MemoryScreenState extends State<MemoryScreen> {
     if (sure != true) return;
     try {
       await widget.api.delete('/api/memory/${fact['id']}');
-      if (mounted) setState(() => facts.remove(fact));
+      asked++;
+      if (mounted) {
+        setState(() => facts.removeWhere((f) => f['id'] == fact['id']));
+      }
     } catch (e) {
       if (mounted) setState(() => note = explain(e));
     }

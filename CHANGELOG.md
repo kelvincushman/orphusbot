@@ -115,6 +115,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Fixed
 
+- Security: updated `ctutils` to 0.4.8 (RUSTSEC-2026-0385, timing leaks in constant-time comparisons, reached through the database driver) and replaced a withdrawn `async-executor` release. The licence and advisory check in CI had been failing before it ran, which hid both; it runs again now.
 - Android: pictures can be added to the gallery. **Add files** now shows when choosing from the gallery for a message too (new files are selected), and uploads read Android's picked files directly.
 - **Bots know today's date and time:** every task now starts with the date and time in your time zone, so a bot no longer guesses the day (PA had called a Tuesday "Friday").
 - **Bots no longer think they have Google before it's set up:** they were told about their Google access even though Google wasn't connected yet, so a calendar request bounced between bots. Until Google is set up they now say so plainly.

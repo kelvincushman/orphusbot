@@ -11,6 +11,16 @@ Format:
 
 ---
 
+## D-066: Learned memory is built into the server, on the box's own models (2026-11-15)
+
+**Decided:** OrphusBot learns facts about the owner from his messages itself: a Rust module in the server, tables in its own Postgres, the box's local chat model for extraction and its local embedding model for finding similar facts. The behaviour follows our study of Honcho ([research/honcho-2026-11-15.md](research/honcho-2026-11-15.md) §1), written from that description in our own words. No Honcho code or prompt text is used, and its source is not consulted while building.
+
+**Why:** The owner chose it. The wiki only holds what a bot decides to write down, so nothing was learned unless someone filed it. Honcho does this well, but its server is AGPL-3.0 and can't be mixed into an MIT project, and running it beside OrphusBot would add Python, Redis, a second database and a store the owner can't read in his vault. Local models keep every message on the box and cost nothing per call.
+
+**Alternatives:** Running Honcho unmodified as a separate service (its real system at once, but the extra services above); a nightly routine in which a bot writes facts into the vault (no new code, but no per-message sources and no search). pgvector for the embeddings (needs a different Postgres image; unnecessary at this size). Deciding "same or different" by embedding distance alone (measured: opposites score higher than rewordings, so it would merge contradictions).
+
+**Revisit if:** the local model's facts are often wrong or it can't keep up; the fact count makes loading them all slow (then pgvector); or the owner wants memory shared with other tools, which a separate service would do better.
+
 ## D-064: A new piece of work gets a mission with its own Chief of Staff (2026-11-07)
 
 **Decided:** A `mission` record, with a Chief of Staff per mission as a bot row (`chief--<id>`) with its own thread and engine. The Orchestrator starts one with `start_mission`. A chief's hand-offs are tickets tagged with the mission, so teammates run them in `<slug>-mission-<id>`, away from their everyday session, and queue as usual. Only the chief hands work on. Missions are visible to the team unless marked private; a bot can make one private, and only Kelvin can reveal it. Each bot also gets New conversation (`bot.session_gen`), which moves it to a fresh session and hands it the last 8 messages.

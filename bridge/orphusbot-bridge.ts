@@ -528,8 +528,11 @@ export default function (pi: ExtensionAPI) {
       elements.some((e) =>
         (typeof e.id === "string" && e.id.startsWith("com.google.android.gms:")) ||
         [e.text, e.desc].some((t) => typeof t === "string" && SECURITY_TEXT.test(t)));
-    /** What the bot last saw, so an action that waited long for approval can be checked. */
-    let lastLook: { at: number; app: string } | undefined;
+    /**
+     * What the bot last saw on each phone, so an action that waited long for approval
+     * can be checked. `null` means that look was thrown away: no acting until a new one.
+     */
+    const looks = new Map<string, { at: number; app: string } | null>();
     const STALE_MS = 2 * 60_000;
     const account = async (key: string) => {
       const { accounts } = await json("/social/accounts");
@@ -630,7 +633,7 @@ export default function (pi: ExtensionAPI) {
               .map(({ text, desc, id, clickable, scrollable, center }) =>
                 ({ ...(text ? { text } : {}), ...(desc ? { desc } : {}), ...(id ? { id } : {}),
                    ...(clickable ? { clickable } : {}), ...(scrollable ? { scrollable } : {}), center }));
-            lastLook = { at: Date.now(), app: String(now.current_app) };
+            looks.set(n, { at: Date.now(), app: String(now.current_app) });
             return text(UNTRUSTED + `App: ${now.current_app}\n` + JSON.stringify(shown));
           }
           case "screenshot": {
@@ -650,15 +653,17 @@ export default function (pi: ExtensionAPI) {
               json(`/phones/${n}/ui`, undefined, signal), json(`/phones/${n}/current_app`, undefined, signal),
             ]);
             if (security(elements as any[])) {
-              lastLook = undefined;
+              looks.set(n, null);
               throw new Error(
                 "A security or sign-in prompt is on the phone's screen. Never touch these, not even to dismiss one: " +
                 "leave it, tell Kelvin with ask_owner what it says, and stop until he has dealt with it.");
             }
-            const waited = lastLook ? Date.now() - lastLook.at : 0;
-            if (lastLook && waited > STALE_MS && String(now.current_app) !== lastLook.app) {
-              const was = lastLook.app;
-              lastLook = undefined;
+            const seen = looks.get(n);
+            if (seen === null) throw new Error(`Look at the phone again before you ${p.action}: what you saw last no longer holds.`);
+            const waited = seen ? Date.now() - seen.at : 0;
+            if (seen && waited > STALE_MS && String(now.current_app) !== seen.app) {
+              const was = seen.app;
+              looks.set(n, null);
               throw new Error(
                 `This ${p.action} waited ${Math.round(waited / 60_000)} min and the phone has moved on ` +
                 `(you looked at ${was}, it now shows ${now.current_app}), so it wasn't done. Look again and decide afresh.`);

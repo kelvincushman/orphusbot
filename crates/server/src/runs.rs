@@ -99,7 +99,7 @@ pub struct Claimed {
 }
 
 /// The thread has a queued or running run.
-pub async fn busy(db: &PgPool, thread: i64) -> sqlx::Result<bool> {
+pub async fn busy(db: impl sqlx::PgExecutor<'_>, thread: i64) -> sqlx::Result<bool> {
     sqlx::query_scalar!(
         r#"select exists (select 1 from run where thread_id = $1 and status in ('queued', 'running')) as "busy!""#,
         thread

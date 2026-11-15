@@ -1104,8 +1104,13 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
         spec.name = Some(name);
     } else if let Some(session) = fleets::session(&claimed.prompt, &bot.slug, run) {
         spec.session = Some(session);
-    } else if let Some(session) = missions::session(&app.db, run, &bot.slug).await {
-        spec.session = Some(session);
+    } else {
+        // On an error the claimed run stops here; its lease lapses and it's queued again.
+        match missions::session(&app.db, run, &bot.slug).await {
+            Ok(Some(session)) => spec.session = Some(session),
+            Ok(None) => {}
+            Err(e) => return warn!("finding the run's mission session: {e}"),
+        }
     }
     if bot.computer == "e2b" {
         match app.e2b.computer(&app.db, &bot.slug).await {

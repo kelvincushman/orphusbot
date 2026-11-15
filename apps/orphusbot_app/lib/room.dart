@@ -75,6 +75,9 @@ class _IdeasRoomState extends State<IdeasRoom>
   Timer? chimeIn;
   String? orchestratorView;
   int? sessionId;
+  bool ending = false;
+  // The last try at sending what was said to the chat failed.
+  bool unsent = false;
 
   @override
   void initState() {
@@ -194,13 +197,22 @@ class _IdeasRoomState extends State<IdeasRoom>
   }
 
   Future<void> _end() async {
-    chimeIn?.cancel();
-    orchestratorView = null;
-    await live?.stop();
-    if (mounted) setState(() => live = null);
-    _setPhase(Phase.idle);
-    await _wrapUp();
-    widget.onClose?.call();
+    // One wrap-up at a time: a second tap mustn't send the transcript twice.
+    if (ending) return;
+    ending = true;
+    try {
+      chimeIn?.cancel();
+      orchestratorView = null;
+      await live?.stop();
+      if (mounted) setState(() => live = null);
+      _setPhase(Phase.idle);
+      await _wrapUp();
+    } finally {
+      ending = false;
+    }
+    // In the chat, what was said stays until it's sent: the panel stays open
+    // with the error, and End tries again.
+    if (!inChat || transcript.length < 2) widget.onClose?.call();
   }
 
   /// The Orchestrator's view of the conversation so far, for Grok to pass on.
@@ -240,15 +252,22 @@ class _IdeasRoomState extends State<IdeasRoom>
     if (inChat) {
       // The chat is the record: the Orchestrator picks up what was said.
       if (transcript.length >= 2) {
-        await widget.api
-            .send(
-              widget.bot,
-              'We just talked by voice. Here is what was said. Act on anything '
-              'still open, and reply in a line or two.\n\n${_recent()}',
-            )
-            .catchError((Object e) {
-              if (mounted) setState(() => note = explain(e));
+        try {
+          await widget.api.send(
+            widget.bot,
+            'We just talked by voice. Here is what was said. Act on anything '
+            'still open, and reply in a line or two.\n\n${_recent()}',
+          );
+          transcript.clear();
+          unsent = false;
+        } catch (e) {
+          if (mounted) {
+            setState(() {
+              unsent = true;
+              note = 'Not sent to the chat yet: ${explain(e)}';
             });
+          }
+        }
       }
       return;
     }
@@ -349,6 +368,15 @@ class _IdeasRoomState extends State<IdeasRoom>
                   ),
                 if (note != null)
                   Text(note!, style: const TextStyle(color: Colors.redAccent)),
+                // A way out when sending keeps failing, such as with no signal.
+                if (unsent)
+                  TextButton(
+                    onPressed: () {
+                      transcript.clear();
+                      widget.onClose?.call();
+                    },
+                    child: const Text('Close without sending'),
+                  ),
               ],
             ),
           ),
@@ -358,9 +386,9 @@ class _IdeasRoomState extends State<IdeasRoom>
               backgroundColor: Colors.redAccent,
               foregroundColor: Colors.black,
             ),
-            onPressed: phase == Phase.connecting
-                ? null
-                : (live == null ? widget.onClose : _end),
+            // Also when the session has already dropped: what was said still
+            // has to reach the chat before the panel closes.
+            onPressed: phase == Phase.connecting ? null : _end,
             icon: Icon(live == null ? Icons.close : Icons.call_end),
           ),
         ],

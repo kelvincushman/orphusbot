@@ -290,7 +290,12 @@ impl Session {
         futures_util::pin_mut!(events);
         while let Some(next) = events.next().await {
             match next? {
-                None => caught_up = true,
+                // Hand-offs may have started during the replay, so count again.
+                None if !caught_up => {
+                    caught_up = true;
+                    waiting_on = self.waiting_on().await;
+                }
+                None => {}
                 Some((bot, event)) => {
                     // History is replayed first; only what happens after it is news.
                     if notify && caught_up {

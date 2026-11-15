@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select id, title, status, private, latest, team from mission\n         where status = 'open' or updated_at > now() - interval '3 days' order by id",
+  "query": "select id, title, status, private, latest, team,\n                  (status = 'open' or updated_at > now() - interval '3 days') as \"recent!\"\n           from mission\n           where private or status = 'open' or updated_at > now() - interval '3 days' order by id",
   "describe": {
     "columns": [
       {
@@ -68,6 +68,12 @@
             "name": "team"
           }
         }
+      },
+      {
+        "ordinal": 6,
+        "name": "recent!",
+        "type_info": "Bool",
+        "origin": "Expression"
       }
     ],
     "parameters": {
@@ -79,8 +85,9 @@
       false,
       false,
       false,
-      false
+      false,
+      null
     ]
   },
-  "hash": "76f024db98d1aef7df30757785fdaa7eae8ad9c90b60f68d991017830d5f8e9f"
+  "hash": "7ec8558ba2b55dfde1539115bc4d594cf8c95829093fa7b18c080a315887bc6d"
 }

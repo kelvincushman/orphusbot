@@ -234,95 +234,30 @@ async fn learn_due(memory: &Memory, db: &PgPool) -> anyhow::Result<bool> {
     .await?;
     let ids: Vec<i64> = batch.iter().map(|h| h.id).collect();
 
-    match learn(memory, db, thread, &batch).await {
-        Ok(()) => {
-            sqlx::query!(
-                "update memory_heard set learned_at = now() where id = any($1)",
-                &ids
-            )
-            .execute(db)
-            .await?;
-            Ok(true)
-        }
+    // Every model call first, then one transaction: a batch is filed whole or
+    // not at all, so a retry can't count anything twice.
+    let plan = match plan(memory, db, thread, &batch).await {
+        Ok(plan) => plan,
         Err(e) => {
-            // Try again later; give up on a message that keeps failing.
-            sqlx::query!(
-                "update memory_heard set attempts = attempts + 1,
-                        learned_at = case when attempts + 1 >= $2 then now() end
-                 where id = any($1)",
-                &ids,
-                i32::from(MAX_ATTEMPTS)
-            )
-            .execute(db)
-            .await?;
-            Err(e)
+            // A model server that is down or timing out says nothing about
+            // these messages: they wait, however long. Only a reply that
+            // can't be used counts against them.
+            if !e.chain().any(|c| c.is::<reqwest::Error>()) {
+                sqlx::query!(
+                    "update memory_heard set attempts = attempts + 1,
+                            learned_at = case when attempts + 1 >= $2 then now() end
+                     where id = any($1)",
+                    &ids,
+                    i32::from(MAX_ATTEMPTS)
+                )
+                .execute(db)
+                .await?;
+            }
+            return Err(e);
         }
-    }
-}
-
-async fn learn(memory: &Memory, db: &PgPool, thread: i64, batch: &[Heard]) -> anyhow::Result<()> {
-    let tz = crate::profiles::current(db).await.tz;
-    // Numbered lines for the model; `owner_line[n]` is the message line n came from.
-    let mut lines = String::new();
-    let mut owner_line: HashMap<i64, i64> = HashMap::new();
-    let mut n = 0;
-    for h in batch {
-        let before = sqlx::query_scalar!(
-            r#"select body->>'text' from event
-               where thread_id = $1 and created_at < $2
-                 and body->>'type' = 'message' and body->>'role' = 'assistant'
-               order by seq desc limit 1"#,
-            thread,
-            h.heard_at
-        )
-        .fetch_optional(db)
-        .await?
-        .flatten();
-        if let Some(reply) = before {
-            n += 1;
-            let reply: String = reply.chars().take(CONTEXT_CHARS).collect();
-            lines.push_str(&format!("[{n}] the bot (context only): {reply}\n"));
-        }
-        n += 1;
-        owner_line.insert(n, h.id);
-        let when = h.heard_at.with_timezone(&tz).format("%A %-d %B %Y, %H:%M");
-        lines.push_str(&format!("[{n}] {} ({when}): {}\n", memory.owner, h.text));
-    }
-
-    let found = extract(memory, &lines, &owner_line).await?;
-    if found.is_empty() {
-        return Ok(());
-    }
-    let texts: Vec<String> = found.iter().map(|f| f.text.clone()).collect();
-    let vectors = memory.embed(&texts, false).await?;
-
-    // Only facts from before this batch: what was said together is one picture,
-    // and its facts neither repeat nor replace each other.
-    // ponytail: every current fact is loaded and compared here; fine to tens of
-    // thousands of facts, then pgvector with an index.
-    let mut known: Vec<(i64, String, Vec<f32>)> =
-        sqlx::query!("select id, text, embedding from memory_fact where replaced_by is null")
-            .fetch_all(db)
-            .await?
-            .into_iter()
-            .map(|r| (r.id, r.text, r.embedding))
-            .collect();
-
-    for (fact, vector) in found.into_iter().zip(vectors) {
-        let mut near: Vec<(f32, i64, &str)> = known
-            .iter()
-            .map(|(id, text, v)| (cosine(&vector, v), *id, text.as_str()))
-            .filter(|(score, ..)| *score >= ALIKE)
-            .collect();
-        near.sort_by(|a, b| b.0.total_cmp(&a.0));
-        near.truncate(NEIGHBOURS);
-        let verdict = if near.is_empty() {
-            Verdict::New
-        } else {
-            settle(memory, &fact.text, &near).await?
-        };
-
-        let mut tx = db.begin().await?;
+    };
+    let mut tx = db.begin().await?;
+    for (fact, vector, verdict) in plan {
         let id = match verdict {
             Verdict::Same(id) => {
                 sqlx::query!(
@@ -343,13 +278,12 @@ async fn learn(memory: &Memory, db: &PgPool, thread: i64, batch: &[Heard]) -> an
                 .await?;
                 if let Verdict::Replaces(old) = verdict {
                     sqlx::query!(
-                        "update memory_fact set replaced_by = $1 where id = $2",
+                        "update memory_fact set replaced_by = $1 where id = $2 and replaced_by is null",
                         id,
                         old
                     )
                     .execute(&mut *tx)
                     .await?;
-                    known.retain(|(k, ..)| *k != old);
                 }
                 id
             }
@@ -362,9 +296,91 @@ async fn learn(memory: &Memory, db: &PgPool, thread: i64, batch: &[Heard]) -> an
         )
         .execute(&mut *tx)
         .await?;
-        tx.commit().await?;
     }
-    Ok(())
+    sqlx::query!(
+        "update memory_heard set learned_at = now() where id = any($1)",
+        &ids
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(true)
+}
+
+/// Works out what a batch adds to memory, without writing anything.
+async fn plan(
+    memory: &Memory,
+    db: &PgPool,
+    thread: i64,
+    batch: &[Heard],
+) -> anyhow::Result<Vec<(Found, Vec<f32>, Verdict)>> {
+    let tz = crate::profiles::current(db).await.tz;
+    // Numbered lines for the model; `owner_line[n]` is the message line n came from.
+    let mut lines = String::new();
+    let mut owner_line: HashMap<i64, i64> = HashMap::new();
+    let mut n = 0;
+    for h in batch {
+        let before = sqlx::query_scalar!(
+            // Only replies from since the bot became a team bot: one that was
+            // private keeps its thread, and those replies stay out.
+            r#"select e.body->>'text' from event e
+               join thread t on t.id = e.thread_id join bot b on b.id = t.bot_id
+               where e.thread_id = $1 and e.created_at < $2 and e.created_at > b.team_since
+                 and e.body->>'type' = 'message' and e.body->>'role' = 'assistant'
+               order by e.seq desc limit 1"#,
+            thread,
+            h.heard_at
+        )
+        .fetch_optional(db)
+        .await?
+        .flatten();
+        if let Some(reply) = before {
+            n += 1;
+            let reply: String = reply.chars().take(CONTEXT_CHARS).collect();
+            lines.push_str(&format!("[{n}] the bot (context only): {reply}\n"));
+        }
+        n += 1;
+        owner_line.insert(n, h.id);
+        let when = h.heard_at.with_timezone(&tz).format("%A %-d %B %Y, %H:%M");
+        lines.push_str(&format!("[{n}] {} ({when}): {}\n", memory.owner, h.text));
+    }
+
+    let found = extract(memory, &lines, &owner_line).await?;
+    if found.is_empty() {
+        return Ok(Vec::new());
+    }
+    let texts: Vec<String> = found.iter().map(|f| f.text.clone()).collect();
+    let vectors = memory.embed(&texts, false).await?;
+
+    // Only facts from before this batch: what was said together is one picture,
+    // and its facts neither repeat nor replace each other.
+    // ponytail: every current fact is loaded and compared here; fine to tens of
+    // thousands of facts, then pgvector with an index.
+    let known: Vec<(i64, String, Vec<f32>)> =
+        sqlx::query!("select id, text, embedding from memory_fact where replaced_by is null")
+            .fetch_all(db)
+            .await?
+            .into_iter()
+            .map(|r| (r.id, r.text, r.embedding))
+            .collect();
+
+    let mut plan = Vec::new();
+    for (fact, vector) in found.into_iter().zip(vectors) {
+        let mut near: Vec<(f32, i64, &str)> = known
+            .iter()
+            .map(|(id, text, v)| (cosine(&vector, v), *id, text.as_str()))
+            .filter(|(score, ..)| *score >= ALIKE)
+            .collect();
+        near.sort_by(|a, b| b.0.total_cmp(&a.0));
+        near.truncate(NEIGHBOURS);
+        let verdict = if near.is_empty() {
+            Verdict::New
+        } else {
+            settle(memory, &fact.text, &near).await?
+        };
+        plan.push((fact, vector, verdict));
+    }
+    Ok(plan)
 }
 
 /// Asks the model for the facts in `lines`. A fact is kept only if it cites
@@ -585,11 +601,21 @@ pub async fn forget(
     State(app): State<Shared>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
-    let gone = sqlx::query!("delete from memory_fact where id = $1", id)
-        .execute(&app.db)
-        .await
-        .map_err(|e| internal("forgetting a fact", e))?
-        .rows_affected();
+    // With the facts it replaced: forgetting the newest mustn't bring an
+    // older version back as current.
+    let gone = sqlx::query!(
+        "with recursive gone as (
+             select id from memory_fact where id = $1
+             union all
+             select f.id from memory_fact f join gone g on f.replaced_by = g.id
+         )
+         delete from memory_fact where id in (select id from gone)",
+        id
+    )
+    .execute(&app.db)
+    .await
+    .map_err(|e| internal("forgetting a fact", e))?
+    .rows_affected();
     if gone == 0 {
         return Err((StatusCode::NOT_FOUND, "No such fact"));
     }
@@ -787,6 +813,118 @@ mod tests {
             "it has been given up on"
         );
         assert!(current(&db).await.is_empty());
+    }
+
+    #[sqlx::test]
+    async fn an_outage_never_uses_up_a_messages_tries(db: PgPool) {
+        // Nothing listens here, so every call fails to connect.
+        let memory = Memory {
+            llm_url: Some("http://127.0.0.1:1".into()),
+            embed_url: Some("http://127.0.0.1:1".into()),
+            ..Memory::off()
+        };
+        say(&db, "something").await;
+        for _ in 0..MAX_ATTEMPTS + 2 {
+            assert!(learn_due(&memory, &db).await.is_err());
+        }
+        let waiting = sqlx::query_scalar!(
+            "select count(*) from memory_heard where learned_at is null and attempts = 0"
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(
+            waiting,
+            Some(1),
+            "it still waits for the servers to come back"
+        );
+    }
+
+    #[sqlx::test]
+    async fn a_batch_that_fails_part_way_files_nothing(db: PgPool) {
+        let (memory, _) = fake(vec![
+            facts(&[("Sam prefers appointments after 11:00.", &[1])]),
+            // The first fact is new; the second needs the model again, and
+            // that call fails (nothing is scripted for it).
+            facts(&[
+                ("Sam drinks tea.", &[1]),
+                ("Sam wants appointments later than 11:00.", &[1]),
+            ]),
+        ])
+        .await;
+        say(&db, "appointments after 11 please").await;
+        learn_due(&memory, &db).await.unwrap();
+        say(&db, "tea, and later than 11 as I said").await;
+        assert!(learn_due(&memory, &db).await.is_err());
+        assert_eq!(
+            current(&db).await,
+            [("Sam prefers appointments after 11:00.".to_owned(), 1)],
+            "the tea fact waits for the whole batch"
+        );
+    }
+
+    #[sqlx::test]
+    async fn forgetting_a_fact_forgets_what_it_replaced(db: PgPool) {
+        let (memory, _) = fake(vec![
+            facts(&[("Sam prefers appointments after 11:00.", &[1])]),
+            facts(&[("Sam prefers appointments before 11:00.", &[1])]),
+            json!({ "relation": "replaces", "number": 1 }),
+        ])
+        .await;
+        say(&db, "appointments after 11 please").await;
+        learn_due(&memory, &db).await.unwrap();
+        say(&db, "actually before 11").await;
+        learn_due(&memory, &db).await.unwrap();
+        let newest = sqlx::query_scalar!("select id from memory_fact where replaced_by is null")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+
+        let app = crate::auth::tests::app(db.clone());
+        forget(State(app.clone()), Path(newest)).await.unwrap();
+        let left = sqlx::query_scalar!("select count(*) from memory_fact")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(left, Some(0), "the older version doesn't come back");
+        assert_eq!(
+            forget(State(app), Path(newest)).await.unwrap_err().0,
+            StatusCode::NOT_FOUND
+        );
+    }
+
+    #[sqlx::test]
+    async fn a_reply_from_when_the_bot_was_private_is_not_context(db: PgPool) {
+        use orphusbot_proto::{Role, ThreadEvent};
+        let (memory, asked) = fake(vec![facts(&[])]).await;
+        for (text, minutes) in [("PRIVATE-REPLY", 10), ("TEAM-REPLY", 6)] {
+            let event = ThreadEvent::Message {
+                role: Role::Assistant,
+                text: text.into(),
+            };
+            let id = crate::db::append(&db, 1, &event).await.unwrap();
+            sqlx::query!(
+                "update event set created_at = now() - make_interval(mins => $2) where id = $1",
+                id,
+                minutes
+            )
+            .execute(&db)
+            .await
+            .unwrap();
+        }
+        // The bot became a team bot between the two replies.
+        sqlx::query!(
+            "update bot set team_since = now() - interval '7 minutes'
+             where id = (select bot_id from thread where id = 1)"
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        say(&db, "yes").await;
+        learn_due(&memory, &db).await.unwrap();
+        let prompt = asked.lock().unwrap()[0].clone();
+        assert!(prompt.contains("TEAM-REPLY"), "{prompt}");
+        assert!(!prompt.contains("PRIVATE-REPLY"), "{prompt}");
     }
 
     /// Against real servers: `ORPHUSBOT_MEMORY_LLM_URL=… ORPHUSBOT_MEMORY_EMBED_URL=… cargo test live_memory -- --ignored --nocapture`.

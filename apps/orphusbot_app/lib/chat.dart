@@ -104,6 +104,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _loadBots() async {
     final list = await widget.api.get('/api/bots') as List<dynamic>;
+    if (!mounted) return;
     setState(() {
       bots = list
           .cast<Map<String, dynamic>>()
@@ -212,11 +213,11 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _act(Future<void> Function() action) async {
     try {
       await action();
-      setState(() => problem = null);
+      if (mounted) setState(() => problem = null);
     } on SignedOut {
       widget.onSignedOut();
     } catch (e) {
-      setState(() => problem = explain(e));
+      if (mounted) setState(() => problem = explain(e));
     }
   }
 

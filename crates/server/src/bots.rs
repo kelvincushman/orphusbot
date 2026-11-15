@@ -391,9 +391,26 @@ pub async fn update(
             "The inbox bot can't be disabled",
         ));
     }
+    if let (true, Some(mission)) = (bot.disabled, crate::missions::of_chief(&bot.slug)) {
+        let open = sqlx::query_scalar!(
+            r#"select exists (select 1 from mission where id = $1 and status = 'open') as "open!""#,
+            mission
+        )
+        .fetch_one(&app.db)
+        .await
+        .map_err(|e| internal("checking the chief's mission", e))?;
+        if open {
+            return Err((
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Close the mission to retire its chief",
+            ));
+        }
+    }
     let done = sqlx::query!(
         "update bot set name = $2, remit = $3, instructions = $4, model = $5, thinking = $6,
-                exclude_tools = $7, scope = $8, disabled = $9, computer = $10, google = $11, face = $12,
+                exclude_tools = $7,
+                team_since = case when scope <> $8 and $8 = 'team' then now() else team_since end,
+                scope = $8, disabled = $9, computer = $10, google = $11, face = $12,
                 desktop = $13, phone = $14, media = $15
          where slug = $1",
         bot.slug,
@@ -436,12 +453,6 @@ pub async fn new_conversation(
         .await
         .map_err(|e| internal("finding the bot's thread", e))?
         .ok_or((StatusCode::NOT_FOUND, "No such bot"))?;
-    if crate::runs::busy(&app.db, thread.id)
-        .await
-        .map_err(|e| internal("checking the bot", e))?
-    {
-        return Err((StatusCode::CONFLICT, "Wait until it has finished"));
-    }
     let said = sqlx::query!(
         r#"select body ->> 'role' as "role!", body ->> 'text' as "text!" from event
            where thread_id = $1 and body ->> 'type' = 'message'
@@ -451,13 +462,28 @@ pub async fn new_conversation(
     .fetch_all(&app.db)
     .await
     .map_err(|e| internal("reading the chat", e))?;
+    let failed = |e| internal("starting a new conversation", e);
+    // The thread's row lock, as in `runs::submit`: no run can start between
+    // the check and the new session, and two resets can't both pass the check.
+    let mut tx = app.db.begin().await.map_err(failed)?;
+    sqlx::query!("select id from thread where id = $1 for update", thread.id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(failed)?;
+    if crate::runs::busy(&mut *tx, thread.id)
+        .await
+        .map_err(failed)?
+    {
+        return Err((StatusCode::CONFLICT, "Wait until it has finished"));
+    }
     sqlx::query!(
         "update bot set session_gen = session_gen + 1 where slug = $1",
         w.bot
     )
-    .execute(&app.db)
+    .execute(&mut *tx)
     .await
-    .map_err(|e| internal("starting a new conversation", e))?;
+    .map_err(failed)?;
+    tx.commit().await.map_err(failed)?;
     let notice = orphusbot_proto::ThreadEvent::Notice {
         text: "New conversation".into(),
     };

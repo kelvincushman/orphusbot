@@ -179,6 +179,7 @@ The Ideas Room moves to its own engine session (`orchestrator-ideas`), so the ch
 **Decided:** The `phone` tool's taps whose label could commit (post, reply, like, follow, send, confirm, done, …), taps by id alone, and `ENTER` skip the owner's approval rules and always ask. Looking, queueing drafts, opening apps, typing and moving about pass without asking. Bots publish by queueing a draft, which ContentSwarm posts only after the owner approves it in Social.
 **Why:** the owner chose to approve every post and reply by hand. Approval rules are per tool, so one "Always" on a phone card would otherwise allow every later tap, including Post. Matching on visible labels is coarse but errs towards asking. Navigation has to pass freely, or reading comments would take dozens of approvals.
 **Revisit if:** the commit list asks too often in practice, or ContentSwarm gains verified adapters that make bot taps on commit buttons unnecessary.
+**Amended by D-059 (2026-11-05):** these actions still skip the per-tool rule, but "always" on a phone card now remembers that exact action, and the same action later passes without asking. Any other commit still asks.
 
 ## D-044: Social posting goes through the owner's phone and ContentSwarm, reviewed in OrphusBot (2026-10-21)
 

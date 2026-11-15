@@ -288,11 +288,12 @@ async fn file(
     let mut tx = db.begin().await?;
     // Facts this batch has already replaced. Two of its facts can replace the
     // same old one (a general preference split into two specific ones): the
-    // second is then simply added.
+    // second is then simply added. A repeat of the old one is not: it falls
+    // to the check below and is dropped, or both sides would stay current.
     let mut replaced_here: Vec<i64> = Vec::new();
     for (fact, vector, verdict) in plan {
         let verdict = match verdict {
-            Verdict::Same(t) | Verdict::Replaces(t) if replaced_here.contains(&t) => Verdict::New,
+            Verdict::Replaces(t) if replaced_here.contains(&t) => Verdict::New,
             other => other,
         };
         // The model was asked outside this transaction. If the fact it
@@ -994,6 +995,28 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(late, Some(0));
+    }
+
+    #[sqlx::test]
+    async fn a_repeat_of_a_fact_just_replaced_does_not_bring_it_back(db: PgPool) {
+        let (memory, _) = fake(vec![
+            facts(&[("Sam prefers appointments after 11:00.", &[1])]),
+            facts(&[
+                ("Sam prefers appointments before 11:00.", &[1]),
+                ("Sam prefers appointments after 11:00.", &[1]),
+            ]),
+            json!({ "relation": "replaces", "number": 1 }),
+            json!({ "relation": "same", "number": 1 }),
+        ])
+        .await;
+        say(&db, "appointments after 11 please").await;
+        learn_due(&memory, &db).await.unwrap();
+        say(&db, "after 11 as I said. no, actually before 11").await;
+        learn_due(&memory, &db).await.unwrap();
+        assert_eq!(
+            current(&db).await,
+            [("Sam prefers appointments before 11:00.".to_owned(), 1)]
+        );
     }
 
     #[sqlx::test]

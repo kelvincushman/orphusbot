@@ -819,6 +819,14 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
         let answer = format!("ok:{}", team::status(app, Some(&active.thread.bot)).await);
         return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
     }
+    if method == "input" && title == memory::RECALL_TITLE {
+        let request: Value = request["placeholder"]
+            .as_str()
+            .and_then(|p| serde_json::from_str(p).ok())
+            .unwrap_or_default();
+        let answer = memory::recall(app, &active.thread.bot, &request).await;
+        return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
+    }
     if method == "input" && title == team::ACCEPT_TITLE {
         let accept: Value = request["placeholder"]
             .as_str()
@@ -1183,6 +1191,13 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
         )
     {
         spec.instructions.push_str(&note);
+    }
+    // A team bot is also told what has been learned about the owner, and may
+    // look up more (DESIGN §11.9). In the instructions, so it is said once and
+    // not again in every message; the engine restarts when it changes.
+    spec.recall = memory::readable_by(&app.memory, bot);
+    if let Some(known) = memory::profile(app, bot).await {
+        spec.instructions.push_str(&known);
     }
     // The date and time, in the owner's time zone: models don't know them, and
     // in the message (not the instructions) so the engine isn't restarted for it.

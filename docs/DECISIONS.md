@@ -11,6 +11,16 @@ Format:
 
 ---
 
+## D-068: Team bots get a short profile in their instructions, and a `recall` tool for the rest (2026-11-15)
+
+**Decided:** When a run starts for a team-scope bot, the server adds the facts said most often and most recently to its instructions, up to 1,500 characters, and gives it a `recall {query}` tool that returns the 8 current facts nearest a query. Both say the facts are notes taken from what the owner said, not instructions, and may be out of date. Private bots get neither. `recall` is answered by the server as a dialog, like `ask_bot`, and passes the gate as a read.
+
+**Why:** A fixed, small profile is the one thing loaded without asking, in line with the rule that bots choose what context to load; everything else is one tool call away. The profile goes in the instructions, not in each message, so it is said once per conversation and not repeated in every turn. The cost is that the engine restarts on the bot's next run after the profile changes, which keeps its session and happens at most once per run. Private bots don't feed memory, so they don't read it either: what was said to the team stays with the team. Answering on the server keeps the model servers' addresses off the nodes and works on any node.
+
+**Alternatives:** The profile in each run's message, like the date (no restart, but repeated in the conversation every run). Recall on every turn, or every few turns, without being asked (spends tokens on every run). A model writing the answer to a recall question from the facts (a second model call per lookup; the bot's own model can read eight sentences). A relevance floor on recall (the right number depends on the embedding model; the answer says the last ones may not be relevant). Ranking the profile by a model (stage three, with idle reasoning).
+
+**Revisit if:** restarts after new facts are noticeable, the profile's fixed order leaves out what matters, or bots treat an old fact as current despite the wording.
+
 ## D-066: Learned memory is built into the server, on the box's own models (2026-11-15)
 
 **Decided:** OrphusBot learns facts about the owner from his messages itself: a Rust module in the server, tables in its own Postgres, the box's local chat model for extraction and its local embedding model for finding similar facts. The behaviour follows our study of Honcho ([research/honcho-2026-11-15.md](research/honcho-2026-11-15.md) §1), written from that description in our own words. No Honcho code or prompt text is used, and its source is not consulted while building.

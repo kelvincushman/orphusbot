@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update run set\n            status = case when attempts >= $3 then 'failed'::run_status else 'queued'::run_status end,\n            error = case when attempts >= $3 then 'The run could not be set up' else error end,\n            node = null, lease_expires_at = null, updated_at = now()\n         where id = $1 and fence = $2 and status = 'running'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1dfbca336e3023f3fcfe9a7d21dc180b637af29bda6529fecc75f6aaea055b81"
+}

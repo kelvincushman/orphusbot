@@ -573,6 +573,28 @@ mod tests {
                 .await
                 .starts_with("error:")
         );
+        // A mission that has ended hands out no more work.
+        sqlx::query!("update mission set status = 'done' where id = $1", open)
+            .execute(&db)
+            .await
+            .unwrap();
+        let run = run_of(&db, &chief(open)).await;
+        let late = team::ask(
+            &app,
+            run,
+            &chief(open),
+            &json!({ "bot": "blog", "task": "Too late" }),
+        )
+        .await;
+        assert!(
+            late.starts_with("error:") && late.contains("ended"),
+            "{late}"
+        );
+        let made = sqlx::query_scalar!("select count(*) from ticket where title = 'Too late'")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(made, Some(0));
         // Closed long ago, its unfinished hand-off is still hidden.
         sqlx::query!(
             "update mission set status = 'done', updated_at = now() - interval '4 days' where id = $1",

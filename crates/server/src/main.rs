@@ -1094,11 +1094,18 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
     } else if let Some(session) = fleets::session(&claimed.prompt, &bot.slug, run) {
         spec.session = Some(session);
     } else {
-        // On an error the claimed run stops here; its lease lapses and it's queued again.
         match missions::session(&app.db, run, &bot.slug).await {
             Ok(Some(session)) => spec.session = Some(session),
             Ok(None) => {}
-            Err(e) => return warn!("finding the run's mission session: {e}"),
+            Err(e) => {
+                // Hand the claim back, or the node's lease renewals would keep
+                // this run "running" with nothing running it.
+                warn!("finding the run's mission session: {e}");
+                if let Err(e) = runs::unclaim(&app.db, run, claimed.fence).await {
+                    warn!("handing back run {run}: {e}");
+                }
+                return;
+            }
         }
     }
     if bot.computer == "e2b" {

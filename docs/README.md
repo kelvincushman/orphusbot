@@ -12,6 +12,7 @@ Start with the [project README](../README.md) for the overview. Then:
 | [../wearable/README.md](../wearable/README.md) | the wearable itself: hardware, firmware, companion app, device channel, button and habitat specs (its own `docs/` folder) |
 | [research/rakazo-architecture.md](research/rakazo-architecture.md) | how Rakazo works and how each part maps onto OrphusBot (background, not normative) |
 | [research/bot-hq-2026-11-15.md](research/bot-hq-2026-11-15.md) | what the Bot HQ video (Grok Bot, Muse, Dots, Hermes) did, how it maps onto OrphusBot, and what to take (background, not normative) |
+| [research/bot-hq-plan-2026-11-15.md](research/bot-hq-plan-2026-11-15.md) | the plan for what to take from Bot HQ: steps, dressed screens, soul and notes, X search, calls with any bot (a proposal, not decided) |
 
 ## Keeping these up to date
 

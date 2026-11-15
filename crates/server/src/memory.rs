@@ -1,4 +1,4 @@
-//! What OrphusBot learns about the owner from what he says (DESIGN §11.9, D-061).
+//! What OrphusBot learns about the owner from what he says (DESIGN §11.9, D-066).
 //!
 //! Every message the owner sends a bot is noted (`heard`). A background loop
 //! reads what is new, asks a local model for the facts in it, and files each

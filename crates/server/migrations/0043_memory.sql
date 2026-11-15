@@ -1,4 +1,4 @@
--- What OrphusBot learns about the owner from what he says (DESIGN §11.9, D-061).
+-- What OrphusBot learns about the owner from what he says (DESIGN §11.9, D-066).
 
 -- What the owner said to a bot, kept until the learner has read it, and after
 -- that as the source a fact points back to.

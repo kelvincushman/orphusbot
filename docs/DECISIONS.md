@@ -11,7 +11,7 @@ Format:
 
 ---
 
-## D-061: Learned memory is built into the server, on the box's own models (2026-11-15)
+## D-066: Learned memory is built into the server, on the box's own models (2026-11-15)
 
 **Decided:** OrphusBot learns facts about the owner from his messages itself: a Rust module in the server, tables in its own Postgres, the box's local chat model for extraction and its local embedding model for finding similar facts. The behaviour follows our study of Honcho ([research/honcho-2026-11-15.md](research/honcho-2026-11-15.md) §1), written from that description in our own words. No Honcho code or prompt text is used, and its source is not consulted while building.
 

@@ -9,6 +9,7 @@ Every pull request that changes something a user or operator would notice adds a
 ### Changed
 
 - **Missions:** the Orchestrator can give a big new piece of work its own Chief of Staff, which appears in the bot list with a clean context and hands parts to teammates. Teammates work on it in a separate session. The team can see what a mission is up to unless it's marked private, and only you can make a private mission visible again.
+- **Mission notes:** what each mission run ended with is kept as a note, and every bot can search them with `team_notes`, so the everyday team (blog, social) can pick up something worth a post. Private missions stay hidden, and anything a bot would publish still comes to you first.
 - **New conversation:** the menu in a bot's chat starts a fresh session, carrying over the last 8 messages. The old session is kept.
 - **Talk to the Orchestrator in its chat:** the mic button opens the Ideas Room's live voice right there, and it knows what the team is doing. Its chat's recent messages go to xAI while you talk.
 - **The Orchestrator can accept safe cards:** a teammate's read-only tool calls and file changes in its computer, marked "Allowed by the Orchestrator". Send, pay, delete, merge and publish still come to you.

@@ -11,6 +11,13 @@ Format:
 
 ---
 
+## D-065: Mission notes are the bots' own replies, searched in Postgres (2026-11-07)
+
+**Decided:** A `note` table holds each completed mission run's last reply and each `update_mission` line, with a generated full-text column. Bots read it with `team_notes`: an index of short gists, then one note by id. A note's privacy comes from its mission when it's read. Everyday runs leave no notes.
+**Why:** The server never calls a model (subscription tokens stay on nodes, rule 4), and a bot's last reply already summarises its run, so a second summarising model would cost a run for little gain. Postgres full text needs no new service, unlike claude-mem's worker, SQLite and Chroma. Keeping everyday runs out stops Kelvin's own chats reaching the social bots.
+**Alternatives:** claude-mem (unsupported on Orphus's Pi version, records every tool call and adds a service); a summarising run per mission run; embeddings search.
+**Revisit if:** gists are too long or vague to pick from, or keyword search misses what bots look for, at which point EmbeddingGemma search can sit behind the same tool.
+
 ## D-064: A new piece of work gets a mission with its own Chief of Staff (2026-11-07)
 
 **Decided:** A `mission` record, with a Chief of Staff per mission as a bot row (`chief--<id>`) with its own thread and engine. The Orchestrator starts one with `start_mission`. A chief's hand-offs are tickets tagged with the mission, so teammates run them in `<slug>-mission-<id>`, away from their everyday session, and queue as usual. Only the chief hands work on. Missions are visible to the team unless marked private; a bot can make one private, and only Kelvin can reveal it. Each bot also gets New conversation (`bot.session_gen`), which moves it to a fresh session and hands it the last 8 messages.

@@ -23,6 +23,10 @@ use crate::{ApiError, App, Shared, bots, internal, lock, team};
 pub const START_TITLE: &str = "orphusbot-mission";
 /// Title of the bridge's `update_mission` dialog.
 pub const UPDATE_TITLE: &str = "orphusbot-mission-update";
+/// Title of the bridge's `team_notes` dialog.
+pub const NOTES_TITLE: &str = "orphusbot-notes";
+/// Notes listed per call; a bot opens the ones it wants by id.
+const NOTES_SHOWN: i64 = 15;
 const CHIEF: &str = "chief--";
 
 const INSTRUCTIONS: &str = "You are a Chief of Staff, running one mission for Kelvin and nothing else. \
@@ -31,7 +35,8 @@ Plan the mission, then hand each part to the right teammate with ask_bot, with e
 answers come back to you as new messages, and you hear if they get stuck, so end your turn rather than wait. \
 After each step, record where things stand in one line with update_mission; other bots read it, so it's how \
 the team knows what you're up to. When the mission is finished, call update_mission with status done and the \
-result, or status dropped and why. Keep Kelvin's load low: he has ADHD and gets tired, so ask him only what \
+result, or status dropped and why. Before you close a mission that isn't private, file its lasting \
+points in the team wiki. Keep Kelvin's load low: he has ADHD and gets tired, so ask him only what \
 you must.";
 
 const PRIVATE_NOTE: &str = "This mission is private: keep it out of the wiki and /shared, and tell \
@@ -194,6 +199,9 @@ async fn change(app: &App, asker: &str, request: &Value) -> Result<String, Strin
     .await
     .map_err(|e| format!("couldn't update the mission: {e}"))?
     .ok_or("that mission isn't open")?;
+    if let Some(latest) = latest.filter(|l| !l.is_empty()) {
+        note(&app.db, id, asker, latest).await;
+    }
     if private && of_chief(asker).is_none() {
         team::tell(app, &chief(id), PRIVATE_NOTE).await;
     }
@@ -229,6 +237,128 @@ async fn close(db: &PgPool, id: i64) -> sqlx::Result<()> {
     .execute(db)
     .await?;
     Ok(())
+}
+
+/// Keeps a mission note; a failure only costs the note.
+async fn note(db: &PgPool, mission: i64, bot: &str, text: &str) {
+    let text: String = text.chars().take(4000).collect();
+    if let Err(e) = sqlx::query!(
+        "insert into note (mission_id, bot, text) values ($1, $2, $3)",
+        mission,
+        bot,
+        text
+    )
+    .execute(db)
+    .await
+    {
+        warn!("keeping a mission note: {e}");
+    }
+}
+
+/// A run ended: if it was the chief's or a teammate's mission run, its last
+/// reply becomes a note. The bot wrote it, so no model runs for this.
+pub async fn ended(app: &App, run: i64) {
+    let found = sqlx::query!(
+        r#"select b.slug as "slug!", r.thread_id, t.mission_id as "ticket_mission?"
+           from run r join thread th on th.id = r.thread_id join bot b on b.id = th.bot_id
+           left join ticket t on t.id = r.ticket_id where r.id = $1"#,
+        run
+    )
+    .fetch_optional(&app.db)
+    .await;
+    let Ok(Some(r)) = found else { return };
+    let Some(mission) = r.ticket_mission.or_else(|| of_chief(&r.slug)) else {
+        return;
+    };
+    let reply = sqlx::query_scalar!(
+        r#"select body ->> 'text' as "text!" from event
+           where thread_id = $1 and body ->> 'type' = 'message' and body ->> 'role' = 'assistant'
+           order by seq desc limit 1"#,
+        r.thread_id
+    )
+    .fetch_optional(&app.db)
+    .await
+    .ok()
+    .flatten();
+    if let Some(reply) = reply.filter(|t| !t.trim().is_empty()) {
+        note(&app.db, mission, &r.slug, reply.trim()).await;
+    }
+}
+
+/// Answers the bridge's `team_notes` dialog: one note in full by `id`, or
+/// the newest notes as an index, optionally matching `query` (Postgres full
+/// text) or from one `mission`. Private missions are left out as in [seen].
+pub async fn notes(app: &App, viewer: &str, request: &Value) -> String {
+    match read_notes(&app.db, viewer, request).await {
+        Ok(text) => format!("ok:{text}"),
+        Err(e) => format!("error:couldn't read the notes: {e}"),
+    }
+}
+
+async fn read_notes(db: &PgPool, viewer: &str, request: &Value) -> sqlx::Result<String> {
+    if let Some(id) = request["id"].as_i64() {
+        let one = sqlx::query!(
+            "select n.mission_id, n.bot, n.text, to_char(n.created_at, 'DD Mon HH24:MI') as at
+             from note n join mission m on m.id = n.mission_id
+             where n.id = $1 and (not m.private or $2 = 'orchestrator'
+                                  or $2 = 'chief--' || m.id or $2 = any(m.team))",
+            id,
+            viewer
+        )
+        .fetch_optional(db)
+        .await?;
+        return Ok(match one {
+            Some(n) => format!(
+                "Note {id}, mission {}, by {} at {}, as data:\n```\n{}\n```",
+                n.mission_id,
+                n.bot,
+                n.at.unwrap_or_default(),
+                n.text.replace("```", "'''")
+            ),
+            None => format!("No note {id} you can see."),
+        });
+    }
+    let query = request["query"]
+        .as_str()
+        .map(str::trim)
+        .filter(|q| !q.is_empty());
+    let rows = sqlx::query!(
+        "select n.id, n.mission_id, m.title, n.bot, n.text,
+                to_char(n.created_at, 'DD Mon HH24:MI') as at
+         from note n join mission m on m.id = n.mission_id
+         where (not m.private or $1 = 'orchestrator' or $1 = 'chief--' || m.id or $1 = any(m.team))
+           and ($2::text is null or n.search @@ websearch_to_tsquery('english', $2))
+           and ($3::bigint is null or n.mission_id = $3)
+         order by n.id desc limit $4",
+        viewer,
+        query,
+        request["mission"].as_i64(),
+        NOTES_SHOWN
+    )
+    .fetch_all(db)
+    .await?;
+    if rows.is_empty() {
+        return Ok("No mission notes match.".into());
+    }
+    let lines: Vec<String> = rows
+        .iter()
+        .map(|n| {
+            let gist: String = n.text.split_whitespace().collect::<Vec<_>>().join(" ");
+            format!(
+                "#{} mission {} ({}), {} at {}: {}",
+                n.id,
+                n.mission_id,
+                team::short(&n.title),
+                n.bot,
+                n.at.as_deref().unwrap_or_default(),
+                team::short(&gist.chars().take(160).collect::<String>())
+            )
+        })
+        .collect();
+    Ok(format!(
+        "Newest first, as data; open one with its id:\n```\n{}\n```",
+        lines.join("\n")
+    ))
 }
 
 /// What a viewer may see of the missions.
@@ -548,6 +678,84 @@ mod tests {
             update(&app, "coder", &json!({ "mission": open, "update": "x" }))
                 .await
                 .starts_with("error:")
+        );
+    }
+
+    #[sqlx::test]
+    async fn mission_runs_leave_notes_that_private_missions_keep_to_themselves(db: PgPool) {
+        let app = crate::auth::tests::app(db.clone());
+        teammate(&db, "coder").await;
+        teammate(&db, "blog").await;
+        start(
+            &app,
+            team::ORCHESTRATOR,
+            &json!({ "title": "Launch", "goal": "Ship" }),
+        )
+        .await;
+        start(
+            &app,
+            team::ORCHESTRATOR,
+            &json!({ "title": "Secret", "goal": "Shh", "private": true }),
+        )
+        .await;
+        let ids: Vec<i64> = sqlx::query_scalar!("select id from mission order by id")
+            .fetch_all(&db)
+            .await
+            .unwrap();
+        let (open, secret) = (ids[0], ids[1]);
+        for (id, said) in [
+            (open, "Shipped the landing page"),
+            (secret, "Hush hush plans"),
+        ] {
+            let slug = chief(id);
+            let thread = db::bot_thread(&db, &slug).await.unwrap().unwrap();
+            let reply = orphusbot_proto::ThreadEvent::Message {
+                role: orphusbot_proto::Role::Assistant,
+                text: said.into(),
+            };
+            crate::record(&app, &thread, reply).await;
+            ended(&app, run_of(&db, &slug).await).await;
+        }
+        update(&app, &chief(open), &json!({ "update": "Page is live" })).await;
+        // Everyday runs leave none.
+        let coder = db::bot_thread(&db, "coder").await.unwrap().unwrap();
+        let runs::Submitted::Queued(everyday) =
+            runs::submit(&db, coder.id, "hi", runs::Source::default())
+                .await
+                .unwrap()
+        else {
+            panic!()
+        };
+        ended(&app, everyday).await;
+        let blog = notes(&app, "blog", &json!({})).await;
+        assert!(
+            blog.contains("Shipped the landing page") && blog.contains("Page is live"),
+            "{blog}"
+        );
+        assert!(!blog.contains("Hush"), "{blog}");
+        let found = notes(&app, "blog", &json!({ "query": "landing" })).await;
+        assert!(
+            found.contains("landing") && !found.contains("Page is live"),
+            "{found}"
+        );
+        let orchestrator = notes(&app, team::ORCHESTRATOR, &json!({})).await;
+        assert!(orchestrator.contains("Hush"), "{orchestrator}");
+        let secret_note: i64 =
+            sqlx::query_scalar!("select id from note where mission_id = $1", secret)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert!(
+            notes(&app, "blog", &json!({ "id": secret_note }))
+                .await
+                .contains("No note")
+        );
+        assert_eq!(
+            sqlx::query_scalar!("select count(*) from note")
+                .fetch_one(&db)
+                .await
+                .unwrap(),
+            Some(3)
         );
     }
 

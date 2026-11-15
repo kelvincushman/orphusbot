@@ -46,6 +46,7 @@ export const TEAM_TITLE = "orphusbot-team";
 export const ACCEPT_TITLE = "orphusbot-accept";
 export const MISSION_TITLE = "orphusbot-mission";
 export const MISSION_UPDATE_TITLE = "orphusbot-mission-update";
+export const NOTES_TITLE = "orphusbot-notes";
 /** Title of the dialog that starts a discussion among teammates (DESIGN §11.4). */
 export const DISCUSS_TITLE = "orphusbot-discuss";
 
@@ -71,7 +72,7 @@ const HELPER_TOOLS = ["subagent", "fleet", "roundtable"];
 // Plus `mcp`, Orphus's MCP gateway, when the owner granted the bot a connection:
 // it only talks to those servers, so it is safe to run outside the computer.
 const COMPUTER_TOOLS = [
-  "read", "write", "edit", "bash", "request_takeover", "ask_owner", "share_file", "ask_bot", "team_status", "accept_card", "start_mission", "update_mission", "discuss", "install_skill",
+  "read", "write", "edit", "bash", "request_takeover", "ask_owner", "share_file", "ask_bot", "team_status", "accept_card", "start_mission", "update_mission", "team_notes", "discuss", "install_skill",
   ...(process.env.ORPHUSBOT_MCP ? ["mcp"] : []),
   // Fleets: helpers whose calls come back through this gate and into the computer.
   ...(process.env.ORPHUSBOT_HELPERS_GATED === "1" ? HELPER_TOOLS : []),
@@ -412,6 +413,26 @@ export default function (pi: ExtensionAPI) {
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const ui = dialogs(ctx as unknown as { mode: string; ui: Dialogs }) ?? ctx.ui;
       const answer = String((await ui.input(MISSION_UPDATE_TITLE, JSON.stringify(params))) ?? "error:the server didn't answer");
+      if (answer.startsWith("error:")) throw new Error(answer.slice("error:".length));
+      return { content: [{ type: "text", text: answer.replace(/^ok:/, "") }], details: {} };
+    },
+  });
+
+  // What missions have done: an index to search, then one note in full.
+  pi.registerTool({
+    name: "team_notes",
+    label: "Read mission notes",
+    description:
+      "See what missions have done: the newest notes as a short index, or those matching a search, or one mission's. Open a note in full by its id. Private missions you're not part of aren't shown.",
+    promptSnippet: "Read or search what missions have done",
+    parameters: Type.Object({
+      query: Type.Optional(Type.String({ description: "Words to search for" })),
+      mission: Type.Optional(Type.Number({ description: "Only this mission's notes" })),
+      id: Type.Optional(Type.Number({ description: "Open this note in full" })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const ui = dialogs(ctx as unknown as { mode: string; ui: Dialogs }) ?? ctx.ui;
+      const answer = String((await ui.input(NOTES_TITLE, JSON.stringify(params))) ?? "error:the server didn't answer");
       if (answer.startsWith("error:")) throw new Error(answer.slice("error:".length));
       return { content: [{ type: "text", text: answer.replace(/^ok:/, "") }], details: {} };
     },

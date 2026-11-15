@@ -1,0 +1,86 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select n.id, n.mission_id, m.title, n.bot, n.text,\n                to_char(n.created_at, 'DD Mon HH24:MI') as at\n         from note n join mission m on m.id = n.mission_id\n         where (not m.private or $1 = 'orchestrator' or $1 = 'chief--' || m.id or $1 = any(m.team))\n           and ($2::text is null or n.search @@ websearch_to_tsquery('english', $2))\n           and ($3::bigint is null or n.mission_id = $3)\n         order by n.id desc limit $4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "note",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "mission_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "note",
+            "name": "mission_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "mission",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "bot",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "note",
+            "name": "bot"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "text",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "note",
+            "name": "text"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "at",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "569e930106994c71f7b40fbb670b4f24456686b89fde5da28a0e72b49b2c720f"
+}

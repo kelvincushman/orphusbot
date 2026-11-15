@@ -814,6 +814,14 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
         let answer = team::accept(app, &active.thread.bot, &accept).await;
         return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
     }
+    if method == "input" && title == missions::NOTES_TITLE {
+        let ask: Value = request["placeholder"]
+            .as_str()
+            .and_then(|p| serde_json::from_str(p).ok())
+            .unwrap_or_default();
+        let answer = missions::notes(app, &active.thread.bot, &ask).await;
+        return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
+    }
     if method == "input" && (title == missions::START_TITLE || title == missions::UPDATE_TITLE) {
         let mission: Value = request["placeholder"]
             .as_str()
@@ -1620,6 +1628,9 @@ async fn run_ended(
     // Boxed: starting the next ticket can lead back here when its run ends.
     Box::pin(device::start_waiting(app, &thread.bot)).await;
     team::answered(app, run, outcome, error.as_deref()).await;
+    if outcome == RunOutcome::Completed {
+        missions::ended(app, run).await;
+    }
     let news = match outcome {
         RunOutcome::Completed => device::RunNews::Done,
         RunOutcome::Failed => device::RunNews::Failed,

@@ -513,7 +513,9 @@ pub fn roster_note(
             "\n\nYou: {}. If a job needs something you can't do (say, changing something in Google), hand it to the \
              teammate who can with the ask_bot tool; their answer comes back to you as a message, and you hear if they get stuck. \
              Before you say anything is pending, look with the team_status tool. Files you both \
-             need can go in /shared.\n\nYour teammates and what each can do:\n{}",
+             need can go in /shared. team_notes shows what missions have done, and can search them: \
+             something there may be worth a post or a reply, but anything you'd publish still goes to \
+             Kelvin first.\n\nYour teammates and what each can do:\n{}",
             mine.unwrap_or_default(),
             mates.join("\n")
         ) + if me == ORCHESTRATOR {

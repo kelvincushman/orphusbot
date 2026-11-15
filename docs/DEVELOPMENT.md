@@ -126,7 +126,7 @@ flutter build linux --release      # build/linux/x64/release/bundle/orphusbot-ap
 flutter build apk --release        # build/app/outputs/flutter-apk/app-release.apk (needs the Android SDK and JDK 17+)
 ```
 
-The bot faces come from `design/bot-avatar` and are built with the [Rive CLI](https://rive.app/docs/cli/overview) (no account needed); its README has the commands, which put one `.riv` per style in `apps/orphusbot_app/assets/faces/` and animated WebPs for the bar panel in `omarchy/kelvincushman.orphusbot/faces/`.
+The bot faces come from `design/bot-avatar` and are built with the [Rive CLI](https://rive.app/docs/cli/overview) (no account needed to check or screenshot; writing the `.riv` files needs `rive login`); its README has the commands, which put one `.riv` per style in `apps/orphusbot_app/assets/faces/` and animated WebPs for the bar panel in `omarchy/kelvincushman.orphusbot/faces/`.
 
 On Omarchy, copy the bundle to `~/.local/share/orphusbot-app`, link `orphusbot-app` into `~/.local/bin`, and the bar panel's **Open chat** starts it.
 

@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Builds every style to build/faces/<style>.riv (artboards Avatar and Robot): ./build.sh
 # Each style is generated into its own temp project, verified, inspected for
-# problems, then built; a file over 25 KB is reported. Writing the .riv needs
-# `rive login` (CLI 1.9 on); the files have no scripts, so nothing is uploaded.
+# problems, then built; a file over 25 KB is reported.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 rive=${RIVE:-$HOME/.rive/bin/rive}
@@ -14,7 +13,7 @@ for style in $styles; do
   python3 "$here/gen.py" "$style" 0 >"$work/$style/scene.rml"
   (cd "$work/$style" && "$rive" . --verify --quiet &&
     { report=$("$rive" inspect . --summary); grep -q '"problems": \[\]' <<<"$report" || { echo "$style: rive inspect reports problems" >&2; exit 1; }; } &&
-    "$rive" . --publish --quiet)
+    "$rive" . --once --quiet)
   size=$(stat -c%s "$work/$style/build/bot-avatar.riv")
   [ "$size" -le 25600 ] || echo "warning: $style.riv is $size bytes, over 25 KB" >&2
   cp "$work/$style/build/bot-avatar.riv" "$here/build/faces/$style.riv"

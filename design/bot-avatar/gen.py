@@ -7,7 +7,7 @@ only to screenshot a state. `python3 gen.py 0` still means the default style, st
 
 `python3 gen.py <style> 2 <doing>` starts with a `doing` value too, and a fourth
 argument `poke`, `give` or `receive` starts with that reaction playing; both are
-for screenshots only (doing.sh).
+for screenshots only (bodies.sh).
 
 Two artboards, each with a state machine `Bot` holding a Number input `state`,
 a Trigger input `poke` (also fired by tapping the bot), a Number input `doing`

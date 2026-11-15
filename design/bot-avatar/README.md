@@ -1,6 +1,6 @@
 # Bot face and body
 
-The animated face each bot has in the OrphusBot app and the Omarchy bar panel, and its full-body robot, made with the [Rive CLI](https://rive.app/docs/cli/overview). Checking and screenshots need no account; from CLI 1.9 writing the `.riv` files needs `rive login` once.
+The animated face each bot has in the OrphusBot app and the Omarchy bar panel, and its full-body robot, made with the [Rive CLI](https://rive.app/docs/cli/overview) (no account needed).
 
 ![idle, thinking, working, needs you, done](states.png)
 
@@ -109,11 +109,11 @@ Edit `gen.py`, then:
 ```sh
 python3 gen.py default 0 > scene.rml    # scene.rml is the default style; `gen.py 0` means the same
 rive . --verify && rive . --screenshot --advance=1   # build/bot-avatar.png
-./build.sh                  # build/faces/<style>.riv for every style: verified, inspected, under 25 KB (needs `rive login`)
+./build.sh                  # build/faces/<style>.riv for every style: verified, inspected, under 25 KB
 ./frames.sh build/webp      # build/webp/<style>-<state>.webp, for places that can't play Rive
 ./sheet.sh build/webp       # styles.png and styles-library.png
-./bodies.sh                 # bodies.png and bodies-states.png (the Robot artboard)
-./doing.sh                  # doing.png and doing-faces.png: every style with each `doing` prop, giving and receiving
+./bodies.sh                 # bodies.png and bodies-states.png (the Robot artboard), then doing.png and
+                            # doing-faces.png: every style with each `doing` prop, giving and receiving
 cp build/faces/*.riv ../../apps/orphusbot_app/assets/faces/
 cp build/webp/*.webp ../../omarchy/kelvincushman.orphusbot/faces/
 ```
@@ -121,3 +121,5 @@ cp build/webp/*.webp ../../omarchy/kelvincushman.orphusbot/faces/
 To look at the robot: `rive . --artboard=Robot --screenshot --advance=30`. A tap is `--pointer=click@100,150`. To look at a prop or a hand-off: `python3 gen.py default 2 3 > scene.rml` starts working with `doing` 3, and `python3 gen.py default 0 0 give` starts with `give` playing (for screenshots only; real files are built with `0`).
 
 Don't use `rive push`: it uploads to a Rive account.
+
+`build.sh` needs a Rive CLI that still has `--once` (1.6 did). CLI 1.9 removed it and writes a `.riv` only with `--publish`, which needs a Rive account; D-034 chose the CLI because it needed none, so that step waits for a decision. Checking (`--verify`, `rive inspect`) and screenshots work without an account.

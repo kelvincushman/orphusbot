@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update mission set team = array_append(team, $2), updated_at = now()\n             where id = $1 and not ($2 = any(team))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2cf4ac1ce99861a7ade5e8c1cfc2fb392ab9e7401eb7713ee10948dc25556a4f"
+}

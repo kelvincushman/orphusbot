@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select t.id from ticket t\n         where t.asked_by is not null and t.status = 'todo'\n           and t.created_at > now() - interval '1 day'\n           and not exists (select 1 from run r where r.ticket_id = t.id)\n         order by t.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ticket",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "edab87f5a3b15daee7de5c73b59e193db11349a45748404be650920ee4ca65e8"
+}

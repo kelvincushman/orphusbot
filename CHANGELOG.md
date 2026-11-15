@@ -8,6 +8,14 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- **Missions:** the Orchestrator can give a big new piece of work its own Chief of Staff, which appears in the bot list with a clean context and hands parts to teammates. Teammates work on it in a separate session. The team can see what a mission is up to unless it's marked private, and only you can make a private mission visible again.
+- **New conversation:** the menu in a bot's chat starts a fresh session, carrying over the last 8 messages. The old session is kept.
+- **Talk to the Orchestrator in its chat:** the mic button opens the Ideas Room's live voice right there, and it knows what the team is doing. Its chat's recent messages go to xAI while you talk.
+- **The Orchestrator can accept safe cards:** a teammate's read-only tool calls and file changes in its computer, marked "Allowed by the Orchestrator". Send, pay, delete, merge and publish still come to you.
+- **Bots check on each other:** if a teammate is stuck waiting on a card for two minutes, the bot that asked and the Orchestrator hear about it, once per card. A job handed to a busy bot now starts when that bot is free, and bots can look at the team with `team_status`. In the bar, a bot waiting on teammates shows its thinking face.
+- **Safer phone use:** bots no longer touch security or sign-in prompts on your phone (such as Google's "Are you trying to sign in?"). They leave them and tell you. A phone action that waited a long time for your approval is checked against the screen first, and if the phone has moved on, the bot looks again instead of tapping blind.
+- The app now picks up new or changed bots when you come back to it, instead of only after a restart.
+- **"Always allow" on a phone approval now sticks.** It allows that exact phone action from then on, such as a routine tapping LinkedIn's notifications tab, so the bot can do it again on its own. A different tap, such as Post, still asks you once.
 - **Reverse-engineering bots:** a bot's computer can now be **Reverse engineering (REA and Ghidra)**, picked under the bot's desktop in Settings. The bot decompiles and studies binaries with REA and Ghidra inside its own computer, never on the box itself, and loads only the tools and results each step needs, so a small local model's context isn't flooded. Its REA steps need your approval only if bash does, so it can work through a job on its own. REABOT is the first, on the box's local Qwen. Operators: build `images/rea` (after `images/desktop`); the new setting `ORPHUSBOT_REA_IMAGE` picks the image.
 
 - When a bot working on a task from your wearable needs something from you, the wearable buzzes amber: tap, say your answer, and the bot carries on. Bots now have an `ask_owner` tool for this, and a reply that ends with a question also counts.

@@ -24,12 +24,19 @@ const READ_ONLY: &[&str] = &[
     "glob",
     "request_takeover",
     "ask_owner",
+    // Set a Chief of Staff going, or note its progress; the work is gated itself.
+    "start_mission",
+    "update_mission",
     // Only gives the owner a copy of a file (an artifact).
     "share_file",
     // Hands a teammate a ticket, or starts a discussion; everything the
     // teammates do is gated itself.
     "ask_bot",
     "discuss",
+    // Reads what the team's hand-offs are doing.
+    "team_status",
+    // Only answers a card the gate already marked safe (`safe_to_accept`).
+    "accept_card",
     // A fleet's blueprints, read only; and its rooms, where the bot's own
     // helpers talk to each other (DESIGN §11.2).
     "fleet",
@@ -66,6 +73,31 @@ pub struct Call<'a> {
 /// Bash isn't, since a command can reach the network and act outside it.
 fn reversible(call: &Call<'_>) -> bool {
     call.in_computer && matches!(call.tool, "write" | "edit")
+}
+
+/// Words in an MCP tool's name that say it only looks, and words that say it
+/// changes something. A name with neither stays with the owner (D-062).
+const LOOKS: &[&str] = &["get", "list", "search", "read", "find", "fetch", "view"];
+const CHANGES: &[&str] = &[
+    "add", "approve", "assign", "cancel", "close", "create", "delete", "dispatch", "edit", "fork",
+    "merge", "pay", "post", "publish", "push", "remove", "replace", "request", "run", "send",
+    "set", "update", "write",
+];
+
+/// May the Orchestrator accept this card for a teammate (D-062)? Only a call
+/// that's reversible by construction or only looks; never one an interrupted
+/// attempt may already have run. Everything else stays the owner's (rule 5).
+pub fn safe_to_accept(tool: &str, in_computer: bool, uncertain: bool) -> bool {
+    if uncertain {
+        return false;
+    }
+    if let Some(name) = tool.strip_prefix("mcp:") {
+        let lower = name.to_lowercase();
+        let words: Vec<&str> = lower.split(|c: char| !c.is_ascii_alphanumeric()).collect();
+        return words.iter().any(|w| LOOKS.contains(w))
+            && !words.iter().any(|w| CHANGES.contains(w));
+    }
+    in_computer && matches!(tool, "write" | "edit")
 }
 
 /// What System 1 sees: the task, the bot's remit and the call.
@@ -211,8 +243,9 @@ pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Re
     }
 
     // Installing a skill changes what every bot is told, so the owner sees and
-    // approves each one; no "always" rule waves it through (D-051).
-    let always_ask = phone_commit || call.tool == "install_skill";
+    // approves each one; no "always" rule waves it through (D-051). A phone tap that
+    // could commit skips the per-tool rule too (D-045), but passes if the owner said
+    // "always" to this exact action before (D-059).
     // REA's tools on a reverse-engineering bot run inside its own computer (D-058),
     // as its bash does, so they follow the owner's rule for bash instead of each of
     // REA's 229 tools needing its own "always".
@@ -222,8 +255,16 @@ pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Re
         } else {
             call.tool
         };
-    let rule = if always_ask {
+    let rule = if call.tool == "install_skill" {
         None
+    } else if phone_commit {
+        sqlx::query_scalar!(
+            r#"select 'allow' as "effect!" from action_rule where tool = $1 and input = $2"#,
+            call.tool,
+            Json(call.input) as _
+        )
+        .fetch_optional(db)
+        .await?
     } else {
         sqlx::query_scalar!(
             r#"select effect::text as "effect!" from approval_rule where tool = $1"#,
@@ -295,7 +336,28 @@ async fn record(
     Ok(())
 }
 
-/// The owner's answer to an approval card. `always` also adds an allow rule.
+/// The Orchestrator accepted a safe card. False if it's already decided. It
+/// isn't the owner's decision, so it adds no rule and trains nothing.
+pub async fn orchestrator_accepts(
+    db: &PgPool,
+    attempt: Attempt,
+    tool_call_id: &str,
+) -> sqlx::Result<bool> {
+    let done = sqlx::query!(
+        "update effect set state = 'approved', decided_by = 'orchestrator', updated_at = now()
+         where run_id = $1 and fence = $2 and tool_call_id = $3 and state = 'pending'",
+        attempt.run,
+        attempt.fence,
+        tool_call_id
+    )
+    .execute(db)
+    .await?;
+    Ok(done.rows_affected() == 1)
+}
+
+/// The owner's answer to an approval card. `always` also adds an allow rule: for
+/// the phone, for this exact action only (D-059), since its cards are the taps
+/// that could commit and a rule for the whole tool would allow every one of them.
 pub async fn owner_decides(
     db: &PgPool,
     attempt: Attempt,
@@ -304,10 +366,10 @@ pub async fn owner_decides(
     always: bool,
 ) -> sqlx::Result<()> {
     let mut tx = db.begin().await?;
-    let tool = sqlx::query_scalar!(
-        "update effect set state = $4::text::effect_state, decided_by = 'owner', updated_at = now()
-         where run_id = $1 and fence = $2 and tool_call_id = $3 and state = 'pending'
-         returning tool",
+    let decided = sqlx::query!(
+        r#"update effect set state = $4::text::effect_state, decided_by = 'owner', updated_at = now()
+           where run_id = $1 and fence = $2 and tool_call_id = $3 and state = 'pending'
+           returning tool, input as "input: Json<Value>""#,
         attempt.run,
         attempt.fence,
         tool_call_id,
@@ -315,14 +377,26 @@ pub async fn owner_decides(
     )
     .fetch_optional(&mut *tx)
     .await?;
-    if let (Some(tool), true) = (tool, allow && always) {
-        sqlx::query!(
-            "insert into approval_rule (tool, effect) values ($1, 'allow')
-             on conflict (tool) do update set effect = 'allow'",
-            tool
-        )
-        .execute(&mut *tx)
-        .await?;
+    match decided {
+        Some(d) if allow && always && d.tool == "phone" => {
+            sqlx::query!(
+                "insert into action_rule (tool, input) values ($1, $2) on conflict do nothing",
+                d.tool,
+                d.input as _
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+        Some(d) if allow && always => {
+            sqlx::query!(
+                "insert into approval_rule (tool, effect) values ($1, 'allow')
+                 on conflict (tool) do update set effect = 'allow'",
+                d.tool
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+        _ => {}
     }
     tx.commit().await
 }
@@ -396,6 +470,40 @@ mod tests {
 
     async fn decide(db: &PgPool, call: &Call<'_>) -> sqlx::Result<Verdict> {
         super::decide(db, &System1::off(), call).await
+    }
+
+    #[test]
+    fn the_orchestrator_may_accept_only_what_looks_or_is_reversible() {
+        for tool in [
+            "mcp:github_search_code",
+            "mcp:github_get_file_contents",
+            "mcp:github_issue_read",
+        ] {
+            assert!(safe_to_accept(tool, false, false), "{tool}");
+        }
+        for tool in [
+            "mcp:github_merge_pull_request",
+            "mcp:github_create_or_update_file",
+            "mcp:github_issue_write",
+            "mcp:github_get_and_delete",
+            "mcp:pa_mail_send",
+            "mcp:createIssue",
+            "mcp:github_something",
+            "bash",
+            "phone",
+            "google",
+        ] {
+            assert!(!safe_to_accept(tool, true, false), "{tool}");
+        }
+        assert!(safe_to_accept("write", true, false));
+        assert!(
+            !safe_to_accept("write", false, false),
+            "host files aren't reversible"
+        );
+        assert!(
+            !safe_to_accept("mcp:github_search_code", false, true),
+            "it may have run already"
+        );
     }
 
     #[sqlx::test]
@@ -701,6 +809,17 @@ mod tests {
         );
         assert_eq!(
             decide(&db, &call(a, "p5", "phone", &post)).await.unwrap(),
+            Verdict::Ask { uncertain: false }
+        );
+        // "Always" on that card allows the same action again, and only that (D-059).
+        owner_decides(&db, a, "p5", true, true).await.unwrap();
+        assert_eq!(
+            decide(&db, &call(a, "p6", "phone", &post)).await.unwrap(),
+            Verdict::Allow
+        );
+        let tab = json!({"action": "tap", "id": "com.example:id/tab_notifications"});
+        assert_eq!(
+            decide(&db, &call(a, "p7", "phone", &tab)).await.unwrap(),
             Verdict::Ask { uncertain: false }
         );
     }

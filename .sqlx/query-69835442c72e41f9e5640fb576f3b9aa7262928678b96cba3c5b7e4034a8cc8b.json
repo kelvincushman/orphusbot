@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into effect (run_id, fence, tool_call_id, tool, input, state)\n             values ($1, 0, 'call', 'mcp:github_search_code', '{}', 'pending')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "69835442c72e41f9e5640fb576f3b9aa7262928678b96cba3c5b7e4034a8cc8b"
+}

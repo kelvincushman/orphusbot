@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update mission set latest = coalesce($2, latest), private = private or $3,\n                status = coalesce($4, status), updated_at = now()\n         where id = $1 and status = 'open' returning title, latest",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "mission",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "latest",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "mission",
+            "name": "latest"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "250ab3e88542985cdda5fb059fc589fbe2d4e14c37120e551a83bb4e31a287b5"
+}

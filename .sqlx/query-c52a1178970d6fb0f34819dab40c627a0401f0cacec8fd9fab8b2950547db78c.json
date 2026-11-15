@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update bot set disabled = true where slug = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c52a1178970d6fb0f34819dab40c627a0401f0cacec8fd9fab8b2950547db78c"
+}

@@ -1,0 +1,86 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select id, title, status, private, latest, team from mission\n         where status = 'open' or updated_at > now() - interval '3 days' order by id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "mission",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "mission",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "mission",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "private",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "mission",
+            "name": "private"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "latest",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "mission",
+            "name": "latest"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "team",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "mission",
+            "name": "team"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "76f024db98d1aef7df30757785fdaa7eae8ad9c90b60f68d991017830d5f8e9f"
+}

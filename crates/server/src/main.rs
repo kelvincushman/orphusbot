@@ -22,6 +22,7 @@ mod gate;
 mod google;
 mod links;
 mod memory;
+mod missions;
 mod nodes;
 mod notify;
 mod oauth;
@@ -132,6 +133,8 @@ struct Pending {
     tool_call_id: Option<String>,
     /// A takeover request: its yes and no read "Done" and "Couldn't help".
     takeover: bool,
+    /// The Orchestrator may accept this card (`gate::safe_to_accept`).
+    safe: bool,
 }
 
 /// In-memory view of the link. Postgres stays the source of truth for runs;
@@ -283,6 +286,10 @@ fn router(app: Shared) -> Router {
         .route("/api/passkeys/remove", post(auth::remove_passkey))
         .route("/api/logout", post(auth::logout))
         .route("/api/bots", get(bots::list).post(bots::create))
+        .route("/api/team/open", get(team::open_list))
+        .route("/api/missions", get(missions::list))
+        .route("/api/missions/update", post(missions::set))
+        .route("/api/bots/new-conversation", post(bots::new_conversation))
         .route("/api/models", get(models))
         .route("/api/bots/update", post(bots::update))
         .route("/api/decisions", get(system1::list))
@@ -334,6 +341,7 @@ fn router(app: Shared) -> Router {
         .route("/api/decisions/rollback", post(calibrate::rollback))
         .route("/api/usage", get(usage::summary))
         .route("/api/room/voice", post(room::voice))
+        .route("/api/room/voice/chat", post(room::voice_chat))
         .route("/api/room/sessions/end", post(room::end))
         .route("/api/room/sessions/rate", post(room::rate))
         .route("/api/room/ideas", post(room::idea))
@@ -440,9 +448,13 @@ struct NewMessage {
     /// Uploaded first with `POST /api/attachments`.
     #[serde(default)]
     attachments: Vec<i64>,
-    /// Said in the Ideas Room: the bot is told it's a spoken conversation.
+    /// Said in the Ideas Room: the bot is told it's a spoken conversation, and
+    /// it runs in the room's own session.
     #[serde(default)]
     room: bool,
+    /// Said by voice in the bot's own chat: spoken too, but in the chat's session.
+    #[serde(default)]
+    voice: bool,
 }
 
 fn inbox() -> String {
@@ -512,6 +524,8 @@ async fn send_message(
     let mut run_text = format!("{text}{}", tickets::referenced(&app.db, &text).await);
     if msg.room {
         run_text.push_str(room::ROOM_NOTE);
+    } else if msg.voice {
+        run_text.push_str(room::VOICE_NOTE);
     }
     if !files.is_empty() {
         let list: Vec<String> = files
@@ -799,6 +813,31 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
         let answer = team::ask(app, attempt.run, &active.thread.bot, &ask).await;
         return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
     }
+    if method == "input" && title == team::STATUS_TITLE {
+        let answer = format!("ok:{}", team::status(app, Some(&active.thread.bot)).await);
+        return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
+    }
+    if method == "input" && title == team::ACCEPT_TITLE {
+        let accept: Value = request["placeholder"]
+            .as_str()
+            .and_then(|p| serde_json::from_str(p).ok())
+            .unwrap_or_default();
+        let answer = team::accept(app, &active.thread.bot, &accept).await;
+        return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
+    }
+    if method == "input" && (title == missions::START_TITLE || title == missions::UPDATE_TITLE) {
+        let mission: Value = request["placeholder"]
+            .as_str()
+            .and_then(|p| serde_json::from_str(p).ok())
+            .unwrap_or_default();
+        let answer = if title == missions::START_TITLE {
+            missions::start(app, &active.thread.bot, &mission).await
+        } else {
+            missions::update(app, &active.thread.bot, &mission).await
+        };
+        return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
+    }
+    let mut in_computer = false;
     let (kind, tool_call_id) = if method == "input" && title == GATE_TITLE {
         let call: Value = request["placeholder"]
             .as_str()
@@ -820,7 +859,10 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
             tool_call_id: call_id,
             tool: &tool,
             input: &input,
-            in_computer: call["inComputer"].as_bool().unwrap_or(false),
+            in_computer: {
+                in_computer = call["inComputer"].as_bool().unwrap_or(false);
+                in_computer
+            },
             helpers_gated: call["helpersGated"].as_bool().unwrap_or(false),
         };
         let verdict = gate::decide(&app.db, &app.system1, &gate_call)
@@ -879,11 +921,14 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
         (kind, None)
     };
 
+    let safe = matches!(&kind, DialogKind::Approval { tool, uncertain, .. }
+        if gate::safe_to_accept(tool, in_computer, *uncertain));
     let pending = Pending {
         attempt,
         thread: active.thread.clone(),
         takeover: matches!(kind, DialogKind::Takeover { .. }),
         tool_call_id,
+        safe,
     };
     lock(&app.rt).dialogs.insert(id.clone(), pending);
     let news = device::RunNews::Dialog {
@@ -1048,13 +1093,18 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
         Err(e) => return warn!("finding the run's thread: {e}"),
     };
     let mut spec = bot.spec();
-    if claimed.prompt.contains(room::ROOM_NOTE) {
+    if claimed.prompt.contains(room::ROOM_NOTE) || claimed.prompt.contains(room::VOICE_NOTE) {
         room::quick(&mut spec);
+    }
+    if let Some(session) = room::ideas_session(&claimed.prompt, &bot.slug) {
+        spec.session = Some(session);
     }
     if let Some((session, name)) = discussions::session(&app.db, run, &bot.slug).await {
         spec.session = Some(session);
         spec.name = Some(name);
     } else if let Some(session) = fleets::session(&claimed.prompt, &bot.slug, run) {
+        spec.session = Some(session);
+    } else if let Some(session) = missions::session(&app.db, run, &bot.slug).await {
         spec.session = Some(session);
     }
     if bot.computer == "e2b" {
@@ -1157,6 +1207,8 @@ async fn reconcile_forever(app: Shared) {
             Ok(_) => {}
             Err(e) => warn!("sweeping leases: {e}"),
         }
+        team::check(&app).await;
+        missions::retire(&app).await;
     }
 }
 

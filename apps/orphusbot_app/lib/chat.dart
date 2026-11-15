@@ -48,10 +48,16 @@ class _ChatScreenState extends State<ChatScreen> {
   static const maxBytes = 10 * 1024 * 1024;
   final scroll = ScrollController();
   final focus = FocusNode();
+  // Bots made or changed elsewhere (another device, the CLI, a bot) show up when
+  // the app comes back to the front, not only after a restart.
+  late final AppLifecycleListener life = AppLifecycleListener(
+    onResume: () => _act(_loadBots),
+  );
 
   @override
   void initState() {
     super.initState();
+    life;
     _start();
     startPush(widget.api, (bot) {
       if (mounted) {
@@ -71,6 +77,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // Tokens per bot today and this week (`/api/usage`), shown in the header.
   Map<String, dynamic> usage = {};
+  // A live voice conversation is open in the Orchestrator's chat (D-063).
+  bool voice = false;
 
   Future<void> _loadUsage() async {
     try {
@@ -106,6 +114,46 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  /// How many hand-offs each bot is waiting on, for its face.
+  Future<void> _loadTeam() async {
+    try {
+      final got =
+          await widget.api.get('/api/team/open') as Map<String, dynamic>;
+      final counts = <String, int>{};
+      for (final o
+          in (got['open'] as List<dynamic>).cast<Map<String, dynamic>>()) {
+        final asker = o['asked_by'] as String;
+        counts[asker] = (counts[asker] ?? 0) + 1;
+      }
+      if (!mounted) return;
+      setState(() {
+        for (final slug in {...threads.keys, ...counts.keys}) {
+          threads.putIfAbsent(slug, t.ThreadView.new).waitingOn =
+              counts[slug] ?? 0;
+        }
+      });
+    } catch (_) {
+      // Faces only; an older server just doesn't have this.
+    }
+  }
+
+  /// The mission this bot is the Chief of Staff of, if it is one.
+  int? get _mission => chosen.startsWith('chief--')
+      ? int.tryParse(chosen.substring('chief--'.length))
+      : null;
+
+  Future<void> _more(String what) => _act(() async {
+    if (what == 'new') {
+      await widget.api.post('/api/bots/new-conversation', {'bot': chosen});
+      return;
+    }
+    await widget.api.post('/api/missions/update', {
+      'id': _mission,
+      if (what == 'done') 'status': 'done' else 'private': what == 'private',
+    });
+    if (what == 'done') await _loadBots();
+  });
+
   Future<void> _settings() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -120,6 +168,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       await _loadBots();
       _loadUsage();
+      _loadTeam();
     } on SignedOut {
       return widget.onSignedOut();
     } catch (e) {
@@ -132,6 +181,11 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() => threads.putIfAbsent(bot, t.ThreadView.new).apply(e));
         if (bot == chosen) _toBottom();
         if (e['type'] == 'run_ended') _loadUsage();
+        if (e['type'] == 'run_ended' || e['type'] == 'run_queued') _loadTeam();
+        // A mission's new Chief of Staff, which this list hasn't heard of yet.
+        if (e['type'] == 'run_queued' && !bots.any((b) => b['slug'] == bot)) {
+          _act(_loadBots);
+        }
       },
       onError: (Object e) => e is SignedOut
           ? widget.onSignedOut()
@@ -141,6 +195,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    life.dispose();
     sub?.cancel();
     composer.dispose();
     search.dispose();
@@ -639,6 +694,28 @@ class _ChatScreenState extends State<ChatScreen> {
                 _changeModel,
                 scheme,
               ),
+              PopupMenuButton<String>(
+                tooltip: 'More',
+                icon: const Icon(Icons.more_vert),
+                onSelected: _more,
+                itemBuilder: (_) => [
+                  const PopupMenuItem(
+                    value: 'new',
+                    child: Text('New conversation'),
+                  ),
+                  if (_mission != null) ...const [
+                    PopupMenuItem(
+                      value: 'private',
+                      child: Text('Mark private'),
+                    ),
+                    PopupMenuItem(
+                      value: 'visible',
+                      child: Text('Make visible'),
+                    ),
+                    PopupMenuItem(value: 'done', child: Text('Close mission')),
+                  ],
+                ],
+              ),
             ],
           ),
         ),
@@ -674,6 +751,12 @@ class _ChatScreenState extends State<ChatScreen> {
                   ],
                 ),
         ),
+        if (voice && chosen == 'orchestrator')
+          IdeasRoom(
+            api: widget.api,
+            bot: chosen,
+            onClose: () => setState(() => voice = false),
+          ),
         _composer(name, scheme, v),
       ],
     );
@@ -1126,6 +1209,12 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
                 ),
+                if (chosen == 'orchestrator' && !voice)
+                  IconButton(
+                    tooltip: 'Talk',
+                    onPressed: () => setState(() => voice = true),
+                    icon: const Icon(Icons.mic_none),
+                  ),
                 if (working && !hasText)
                   FilledButton.icon(
                     onPressed: () => _act(() => widget.api.stop(chosen)),

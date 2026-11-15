@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update event set created_at = now() - interval '3 minutes' where thread_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d784f115e631e4d1774a09e9696dde56c8028cfe3837ff4c95a0ddb7f2ed752c"
+}

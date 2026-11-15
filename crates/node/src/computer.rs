@@ -42,6 +42,15 @@ pub struct Spec<'a> {
     pub memory: &'a str,
 }
 
+/// Stops a bot's computer, if it's running. Its home volume stays.
+pub async fn stop(runtime: &str, bot: &str) {
+    let name = format!("orphusbot-{bot}");
+    let _ = Command::new(runtime)
+        .args(["stop", "--time", "0", &name])
+        .output()
+        .await;
+}
+
 impl Spec<'_> {
     pub fn container(&self) -> String {
         format!("orphusbot-{}", self.bot)

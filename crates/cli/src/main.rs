@@ -257,7 +257,25 @@ impl Session {
                 None => break,
             }
         }
-        Ok(status(&bots, &views))
+        Ok(status(&bots, &views, &self.waiting_on().await))
+    }
+
+    /// How many unfinished hand-offs each bot is waiting on. Empty on a server
+    /// without them, so the bar still works.
+    async fn waiting_on(&self) -> BTreeMap<String, usize> {
+        let mut counts = BTreeMap::new();
+        let Ok(res) = self.get("/api/team/open").send().await else {
+            return counts;
+        };
+        let Ok(body) = res.json::<Value>().await else {
+            return counts;
+        };
+        for item in body["open"].as_array().into_iter().flatten() {
+            if let Some(asker) = item["asked_by"].as_str() {
+                *counts.entry(asker.to_owned()).or_default() += 1;
+            }
+        }
+        counts
     }
 
     /// One JSON status line per change; `--notify` also tells the desktop when
@@ -266,6 +284,7 @@ impl Session {
         let bots = self.bots().await?;
         let mut views: BTreeMap<String, ThreadView> = BTreeMap::new();
         let (mut last, mut caught_up) = (String::new(), false);
+        let mut waiting_on = self.waiting_on().await;
         let mut told: HashSet<String> = HashSet::new();
         let events = self.events(Duration::from_millis(500)).await?;
         futures_util::pin_mut!(events);
@@ -310,11 +329,18 @@ impl Session {
                             _ => {}
                         }
                     }
+                    let team_changed = matches!(
+                        event,
+                        ThreadEvent::RunQueued { .. } | ThreadEvent::RunEnded { .. }
+                    );
                     views.entry(bot).or_default().apply(event);
+                    if caught_up && team_changed {
+                        waiting_on = self.waiting_on().await;
+                    }
                 }
             }
             if caught_up {
-                let now = status(&bots, &views).to_string();
+                let now = status(&bots, &views, &waiting_on).to_string();
                 if now != last {
                     println!("{now}");
                     last = now;
@@ -348,7 +374,11 @@ fn card_text(kind: &DialogKind) -> String {
 }
 
 /// The bar's view: each bot's state, and every card waiting for the owner.
-fn status(bots: &[(String, String, String)], views: &BTreeMap<String, ThreadView>) -> Value {
+fn status(
+    bots: &[(String, String, String)],
+    views: &BTreeMap<String, ThreadView>,
+    waiting_on: &BTreeMap<String, usize>,
+) -> Value {
     let empty = ThreadView::default();
     let mut waiting = Vec::new();
     let list: Vec<Value> = bots
@@ -366,7 +396,7 @@ fn status(bots: &[(String, String, String)], views: &BTreeMap<String, ThreadView
                 RunState::Queued => "queued",
                 RunState::Running { .. } => "running",
             };
-            json!({ "slug": slug, "name": name, "face": face, "state": state, "waiting": view.waiting(), "reply": last_reply(view), "asked": last_said(view, Role::User) })
+            json!({ "slug": slug, "name": name, "face": face, "state": state, "waiting": view.waiting(), "waiting_on": waiting_on.get(slug).copied().unwrap_or(0), "reply": last_reply(view), "asked": last_said(view, Role::User) })
         })
         .collect();
     let running = list.iter().filter(|b| b["state"] == "running").count();
@@ -481,7 +511,7 @@ mod tests {
             text: "Hi!".into(),
         });
         let views = BTreeMap::from([("coder".to_owned(), coder)]);
-        let s = status(&bots, &views);
+        let s = status(&bots, &views, &BTreeMap::from([("coder".to_owned(), 2)]));
         assert_eq!(
             (s["running"].as_u64(), s["needs_you"].as_u64()),
             (Some(1), Some(1))

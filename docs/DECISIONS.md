@@ -11,6 +11,55 @@ Format:
 
 ---
 
+## D-064: A new piece of work gets a mission with its own Chief of Staff (2026-11-07)
+
+**Decided:** A `mission` record, with a Chief of Staff per mission as a bot row (`chief--<id>`) with its own thread and engine. The Orchestrator starts one with `start_mission`. A chief's hand-offs are tickets tagged with the mission, so teammates run them in `<slug>-mission-<id>`, away from their everyday session, and queue as usual. Only the chief hands work on. Missions are visible to the team unless marked private; a bot can make one private, and only Kelvin can reveal it. Each bot also gets New conversation (`bot.session_gen`), which moves it to a fresh session and hands it the last 8 messages.
+**Why:** Each bot has one thread with one active run, and new messages merge into it, so several missions on one shared chief bot could mix. A bot row reuses threads, engines, hand-offs, the checker and the app's bot list as they are, and chiefs run side by side. Keeping hand-offs to the chief means every answer returns to a thread that belongs to the mission.
+**Alternatives:** one chief bot with a session per mission (mixes messages unless runs and threads are reworked); several threads per bot (`thread.bot_id` is unique, and the app folds events by bot); a full bot per mission with Google and connections (more than a coordinator needs).
+**Revisit if:** the cost of a computer per open mission matters, or specialists queuing behind each other is too slow. Pi's RPC `switch_session` could replace the engine restart between sessions.
+
+## D-063: The Orchestrator's chat gets the Ideas Room's voice, as a panel (2026-11-06)
+
+**Decided:** A mic button in the Orchestrator's chat opens the room's live Grok voice as a panel inside the chat, reusing `IdeasRoom`, with instructions for getting work moving rather than brainstorming. Grok is told the team's state and the last eight messages; the transcript goes back to the Orchestrator when the talk ends.
+
+The Ideas Room moves to its own engine session (`orchestrator-ideas`), so the chat's conversation can't reach it.
+
+**Why:** Kelvin wants to talk to the Orchestrator where the work is, not in a separate room, and that talk must not leak into the room's memory. All the Orchestrator's runs shared one session before, room turns included. The room gives up the chat's context, keeping its own recall, the wiki and the team. Reusing the room keeps one voice path (D-053). **Alternatives:** a second copy of the room (two things to keep right); Grok acting directly (it stays a voice, the Orchestrator acts). **Revisit if:** sending chat text to xAI matters more than the context it gives Grok.
+
+---
+
+## D-062: The Orchestrator may accept a teammate's safe card, and nothing else (2026-11-06)
+
+**Decided:** The server marks a card safe when it opens: a tool that only looks, by its name, or a file change inside the bot's computer. The Orchestrator can accept those once with `accept_card`. Everything else, including any name it can't classify, stays Kelvin's.
+
+**Why:** Kelvin chose this. Teammates were stalling on harmless reads. Rule 5 keeps irreversible actions for a human tap, and the Orchestrator reads text from repos and web pages, so a planted instruction must not be able to approve one; the check is on the server, out of its reach. It's recorded as the Orchestrator's decision, never the owner's, and doesn't train System 1. **Alternatives:** bash in computers too (a command can reach the network); every card (needs rule 5 rewritten). **Revisit if:** an MCP server names a changing tool like a read: names are all this goes on, and a connection is the owner's choice to trust.
+
+---
+
+## D-061: The server checks on hand-offs, instead of bots polling (2026-11-06)
+
+**Decided:** `team::check` runs on the reconcile tick. It tells the asker and the Orchestrator once per card when a teammate has been blocked for two minutes, and starts hand-offs left waiting for a busy bot. Bots can also look with a read-only `team_status` tool.
+
+**Why:** On 5 and 6 November the Orchestrator told Kelvin it didn't know why Coder hadn't returned, while Coder was waiting on an approval card; later two bots waited on cards while it sat idle. An answer only came back when a run ended, and a blocked run doesn't end. A bot polling would spend a model run each time to learn nothing; the server already knows, so a model runs only when there's news.
+
+**Revisit if:** two minutes proves too eager or too slow, or several cards on one job wake the Orchestrator too often.
+
+## D-060: Bots never touch security prompts on the phone, and a long-waiting action is checked against the screen first (2026-11-05)
+
+**Decided:** The bridge reads the phone's screen before every tap, key, type and swipe. On a security or sign-in prompt it refuses the action, dismissals included, and tells the bot to tell Kelvin and stop. An action that waited over two minutes since the bot's last look, where the phone now shows a different app, is refused with the current screen so the bot decides again.
+
+**Why:** On 3 November the Phone bot's approved tap ran 36 hours late, when a Google "Are you trying to sign in?" prompt covered LinkedIn, and it went on to tap "No, don't allow" on that prompt after Kelvin said the sign-in was his. **Alternatives:** classify these taps in the server's gate (it never sees the screen); always re-look and compare the whole screen (lists scroll and badges change, so it would refuse most taps). **Revisit if:** a real sign-in step is part of a job Kelvin wants a bot to do, or prompts slip past the text patterns.
+
+---
+
+## D-059: "Always allow" on a phone card remembers that exact action (2026-11-05)
+
+**Decided:** When the owner answers a phone approval card with "always", the server stores an action rule for that tool and that exact input (`action_rule`, `jsonb` equality), and later identical phone taps pass. Phone commits still skip the per-tool rule (D-045), so a different tap, such as Post, asks once. Other tools keep per-tool "always" rules.
+
+**Why:** Kelvin answered "always allow" on a routine's daily LinkedIn tap (`tab_notifications`, by id) and was asked again the next day, because D-045 makes every phone commit (taps by id included) ignore the rules. He wants the bots to work on their own. Remembering the exact action keeps D-045's point (one "always" can't approve every later post) while repeated, known-safe taps stop asking. **Alternatives:** let the per-tool "always" cover phone commits (would also allow every Post tap); classify `tab_*` ids as navigation (guesses from app-specific names, and still asks for other safe ids). **Revisit if:** the same safe action keeps changing its input (a coordinate or a counter in the label), so exact rules don't match; then match on a normalised input.
+
+---
+
 ## D-058: Reverse engineering runs in its own computer, with REA's MCP server inside it (2026-11-05)
 
 **Decided:** A third bot desktop, `rea` (`images/rea`): the Debian desktop plus REA 6.8.0, Ghidra 12.1.4, JDK 21 and Node 24, with 6 GB of memory instead of 2. For such a bot, the node starts REA's MCP server inside the computer (`podman exec -i <computer> rea mcp`) as an extra MCP server named `rea`. The first such bot is REABOT, on the box's local Qwen (`local/qwen3.8-27b-abl`, 64k context). Context is kept small in the way REA is built for: the bot reaches REA's tools only through Orphus's `mcp` tool, which searches them and describes one at a time, so the 229 schemas (about 300 KB) never enter its context; its replies are summaries, with the detail retained in REA under an Evidence ID that the bot pages with `inspect_analysis_view`; compact input schemas and no output schemas; and instructions that tell it to load only what each step needs (search with a specific word and no schemas, never `connect` or list all tools). REA's calls on such a bot follow the owner's rule for `bash`, since they run inside the same computer; otherwise each of the 229 tools would need its own "always", and the bot couldn't work on its own.
@@ -120,6 +169,7 @@ Format:
 **Decided:** The `phone` tool's taps whose label could commit (post, reply, like, follow, send, confirm, done, …), taps by id alone, and `ENTER` skip the owner's approval rules and always ask. Looking, queueing drafts, opening apps, typing and moving about pass without asking. Bots publish by queueing a draft, which ContentSwarm posts only after the owner approves it in Social.
 **Why:** the owner chose to approve every post and reply by hand. Approval rules are per tool, so one "Always" on a phone card would otherwise allow every later tap, including Post. Matching on visible labels is coarse but errs towards asking. Navigation has to pass freely, or reading comments would take dozens of approvals.
 **Revisit if:** the commit list asks too often in practice, or ContentSwarm gains verified adapters that make bot taps on commit buttons unnecessary.
+**Amended by D-059 (2026-11-05):** these actions still skip the per-tool rule, but "always" on a phone card now remembers that exact action, and the same action later passes without asking. Any other commit still asks.
 
 ## D-044: Social posting goes through the owner's phone and ContentSwarm, reviewed in OrphusBot (2026-10-21)
 

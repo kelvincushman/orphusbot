@@ -15,7 +15,7 @@ use std::process::Stdio;
 use anyhow::{Context, bail};
 use tokio::io::AsyncWriteExt;
 use tokio::process::{Child, Command};
-use tracing::info;
+use tracing::{info, warn};
 
 /// The home folder inside every computer; the engine's working folder maps onto it.
 pub const HOME: &str = "/home/bot";
@@ -40,6 +40,25 @@ pub struct Spec<'a> {
     pub team: bool,
     /// The memory limit, such as `2g`; set when the computer is created.
     pub memory: &'a str,
+}
+
+/// Stops a bot's computer, if it's running. Its home volume stays.
+pub async fn stop(runtime: &str, bot: &str) {
+    let name = format!("orphusbot-{bot}");
+    match Command::new(runtime)
+        // `--ignore`: every node is told to stop a retired chief's computer,
+        // and most never had it.
+        .args(["stop", "--ignore", "--time", "0", &name])
+        .output()
+        .await
+    {
+        Ok(out) if out.status.success() => {}
+        Ok(out) => warn!(
+            "stopping {name}: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ),
+        Err(e) => warn!("stopping {name}: {e}"),
+    }
 }
 
 impl Spec<'_> {

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update mission set status = 'done', updated_at = now() - interval '4 days' where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dced69b5c6f03955d5c763dfe8b1b6db6a152f017c950b7bf7b642d4b12867e2"
+}

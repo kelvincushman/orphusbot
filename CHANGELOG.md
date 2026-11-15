@@ -8,6 +8,14 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- **Missions:** the Orchestrator can give a big new piece of work its own Chief of Staff, which appears in the bot list with a clean context and hands parts to teammates. Teammates work on it in a separate session. The team can see what a mission is up to unless it's marked private, and only you can make a private mission visible again.
+- **New conversation:** the menu in a bot's chat starts a fresh session, carrying over the last 8 messages. The old session is kept.
+- **Talk to the Orchestrator in its chat:** the mic button opens the Ideas Room's live voice right there, and it knows what the team is doing. Its chat's recent messages go to xAI while you talk.
+- **The Orchestrator can accept safe cards:** a teammate's read-only tool calls and file changes in its computer, marked "Allowed by the Orchestrator". Send, pay, delete, merge and publish still come to you.
+- **Bots check on each other:** if a teammate is stuck waiting on a card for two minutes, the bot that asked and the Orchestrator hear about it, once per card. A job handed to a busy bot now starts when that bot is free, and bots can look at the team with `team_status`. In the bar, a bot waiting on teammates shows its thinking face.
+- **Safer phone use:** bots no longer touch security or sign-in prompts on your phone (such as Google's "Are you trying to sign in?"). They leave them and tell you. A phone action that waited a long time for your approval is checked against the screen first, and if the phone has moved on, the bot looks again instead of tapping blind.
+- The app now picks up new or changed bots when you come back to it, instead of only after a restart.
+- **"Always allow" on a phone approval now sticks.** It allows that exact phone action from then on, such as a routine tapping LinkedIn's notifications tab, so the bot can do it again on its own. A different tap, such as Post, still asks you once.
 - **Reverse-engineering bots:** a bot's computer can now be **Reverse engineering (REA and Ghidra)**, picked under the bot's desktop in Settings. The bot decompiles and studies binaries with REA and Ghidra inside its own computer, never on the box itself, and loads only the tools and results each step needs, so a small local model's context isn't flooded. Its REA steps need your approval only if bash does, so it can work through a job on its own. REABOT is the first, on the box's local Qwen. Operators: build `images/rea` (after `images/desktop`); the new setting `ORPHUSBOT_REA_IMAGE` picks the image.
 
 - When a bot working on a task from your wearable needs something from you, the wearable buzzes amber: tap, say your answer, and the bot carries on. Bots now have an `ask_owner` tool for this, and a reply that ends with a question also counts.
@@ -43,7 +51,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
-- **Phone and social bots:** a new bot setting, **Phone and social accounts**: none, read accounts and queue drafts, or also use the phone. Bots with it can read your accounts' voice, queue posts and replies for your approval, and (if allowed) look at and use your phone. Anything that could post, reply, like, follow or confirm on the phone asks you every time, even if you've said "always" before.
+- **Phone and social bots:** a new bot setting, **Phone and social accounts**: none, read accounts and queue drafts, or also use the phone. Bots with it can read your accounts' voice, queue posts and replies for your approval, and (if allowed) look at and use your phone. Anything that could post, reply, like, follow or confirm on the phone asks you first. "Always allow" on one of these cards covers that exact action only, so a different one still asks.
 - **Social:** the megaphone in the header opens your X and LinkedIn drafts, shown the way they'll be posted, to approve, edit, schedule or reject (say why and the next drafts learn). Replies show under the comment they answer, the Calendar shows what's scheduled and what went out, the Phone tab shows the phone's screen live, and Voice holds each account's voice and what it knows. A notification tells you when new drafts arrive. Posting goes through your own phone, plugged into the server, and nothing goes out without your tap.
 - **Omarchy computers:** give a bot an Omarchy desktop in its settings (Its computer's desktop → Omarchy). Its computer becomes Arch Linux with Omarchy's look, bar, terminal and keys, which you can watch and take over as before, and the bot can take screenshots, click and type on it itself. Its home folder carries over when you switch.
 - **Teach System 1 in the app:** Settings → Decisions lists where kev sent messages and which tool calls it judged; mark each right or wrong, and Fit tunes how sure it must be from your answers.
@@ -115,6 +123,11 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Fixed
 
+- A private mission's title and result no longer reach the Orchestrator's chat when it closes (the voice model reads that chat), and its hand-offs stay hidden from bots outside it however long ago it closed.
+- Talking to the Orchestrator by voice in its chat: if what was said can't be sent to the chat, the panel now stays open with the error so you can try again or close without sending, a conversation whose connection dropped is saved when you close it, and so is one where only you had spoken. Before, all three were lost silently.
+- Phone bots: what a bot last saw is now kept per phone, and after an action is refused because the screen changed (or a security prompt appeared), the bot must look again before it can act on that phone.
+- A hand-off to a busy bot now starts when that bot is free however long it waited; it used to be dropped from the queue after a day.
+- Closing a mission, and handing work to a teammate on a mission, can no longer be left half done if the database fails midway. A mission's chief can't be disabled while its mission is open. A chief can't hand out more work once its mission has ended, and a run that can't be set up goes back in the queue instead of sitting as "running".
 - Security: updated `ctutils` to 0.4.8 (RUSTSEC-2026-0385, timing leaks in constant-time comparisons, reached through the database driver) and replaced a withdrawn `async-executor` release. The licence and advisory check in CI had been failing before it ran, which hid both; it runs again now.
 - Android: pictures can be added to the gallery. **Add files** now shows when choosing from the gallery for a message too (new files are selected), and uploads read Android's picked files directly.
 - **Bots know today's date and time:** every task now starts with the date and time in your time zone, so a bot no longer guesses the day (PA had called a Tuesday "Friday").

@@ -99,7 +99,7 @@ pub struct Claimed {
 }
 
 /// The thread has a queued or running run.
-pub async fn busy(db: &PgPool, thread: i64) -> sqlx::Result<bool> {
+pub async fn busy(db: impl sqlx::PgExecutor<'_>, thread: i64) -> sqlx::Result<bool> {
     sqlx::query_scalar!(
         r#"select exists (select 1 from run where thread_id = $1 and status in ('queued', 'running')) as "busy!""#,
         thread
@@ -248,6 +248,26 @@ pub async fn release(db: &PgPool, node: Option<&str>) -> sqlx::Result<Vec<Releas
         .collect())
 }
 
+/// Hands back one claimed run that couldn't be started, so it's queued again
+/// (or failed, once it has been tried too often). `fence` must be the claim's.
+/// True if this failed the run, so the caller can say that it ended.
+pub async fn unclaim(db: &PgPool, run: i64, fence: i64) -> sqlx::Result<bool> {
+    let row = sqlx::query!(
+        r#"update run set
+            status = case when attempts >= $3 then 'failed'::run_status else 'queued'::run_status end,
+            error = case when attempts >= $3 then 'The run could not be set up' else error end,
+            node = null, lease_expires_at = null, updated_at = now()
+         where id = $1 and fence = $2 and status = 'running'
+         returning status::text as "status!""#,
+        run,
+        fence,
+        MAX_ATTEMPTS
+    )
+    .fetch_optional(db)
+    .await?;
+    Ok(row.is_some_and(|r| r.status == "failed"))
+}
+
 /// On server start no node is connected, so every running run is orphaned.
 // ponytail: assumes one server process; with several, rely on lease expiry instead.
 pub async fn release_all(db: &PgPool) -> sqlx::Result<u64> {
@@ -303,6 +323,31 @@ mod tests {
                 fence: c.fence
             }
         );
+    }
+
+    #[sqlx::test]
+    async fn a_run_that_cannot_be_set_up_is_handed_back(db: PgPool) {
+        let Submitted::Queued(run) = submit(&db, INBOX, "work", Source::default()).await.unwrap()
+        else {
+            panic!("expected a new run")
+        };
+        let c = claim(&db, run, "laptop").await.unwrap().unwrap();
+        // A claim that has moved on isn't touched.
+        assert!(!unclaim(&db, run, c.fence - 1).await.unwrap());
+        assert_eq!(status(&db, run).await, "running");
+        assert!(!unclaim(&db, run, c.fence).await.unwrap());
+        assert_eq!(status(&db, run).await, "queued");
+        // It can be claimed again, and gives up after too many tries.
+        for attempt in 2..=MAX_ATTEMPTS {
+            let c = claim(&db, run, "laptop").await.unwrap().unwrap();
+            let failed = unclaim(&db, run, c.fence).await.unwrap();
+            assert_eq!(
+                failed,
+                attempt == MAX_ATTEMPTS,
+                "only the last try fails it"
+            );
+        }
+        assert_eq!(status(&db, run).await, "failed");
     }
 
     #[sqlx::test]

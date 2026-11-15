@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select r.id from run r join thread t on t.id = r.thread_id join bot b on b.id = t.bot_id\n             where b.slug = $1 order by r.id desc limit 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "run",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0646cabf0eebef0e6473164f339d82ddf9fdc22037f84d4213b755a153e19321"
+}

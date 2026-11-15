@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select e.body ->> 'role' as \"role!\", e.body ->> 'text' as \"text!\"\n           from event e join thread t on t.id = e.thread_id join bot b on b.id = t.bot_id\n           where b.slug = 'orchestrator' and e.body ->> 'type' = 'message'\n           order by e.seq desc limit 8",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "text!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "498cefd817c6525adcb4138eda02b9ee85d52621fce8dd34617a2ec0d43fef3d"
+}

@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select t.id from ticket t\n         where t.asked_by is not null and t.status = 'todo'\n           and not exists (select 1 from run r where r.ticket_id = t.id)\n         order by t.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ticket",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f8b8200fe4de7455762a6687f87c0623d57d058453c4191b9637dece6f965b09"
+}

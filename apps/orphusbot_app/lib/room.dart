@@ -212,7 +212,7 @@ class _IdeasRoomState extends State<IdeasRoom>
     }
     // In the chat, what was said stays until it's sent: the panel stays open
     // with the error, and End tries again.
-    if (!inChat || transcript.length < 2) widget.onClose?.call();
+    if (!inChat || transcript.isEmpty) widget.onClose?.call();
   }
 
   /// The Orchestrator's view of the conversation so far, for Grok to pass on.
@@ -250,8 +250,9 @@ class _IdeasRoomState extends State<IdeasRoom>
   /// review in its chat, and ask Kelvin how it went.
   Future<void> _wrapUp() async {
     if (inChat) {
-      // The chat is the record: the Orchestrator picks up what was said.
-      if (transcript.length >= 2) {
+      // The chat is the record: the Orchestrator picks up what was said, even
+      // if it was only the owner's turn.
+      if (transcript.isNotEmpty) {
         try {
           await widget.api.send(
             widget.bot,

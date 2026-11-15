@@ -125,10 +125,10 @@ Every pull request that changes something a user or operator would notice adds a
 ### Fixed
 
 - A private mission's title and result no longer reach the Orchestrator's chat when it closes (the voice model reads that chat), and its hand-offs stay hidden from bots outside it however long ago it closed.
-- Talking to the Orchestrator by voice in its chat: if what was said can't be sent to the chat, the panel now stays open with the error so you can try again or close without sending, and a conversation whose connection dropped is saved when you close it. Before, both were lost silently.
+- Talking to the Orchestrator by voice in its chat: if what was said can't be sent to the chat, the panel now stays open with the error so you can try again or close without sending, a conversation whose connection dropped is saved when you close it, and so is one where only you had spoken. Before, all three were lost silently.
 - Phone bots: what a bot last saw is now kept per phone, and after an action is refused because the screen changed (or a security prompt appeared), the bot must look again before it can act on that phone.
 - A hand-off to a busy bot now starts when that bot is free however long it waited; it used to be dropped from the queue after a day.
-- Closing a mission, and handing work to a teammate on a mission, can no longer be left half done if the database fails midway. A mission's chief can't be disabled while its mission is open.
+- Closing a mission, and handing work to a teammate on a mission, can no longer be left half done if the database fails midway. A mission's chief can't be disabled while its mission is open. A chief can't hand out more work once its mission has ended, and a run that can't be set up goes back in the queue instead of sitting as "running".
 - Security: updated `ctutils` to 0.4.8 (RUSTSEC-2026-0385, timing leaks in constant-time comparisons, reached through the database driver) and replaced a withdrawn `async-executor` release. The licence and advisory check in CI had been failing before it ran, which hid both; it runs again now.
 - Android: pictures can be added to the gallery. **Add files** now shows when choosing from the gallery for a message too (new files are selected), and uploads read Android's picked files directly.
 - **Bots know today's date and time:** every task now starts with the date and time in your time zone, so a bot no longer guesses the day (PA had called a Tuesday "Friday").

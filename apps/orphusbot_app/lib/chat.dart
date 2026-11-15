@@ -174,8 +174,10 @@ class _ChatScreenState extends State<ChatScreen> {
     } on SignedOut {
       return widget.onSignedOut();
     } catch (e) {
-      setState(() => problem = '$e');
+      if (mounted) setState(() => problem = '$e');
     }
+    // Closed while loading: don't start listening for a screen that's gone.
+    if (!mounted) return;
     sub = widget.api.events().listen(
       (e) {
         final bot = e['bot'] as String?;

@@ -370,6 +370,20 @@ async fn handoff(app: &App, run: i64, asker: &str, request: &Value) -> Result<St
     let failed = |e: sqlx::Error| format!("couldn't make the ticket: {e}");
     // One transaction, so a failed request leaves no ticket for a retry to double.
     let mut tx = app.db.begin().await.map_err(failed)?;
+    if let Some(mission) = mission {
+        // The row lock waits out a close in progress, so no work starts on a
+        // mission that has just ended.
+        let open = sqlx::query_scalar!(
+            r#"select status = 'open' as "open!" from mission where id = $1 for update"#,
+            mission
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(failed)?;
+        if open != Some(true) {
+            return Err("that mission has ended, so there's no more work to hand out".into());
+        }
+    }
     let id = sqlx::query_scalar!(
         "insert into ticket (title, body, urgency, bot_id, asked_by, ask_depth, mission_id)
          values ($1, $2, 'hour', (select id from bot where slug = $3), (select id from bot where slug = $4), $5, $6)

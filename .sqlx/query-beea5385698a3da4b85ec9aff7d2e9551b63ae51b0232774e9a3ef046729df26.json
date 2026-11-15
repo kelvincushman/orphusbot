@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update mission set status = 'done' where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "beea5385698a3da4b85ec9aff7d2e9551b63ae51b0232774e9a3ef046729df26"
+}

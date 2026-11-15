@@ -44,20 +44,23 @@ pub struct Open {
     pub worker: String,
     pub asker: String,
     mission: Option<i64>,
+    /// Its mission is private: its text stays out of chats the voice model reads.
+    private: bool,
     told: Option<String>,
     card: Option<String>,
     pub card_text: Option<String>,
     card_stale: bool,
 }
 
-/// Every unfinished hand-off from the last three days, oldest first.
+/// Every unfinished hand-off, however old, oldest first.
 pub async fn open(db: &PgPool) -> sqlx::Result<Vec<Open>> {
     sqlx::query_as!(
         Open,
         r#"select t.id, t.title, t.status::text as "status!", w.slug as bot, w.name as worker,
-                  a.slug as asker, t.mission_id as mission, t.asker_told as told, c.id as "card?", c.text as "card_text?",
+                  a.slug as asker, t.mission_id as mission, coalesce(m.private, false) as "private!", t.asker_told as told, c.id as "card?", c.text as "card_text?",
                   coalesce(c.stale, false) as "card_stale!"
            from ticket t join bot w on w.id = t.bot_id join bot a on a.id = t.asked_by
+           left join mission m on m.id = t.mission_id
            left join lateral (
                select e.body -> 'dialog' ->> 'id' as id,
                       coalesce(e.body -> 'dialog' -> 'kind' ->> 'message',
@@ -75,7 +78,7 @@ pub async fn open(db: &PgPool) -> sqlx::Result<Vec<Open>> {
                                    and x.body ->> 'id' = e.body -> 'dialog' ->> 'id')
                order by e.seq limit 1
            ) c on true
-           where t.status in ('todo', 'doing') and t.created_at > now() - interval '3 days'
+           where t.status in ('todo', 'doing')
            order by t.id"#
     )
     .fetch_all(db)
@@ -244,13 +247,25 @@ pub async fn check(app: &App) {
             short(&t.title),
             short(text)
         );
-        let for_orchestrator = if safe(app, card) {
+        // The voice model reads the Orchestrator's chat, so a private mission's
+        // task and card text stay with its chief.
+        let shown = if t.private {
             format!(
-                "{note}\nThis call is safe for you to accept: if it serves the job, use accept_card \
-                 with card {card} instead of asking Kelvin."
+                "A teammate on a private mission is blocked on OB-{}: Kelvin hasn't answered a card \
+                 yet. It's private, so the details aren't given here. The job isn't lost, so don't \
+                 start it again. If Kelvin doesn't know yet, tell them a card is waiting.",
+                t.id
             )
         } else {
             note.clone()
+        };
+        let for_orchestrator = if safe(app, card) {
+            format!(
+                "{shown}\nThis call is safe for you to accept: if it serves the job, use accept_card \
+                 with card {card} instead of asking Kelvin."
+            )
+        } else {
+            shown
         };
         if t.asker != ORCHESTRATOR {
             tell(app, &t.asker, &note).await;

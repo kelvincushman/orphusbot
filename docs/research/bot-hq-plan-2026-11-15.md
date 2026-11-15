@@ -16,7 +16,7 @@ The harness, the gate and placement don't change. No Composio, Orgo or Bops code
 | # | Item | Size | New protocol or schema | Touches the gate |
 |---|---|---|---|---|
 | 1 | Steps: live "doing now" line and a "Worked for 2m 10s · 7 steps" fold-up | Small | Two thread events, one reducer item | No |
-| 1A | Animated bots: robots show what they're doing, and bots visibly hand work to each other | Medium | A `kind` on each step, two team events, new inputs in the Rive files | No |
+| 1A | Animated bots: robots show what they're doing, and bots visibly hand work to each other | Medium | A `kind` on each step, two team events, new inputs in the Rive files (Rive is the animation format the bots' faces and robots are drawn in) | No |
 | 2 | Dressed screens: a home page with the bot's name, role and a clock | Small | Three env vars to the computer | No |
 | 3 | Soul and notes panel per bot | Small–medium | One file per bot in the vault, two endpoints | No |
 | 4 | `x_search`: research on X | Small | One bot setting, one dialog kind | Classed as a read, with a daily cap |
@@ -41,16 +41,16 @@ So this needs no change to the node, the bridge or the engine.
 **Design.**
 
 - **Server** (`runs.rs`, new `steps.rs`): when a gate dialog arrives, publish `ThreadEvent::StepStarted { run, id, label }`; on `ToolDone`, publish `ThreadEvent::StepEnded { id, ok }`. A call the gate denies ends at once with `ok: false`.
-- **Labels** (`steps::label(tool, input) -> String`): one match on the tool name, written in our own words. `bash` → "Running a command"; `read` → "Reading `<file name>`"; `write`/`edit` → "Writing `<file name>`"; `ask_bot` → "Checking with `<bot name>`"; `google` → "Looking in `<service>`"; `media` → "Making an image"; `phone` → "Using the phone"; an MCP tool → "Using `<connection name>`"; anything else → "Working". The label carries a file's base name or a service name, never a command line, a URL's query, or any other argument. Arguments stay where they are today: in approval cards and the effect ledger. That keeps secrets out of the thread (hard rule 8) without a redaction pass.
+- **Labels** (`steps::label(tool, input) -> String`): one match on the tool name, written in our own words. `bash` → "Running a command"; `read` → "Reading a file"; `write`/`edit` → "Writing a file"; `ask_bot` → "Checking with `<bot name>`"; `google` → "Looking in `<service>`"; `media` → "Making an image"; `phone` → "Using the phone"; an MCP tool (Model Context Protocol: a tool from one of the bot's connections) → "Using `<connection name>`"; anything else → "Working". The label carries at most a bot's, service's or connection's name, never a file name (a name such as `token-abc123` can itself be a secret), a command line, a URL, or any other argument. Arguments stay where they are today: in approval cards and the effect ledger. That keeps secrets out of the thread (hard rule 8) without a redaction pass.
 - **Reducer** (`view.rs`): a new `Item::Steps { steps: Vec<Step>, open: bool }` where `Step { id, label, done: Option<bool> }`. Consecutive step events fold into the last `Steps` item; any other item closes it. `ThreadView` gains `doing: Option<String>` (the label of the newest unfinished step, cleared on `RunEnded`). Both clients get this from the one reducer.
-- **Timing:** the fold-up's duration is the time between the first step's event and the item that closes it. If stream events don't already carry their stored time, add `at` (Unix seconds) to the two new events only.
-- **Flutter** (`chat.dart`, `thread.dart`): the top pill shows `doing` in place of "Working" when it is set. In the transcript, a `Steps` item is a single grey line: while running, the current label and a count; when closed, "Worked for 2m 10s · 7 steps", which expands to the labels with a tick or a cross. The **Leptos** UI gets the same line.
+- **Timing:** the fold-up's duration runs from the first step to the item that closes it, and that item can be any kind (a message, a card). Today `ThreadEvent` carries no time and `db::since` doesn't select the stored `event.created_at`, so nothing has a time after a reload. The fix is one change for every event: `since` selects `created_at` and the stream passes it to clients beside each event, so the reducer stamps every item. Live-only events use the time they arrive.
+- **Flutter** (`chat.dart`, `thread.dart`): the top pill shows `doing` in place of "Working" when it is set. In the transcript, a `Steps` item is a single grey line: while running, the current label and a count; when closed, "Worked for 2m 10s · 7 steps", which expands to the labels with a tick or a cross. The **Leptos** UI (the Rust web client in `crates/ui`) gets the same line.
 - **Wearable:** nothing changes. It has no use for steps.
 - **Stored:** as thread events, like the rest of the thread, so the fold-up is there after a reload.
 
 **Not taken:** rotating joke phrases, the mascot on a pill, per-step screenshots and expandable arguments.
 
-**Tests:** reducer tests in `proto` (folding, closing, a denied call, a run that ends mid-step); a label table test, including that no label contains the input's values other than a base name.
+**Tests:** reducer tests in `proto` (folding, closing, a denied call, a run that ends mid-step); a label table test, including that no label contains any of the input's values.
 
 ---
 
@@ -129,7 +129,7 @@ So this needs no change to the node, the bridge or the engine.
 **Design.**
 
 - **A notes file per bot** in the vault: `bots/<slug>/notes.md`. It holds short standing notes: how Kelvin likes this bot to work, and things it has been corrected on. It is for preferences, not knowledge. Knowledge still goes to the wiki.
-- **Read at run start:** `team::roster_note` already rebuilds a note for every run. It appends the bot's notes, cut to **2,000 characters**, under "Your notes". A cap this small keeps to Kelvin's rule that bots load context by choice: the wiki stays query-only.
+- **Read at run start:** `team::roster_note` already rebuilds a note for every run. It appends the bot's notes, cut to **2,000 characters**, under "Your notes". **Past the cap:** nothing is dropped silently. The run note ends with "(Your notes are longer than fits here: tidy them.)" so the bot shortens its own file, and the Notes panel shows a count ("2,340 of 2,000 loaded") with the part that isn't loaded greyed out. The file itself may be longer, up to the 16 KB save limit, since the bot and Obsidian both write it directly. A cap this small keeps to Kelvin's rule that bots load context by choice: the wiki stays query-only.
 - **Written by:** Kelvin, in the app or in Obsidian, since the file is in his vault. And the bot, with its ordinary file tools: team-scope bots already have the folder at `/shared`, and writing there is inside the computer, so the gate treats it as it does today. The bot's instructions gain one line: "When Kelvin corrects how you work, add a line to your notes."
 - **Server** (`bots.rs`, `vault.rs`): `GET` and `PUT /api/bots/{slug}/notes`, reading and writing that one file under `ORPHUSBOT_VAULT_DIR`. The slug is validated as it is everywhere else (so the path can't leave the folder), and the body is capped at 16 KB.
 - **App:** tapping the bot's pill at the top of the chat opens a panel with three parts. **Soul** is the instructions, editable (the same field as Settings). **Notes** is the file, editable. **Can do** is the line the bot is told about itself (model, Google access, connections, phone, media), read-only, taken from the same code that writes the roster.
@@ -188,7 +188,7 @@ So this needs no change to the node, the bridge or the engine.
 
 ## 6. Not planned
 
-- **Group chat with @mentions.** Discussions (D-036) cover the case where several bots weigh a question, with rounds and a verdict, and `ask_bot` covers hand-offs. A casual room adds a third way for bots to talk and a new way for a thread to flood. Revisit if Kelvin finds himself wanting to address two bots at once.
+- **Group chat with @mentions.** Not taken from bot-hq, but not dropped: PRD B-BOT-02 (P1) requires a group thread as an Orphus room, and it should be built to that requirement when it is scheduled. Until then, Discussions (D-036) cover the case where several bots weigh a question, with rounds and a verdict, and `ask_bot` covers hand-offs. A casual room adds a third way for bots to talk and a new way for a thread to flood. Revisit if Kelvin finds himself wanting to address two bots at once.
 - **An email inbox per bot.** It needs a mail domain, spam handling and a rule for who a bot may answer. AgentMail would do it as a service; a mailbox on the box would keep it self-hosted. Neither is small. The PA already reads and drafts in Kelvin's Gmail.
 - **Honcho.** The wiki is small (87 files on 2026-11-05) and readable in Obsidian. Revisit when lookups get slow or wrong.
 
@@ -196,9 +196,9 @@ So this needs no change to the node, the bridge or the engine.
 
 ## 7. Decision drafts
 
-Numbers are assigned when each is built. D-059 and D-060 are on another branch.
+Numbers are assigned when each is built.
 
-**Steps come from the gate's own events.** *Decided:* the thread shows each tool call as a step, labelled by the server from the tool's name and at most a file or service name; arguments are not put in the thread. *Why:* the server already sees every call start and end, so no new channel is needed, and keeping arguments out means nothing secret reaches the thread. *Alternatives:* the node forwarding Orphus's `tool_execution_start` (a second source for what the gate already has); showing arguments (needs redaction, and leaks when it misses). *Revisit if:* Kelvin wants to see commands without opening the ledger.
+**Steps come from the gate's own events.** *Decided:* the thread shows each tool call as a step, labelled by the server from the tool's name and at most a bot, service or connection name; file names and arguments are not put in the thread. *Why:* the server already sees every call start and end, so no new channel is needed, and keeping arguments out means nothing secret reaches the thread. *Alternatives:* the node forwarding Orphus's `tool_execution_start` (a second source for what the gate already has); showing arguments (needs redaction, and leaks when it misses). *Revisit if:* Kelvin wants to see commands without opening the ledger.
 
 **Bots show their work and their hand-offs in motion, calm by default.** *Decided:* each step has a kind that the robot acts out with a prop; `ask_bot` and its answer are thread events that play as a note passing between two faces; a Team screen shows every robot and moves them when they work together; a setting offers full, calm or off, and reduce-motion is honoured. *Why:* Kelvin asked for it, and seeing who is doing what, and who is waiting on whom, is information the text hides. *Alternatives:* status words only, as bot-hq does (no sense of the team); one Rive scene holding every bot (the files are generated per style, and a shared scene would have to be rebuilt whenever a bot is added). *Revisit if:* the motion distracts more than it informs.
 

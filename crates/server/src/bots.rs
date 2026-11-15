@@ -408,7 +408,9 @@ pub async fn update(
     }
     let done = sqlx::query!(
         "update bot set name = $2, remit = $3, instructions = $4, model = $5, thinking = $6,
-                exclude_tools = $7, scope = $8, disabled = $9, computer = $10, google = $11, face = $12,
+                exclude_tools = $7,
+                team_since = case when scope <> $8 and $8 = 'team' then now() else team_since end,
+                scope = $8, disabled = $9, computer = $10, google = $11, face = $12,
                 desktop = $13, phone = $14, media = $15
          where slug = $1",
         bot.slug,

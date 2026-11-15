@@ -472,6 +472,7 @@ pub(crate) mod tests {
             devices: Default::default(),
             notifier: crate::notify::Notifier::off(),
             social: crate::social::Social::off(),
+            memory: crate::memory::Memory::off(),
             ui_dir: String::new(),
         })
     }

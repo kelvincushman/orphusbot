@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select t.id, t.title, t.status::text as \"status!\", w.slug as bot, w.name as worker,\n                  a.slug as asker, t.mission_id as mission, t.asker_told as told, c.id as \"card?\", c.text as \"card_text?\",\n                  coalesce(c.stale, false) as \"card_stale!\"\n           from ticket t join bot w on w.id = t.bot_id join bot a on a.id = t.asked_by\n           left join lateral (\n               select e.body -> 'dialog' ->> 'id' as id,\n                      coalesce(e.body -> 'dialog' -> 'kind' ->> 'message',\n                               e.body -> 'dialog' -> 'kind' ->> 'title',\n                               e.body -> 'dialog' -> 'kind' ->> 'reason',\n                               'permission to use ' || (e.body -> 'dialog' -> 'kind' ->> 'tool')) as text,\n                      e.created_at < now() - interval '2 minutes' as stale\n               from run r join event e on e.thread_id = r.thread_id\n               where r.ticket_id = t.id and r.status = 'running'\n                 and e.body ->> 'type' = 'dialog_opened'\n                 and (e.body -> 'dialog' ->> 'run')::bigint = r.id\n                 and not exists (select 1 from event x\n                                 where x.thread_id = e.thread_id and x.seq > e.seq\n                                   and x.body ->> 'type' = 'dialog_closed'\n                                   and x.body ->> 'id' = e.body -> 'dialog' ->> 'id')\n               order by e.seq limit 1\n           ) c on true\n           where t.status in ('todo', 'doing') and t.created_at > now() - interval '3 days'\n           order by t.id",
+  "query": "select t.id, t.title, t.status::text as \"status!\", w.slug as bot, w.name as worker,\n                  a.slug as asker, t.mission_id as mission, coalesce(m.private, false) as \"private!\", t.asker_told as told, c.id as \"card?\", c.text as \"card_text?\",\n                  coalesce(c.stale, false) as \"card_stale!\"\n           from ticket t join bot w on w.id = t.bot_id join bot a on a.id = t.asked_by\n           left join mission m on m.id = t.mission_id\n           left join lateral (\n               select e.body -> 'dialog' ->> 'id' as id,\n                      coalesce(e.body -> 'dialog' -> 'kind' ->> 'message',\n                               e.body -> 'dialog' -> 'kind' ->> 'title',\n                               e.body -> 'dialog' -> 'kind' ->> 'reason',\n                               'permission to use ' || (e.body -> 'dialog' -> 'kind' ->> 'tool')) as text,\n                      e.created_at < now() - interval '2 minutes' as stale\n               from run r join event e on e.thread_id = r.thread_id\n               where r.ticket_id = t.id and r.status = 'running'\n                 and e.body ->> 'type' = 'dialog_opened'\n                 and (e.body -> 'dialog' ->> 'run')::bigint = r.id\n                 and not exists (select 1 from event x\n                                 where x.thread_id = e.thread_id and x.seq > e.seq\n                                   and x.body ->> 'type' = 'dialog_closed'\n                                   and x.body ->> 'id' = e.body -> 'dialog' ->> 'id')\n               order by e.seq limit 1\n           ) c on true\n           where t.status in ('todo', 'doing')\n           order by t.id",
   "describe": {
     "columns": [
       {
@@ -77,6 +77,12 @@
       },
       {
         "ordinal": 7,
+        "name": "private!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
         "name": "told",
         "type_info": "Text",
         "origin": {
@@ -87,19 +93,19 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "card?",
         "type_info": "Text",
         "origin": "Expression"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "card_text?",
         "type_info": "Text",
         "origin": "Expression"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "card_stale!",
         "type_info": "Bool",
         "origin": "Expression"
@@ -116,11 +122,12 @@
       false,
       false,
       true,
+      null,
       true,
       null,
       null,
       null
     ]
   },
-  "hash": "9946bc75fd75bfa8daee5634735bc5ceee84ecff7877341d4b01804e271a4257"
+  "hash": "49c323ea11d9791a94d95875de01ebb60b59978f0f4a6c126f6e1eda1c06a317"
 }

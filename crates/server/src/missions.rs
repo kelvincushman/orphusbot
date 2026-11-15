@@ -387,7 +387,15 @@ pub async fn set(State(app): State<Shared>, Json(c): Json<Change>) -> Result<Sta
     }
     let failed = |e| internal("updating a mission", e);
     let mut tx = app.db.begin().await.map_err(failed)?;
-    let done = sqlx::query!(
+    let was = sqlx::query!(
+        r#"select private, status = 'open' as "open!" from mission where id = $1 for update"#,
+        c.id
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(failed)?
+    .ok_or((StatusCode::NOT_FOUND, "No such mission"))?;
+    sqlx::query!(
         "update mission set private = coalesce($2, private), status = coalesce($3, status),
                 updated_at = now() where id = $1",
         c.id,
@@ -397,13 +405,15 @@ pub async fn set(State(app): State<Shared>, Json(c): Json<Change>) -> Result<Sta
     .execute(&mut *tx)
     .await
     .map_err(failed)?;
-    if done.rows_affected() == 0 {
-        return Err((StatusCode::NOT_FOUND, "No such mission"));
-    }
     if status.is_some() {
         close(&mut tx, c.id).await.map_err(failed)?;
     }
     tx.commit().await.map_err(failed)?;
+    // A chief that is already working has to hear that its mission became
+    // private, or it would go on writing to the wiki and /shared.
+    if c.private == Some(true) && !was.private && was.open && status.is_none() {
+        team::tell(&app, &chief(c.id), PRIVATE_NOTE).await;
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -607,6 +617,129 @@ mod tests {
             let s = team::status(&app, viewer).await;
             assert!(!s.contains("Hush"), "{s}");
         }
+    }
+
+    /// The text of every message in a bot's thread.
+    async fn said_to(db: &PgPool, slug: &str) -> Vec<String> {
+        let thread = db::bot_thread(db, slug).await.unwrap().unwrap();
+        sqlx::query_scalar!(
+            r#"select body ->> 'text' as "text!" from event
+               where thread_id = $1 and body ->> 'type' = 'message' order by seq"#,
+            thread.id
+        )
+        .fetch_all(db)
+        .await
+        .unwrap()
+    }
+
+    #[sqlx::test]
+    async fn a_private_missions_stuck_hand_off_tells_the_orchestrator_no_details(db: PgPool) {
+        use orphusbot_proto::{Dialog, DialogKind, ThreadEvent};
+        let app = crate::auth::tests::app(db.clone());
+        teammate(&db, "blog").await;
+        start(
+            &app,
+            team::ORCHESTRATOR,
+            &json!({ "title": "Secret", "goal": "Shh", "private": true }),
+        )
+        .await;
+        let id: i64 = sqlx::query_scalar!("select id from mission")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        let run = run_of(&db, &chief(id)).await;
+        team::ask(
+            &app,
+            run,
+            &chief(id),
+            &json!({ "bot": "blog", "task": "Hush task" }),
+        )
+        .await;
+        // The teammate is running and has waited a long time on a card.
+        let blog_run = run_of(&db, "blog").await;
+        sqlx::query!(
+            "update run set status = 'running', node = 'n', lease_expires_at = now() + interval '1 hour'
+             where id = $1",
+            blog_run
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        let blog = db::bot_thread(&db, "blog").await.unwrap().unwrap();
+        let dialog = Dialog {
+            id: "card-1".into(),
+            run: blog_run,
+            kind: DialogKind::Approval {
+                tool: "bash".into(),
+                input: json!({ "command": "hush-command" }),
+                uncertain: false,
+            },
+        };
+        db::append(&db, blog.id, &ThreadEvent::DialogOpened { dialog })
+            .await
+            .unwrap();
+        sqlx::query!(
+            "update event set created_at = now() - interval '3 minutes' where thread_id = $1",
+            blog.id
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        // An old hand-off is still watched.
+        sqlx::query!("update ticket set created_at = now() - interval '4 days'")
+            .execute(&db)
+            .await
+            .unwrap();
+        team::check(&app).await;
+
+        let orchestrator = said_to(&db, team::ORCHESTRATOR).await;
+        let told: Vec<_> = orchestrator
+            .iter()
+            .filter(|t| t.contains("blocked"))
+            .collect();
+        assert_eq!(told.len(), 1, "{orchestrator:?}");
+        assert!(
+            told[0].contains("private mission")
+                && !told[0].contains("Hush")
+                && !told[0].contains("bash"),
+            "{told:?}"
+        );
+        // Its chief, whose chat the voice model doesn't read, gets the details.
+        let chiefs = said_to(&db, &chief(id)).await;
+        assert!(
+            chiefs
+                .iter()
+                .any(|t| t.contains("blocked") && t.contains("Hush task")),
+            "{chiefs:?}"
+        );
+    }
+
+    #[sqlx::test]
+    async fn making_an_open_mission_private_tells_its_chief(db: PgPool) {
+        let app = crate::auth::tests::app(db.clone());
+        start(
+            &app,
+            team::ORCHESTRATOR,
+            &json!({ "title": "Plain", "goal": "Hi" }),
+        )
+        .await;
+        let id: i64 = sqlx::query_scalar!("select id from mission")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        let change = |private| Change {
+            id,
+            private: Some(private),
+            status: None,
+        };
+        let noted = |said: Vec<String>| said.iter().filter(|t| t.contains(PRIVATE_NOTE)).count();
+        assert_eq!(noted(said_to(&db, &chief(id)).await), 0);
+        set(State(app.clone()), Json(change(true))).await.unwrap();
+        assert_eq!(noted(said_to(&db, &chief(id)).await), 1);
+        // Saying it again, or making it visible, sends nothing more.
+        set(State(app.clone()), Json(change(true))).await.unwrap();
+        set(State(app.clone()), Json(change(false))).await.unwrap();
+        assert_eq!(noted(said_to(&db, &chief(id)).await), 1);
     }
 
     #[sqlx::test]

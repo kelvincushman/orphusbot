@@ -16,6 +16,7 @@ import 'api.dart';
 import 'avatar.dart';
 import 'discuss.dart';
 import 'gallery.dart';
+import 'memory.dart';
 import 'push.dart';
 import 'room.dart';
 import 'schedules.dart';
@@ -517,6 +518,11 @@ class _ChatScreenState extends State<ChatScreen> {
               Icons.forum_outlined,
               'Discussions',
               DiscussionsScreen(api: widget.api, bots: bots),
+            ),
+            place(
+              Icons.psychology_outlined,
+              'Memory',
+              MemoryScreen(api: widget.api),
             ),
             place(
               Icons.watch_outlined,

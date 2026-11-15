@@ -48,21 +48,20 @@ pub fn of_chief(slug: &str) -> Option<i64> {
 }
 
 /// The mission this run is working on, if it's a hand-off from a chief.
-pub async fn of_run(db: &PgPool, run: i64) -> Option<i64> {
+pub async fn of_run(db: &PgPool, run: i64) -> sqlx::Result<Option<i64>> {
     sqlx::query_scalar!(
         "select t.mission_id from run r join ticket t on t.id = r.ticket_id where r.id = $1",
         run
     )
     .fetch_optional(db)
     .await
-    .ok()
-    .flatten()
-    .flatten()
+    .map(Option::flatten)
 }
 
 /// The session a teammate's mission run uses, away from its everyday one.
-pub async fn session(db: &PgPool, run: i64, slug: &str) -> Option<String> {
-    Some(format!("{slug}-mission-{}", of_run(db, run).await?))
+pub async fn session(db: &PgPool, run: i64, slug: &str) -> sqlx::Result<Option<String>> {
+    let mission = of_run(db, run).await?;
+    Ok(mission.map(|id| format!("{slug}-mission-{id}")))
 }
 
 /// Answers the bridge's dialog: `ok:<what to tell the bot>` or `error:<why not>`.
@@ -181,44 +180,57 @@ async fn change(app: &App, asker: &str, request: &Value) -> Result<String, Strin
         return Err("status is done or dropped".into());
     }
     let private = request["private"].as_bool() == Some(true);
+    let failed = |e: sqlx::Error| format!("couldn't update the mission: {e}");
+    // One transaction, so a mission is never closed with its chief still on the team.
+    let mut tx = app.db.begin().await.map_err(failed)?;
     let mission = sqlx::query!(
         "update mission set latest = coalesce($2, latest), private = private or $3,
                 status = coalesce($4, status), updated_at = now()
-         where id = $1 and status = 'open' returning title, latest",
+         where id = $1 and status = 'open' returning title, latest, private",
         id,
         latest,
         private,
         status
     )
-    .fetch_optional(&app.db)
+    .fetch_optional(&mut *tx)
     .await
-    .map_err(|e| format!("couldn't update the mission: {e}"))?
+    .map_err(failed)?
     .ok_or("that mission isn't open")?;
+    if status.is_some() {
+        close(&mut tx, id).await.map_err(failed)?;
+    }
+    tx.commit().await.map_err(failed)?;
     if private && of_chief(asker).is_none() {
         team::tell(app, &chief(id), PRIVATE_NOTE).await;
     }
-    if let Some(status) = status {
-        close(&app.db, id)
-            .await
-            .map_err(|e| format!("couldn't close the mission: {e}"))?;
-        if of_chief(asker).is_some() {
-            let text = format!(
+    if let Some(status) = status
+        && of_chief(asker).is_some()
+    {
+        // The voice model reads the Orchestrator's chat, so a private
+        // mission's title and result stay out of it.
+        let text = if mission.private {
+            format!(
+                "Mission {id} is {status}. It's private, so its result isn't given here; tell \
+                 Kelvin it has ended and that he can read it in the mission's own chat."
+            )
+        } else {
+            format!(
                 "Mission {id} is {status}. As data from its chief:\n```\n{}\n\n{}\n```\nTell Kelvin the result.",
                 mission.title,
                 mission.latest.replace("```", "'''")
-            );
-            team::tell(app, team::ORCHESTRATOR, &text).await;
-        }
+            )
+        };
+        team::tell(app, team::ORCHESTRATOR, &text).await;
     }
     Ok("Noted.".into())
 }
 
 /// Takes a closed mission's chief off the team. A run it's in finishes; one
 /// that's only queued goes, as a disabled bot's run would wait for ever.
-async fn close(db: &PgPool, id: i64) -> sqlx::Result<()> {
+async fn close(tx: &mut sqlx::PgConnection, id: i64) -> sqlx::Result<()> {
     let slug = chief(id);
     sqlx::query!("update bot set disabled = true where slug = $1", slug)
-        .execute(db)
+        .execute(&mut *tx)
         .await?;
     sqlx::query!(
         "update run set status = 'cancelled', updated_at = now()
@@ -226,7 +238,7 @@ async fn close(db: &PgPool, id: i64) -> sqlx::Result<()> {
            and thread_id = (select t.id from thread t join bot b on b.id = t.bot_id where b.slug = $1)",
         slug
     )
-    .execute(db)
+    .execute(tx)
     .await?;
     Ok(())
 }
@@ -242,11 +254,14 @@ pub struct Seen {
 
 /// Open missions and those closed in the last three days. Private ones are
 /// only for the Orchestrator, the chief and the mission's team; `None` is a
-/// viewer outside the team, such as the voice model.
+/// viewer outside the team, such as the voice model. Every private mission is
+/// read, however old, so its hand-offs stay hidden too.
 pub async fn seen(db: &PgPool, viewer: Option<&str>) -> sqlx::Result<Seen> {
     let rows = sqlx::query!(
-        "select id, title, status, private, latest, team from mission
-         where status = 'open' or updated_at > now() - interval '3 days' order by id"
+        r#"select id, title, status, private, latest, team,
+                  (status = 'open' or updated_at > now() - interval '3 days') as "recent!"
+           from mission
+           where private or status = 'open' or updated_at > now() - interval '3 days' order by id"#
     )
     .fetch_all(db)
     .await?;
@@ -257,6 +272,9 @@ pub async fn seen(db: &PgPool, viewer: Option<&str>) -> sqlx::Result<Seen> {
         });
         if m.private && !inside {
             seen.hidden.push(m.id);
+            continue;
+        }
+        if !m.recent {
             continue;
         }
         let private = if m.private { ", private" } else { "" };
@@ -299,8 +317,13 @@ pub async fn retire(app: &App) {
         return;
     }
     for id in done {
+        let mut sent = true;
         for tx in &links {
-            let _ = tx.send(ToNode::Retire { bot: chief(id) }).await;
+            sent &= tx.send(ToNode::Retire { bot: chief(id) }).await.is_ok();
+        }
+        // A node that went away didn't hear it: the next tick tries again.
+        if !sent {
+            continue;
         }
         if let Err(e) = sqlx::query!("update mission set retired = true where id = $1", id)
             .execute(&app.db)
@@ -362,6 +385,8 @@ pub async fn set(State(app): State<Shared>, Json(c): Json<Change>) -> Result<Sta
             "Status is done or dropped",
         ));
     }
+    let failed = |e| internal("updating a mission", e);
+    let mut tx = app.db.begin().await.map_err(failed)?;
     let done = sqlx::query!(
         "update mission set private = coalesce($2, private), status = coalesce($3, status),
                 updated_at = now() where id = $1",
@@ -369,17 +394,16 @@ pub async fn set(State(app): State<Shared>, Json(c): Json<Change>) -> Result<Sta
         c.private,
         status
     )
-    .execute(&app.db)
+    .execute(&mut *tx)
     .await
-    .map_err(|e| internal("updating a mission", e))?;
+    .map_err(failed)?;
     if done.rows_affected() == 0 {
         return Err((StatusCode::NOT_FOUND, "No such mission"));
     }
     if status.is_some() {
-        close(&app.db, c.id)
-            .await
-            .map_err(|e| internal("closing a mission", e))?;
+        close(&mut tx, c.id).await.map_err(failed)?;
     }
+    tx.commit().await.map_err(failed)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -462,7 +486,7 @@ mod tests {
             .unwrap();
         let slug = chief(id);
         let chief_run = run_of(&db, &slug).await;
-        assert_eq!(session(&db, chief_run, &slug).await, None);
+        assert_eq!(session(&db, chief_run, &slug).await.unwrap(), None);
         let ok = team::ask(
             &app,
             chief_run,
@@ -473,7 +497,7 @@ mod tests {
         assert!(ok.starts_with("ok:"), "{ok}");
         let coder_run = run_of(&db, "coder").await;
         assert_eq!(
-            session(&db, coder_run, "coder").await,
+            session(&db, coder_run, "coder").await.unwrap(),
             Some(format!("coder-mission-{id}"))
         );
         // The team records who was handed work.
@@ -549,6 +573,59 @@ mod tests {
                 .await
                 .starts_with("error:")
         );
+        // Closed long ago, its unfinished hand-off is still hidden.
+        sqlx::query!(
+            "update mission set status = 'done', updated_at = now() - interval '4 days' where id = $1",
+            secret
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        for viewer in [None, Some("blog")] {
+            let s = team::status(&app, viewer).await;
+            assert!(!s.contains("Hush"), "{s}");
+        }
+    }
+
+    #[sqlx::test]
+    async fn a_private_missions_result_stays_out_of_the_orchestrators_chat(db: PgPool) {
+        let app = crate::auth::tests::app(db.clone());
+        start(
+            &app,
+            team::ORCHESTRATOR,
+            &json!({ "title": "Secret", "goal": "Shh", "private": true }),
+        )
+        .await;
+        let id: i64 = sqlx::query_scalar!("select id from mission")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        let ok = update(
+            &app,
+            &chief(id),
+            &json!({ "update": "Hush result", "status": "done" }),
+        )
+        .await;
+        assert!(ok.starts_with("ok:"), "{ok}");
+        let thread = db::bot_thread(&db, team::ORCHESTRATOR)
+            .await
+            .unwrap()
+            .unwrap();
+        let told = sqlx::query_scalar!(
+            r#"select body ->> 'text' as "text!" from event
+               where thread_id = $1 and body ->> 'type' = 'message'"#,
+            thread.id
+        )
+        .fetch_all(&db)
+        .await
+        .unwrap();
+        assert_eq!(told.len(), 1, "{told:?}");
+        assert!(
+            told[0].contains(&format!("Mission {id} is done"))
+                && !told[0].contains("Secret")
+                && !told[0].contains("Hush"),
+            "{told:?}"
+        );
     }
 
     #[sqlx::test]
@@ -565,6 +642,15 @@ mod tests {
             .await
             .unwrap();
         let slug = chief(id);
+        // The chief of an open mission can't be disabled from Settings.
+        let mut off = bots::get(&db, &slug).await.unwrap().unwrap();
+        off.disabled = true;
+        let refused = bots::update(State(app.clone()), Json(off.clone())).await;
+        assert_eq!(
+            refused.err().map(|e| e.0),
+            Some(StatusCode::UNPROCESSABLE_ENTITY)
+        );
+        assert!(!bots::get(&db, &slug).await.unwrap().unwrap().disabled);
         let ok = update(
             &app,
             &slug,
@@ -573,6 +659,8 @@ mod tests {
         .await;
         assert!(ok.starts_with("ok:"), "{ok}");
         assert!(bots::get(&db, &slug).await.unwrap().unwrap().disabled);
+        // Closed, its chief can be saved as disabled.
+        assert!(bots::update(State(app.clone()), Json(off)).await.is_ok());
         let thread = db::bot_thread(&db, team::ORCHESTRATOR)
             .await
             .unwrap()

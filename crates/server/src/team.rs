@@ -200,7 +200,6 @@ pub async fn check(app: &App) {
     let stranded = sqlx::query_scalar!(
         "select t.id from ticket t
          where t.asked_by is not null and t.status = 'todo'
-           and t.created_at > now() - interval '1 day'
            and not exists (select 1 from run r where r.ticket_id = t.id)
          order by t.id"
     )
@@ -306,7 +305,10 @@ async fn handoff(app: &App, run: i64, asker: &str, request: &Value) -> Result<St
     if task.is_empty() || task.chars().count() > 4000 {
         return Err("the task must be 1 to 4,000 characters".into());
     }
-    if missions::of_run(&app.db, run).await.is_some() {
+    let on_mission = missions::of_run(&app.db, run)
+        .await
+        .map_err(|e| format!("couldn't check whether you're on a mission: {e}"))?;
+    if on_mission.is_some() {
         return Err(
             "you're on a mission, so finish your turn and say what you need; your Chief of Staff \
              will hand it on"
@@ -365,6 +367,9 @@ async fn handoff(app: &App, run: i64, asker: &str, request: &Value) -> Result<St
         .take(200)
         .collect();
     let mission = missions::of_chief(asker);
+    let failed = |e: sqlx::Error| format!("couldn't make the ticket: {e}");
+    // One transaction, so a failed request leaves no ticket for a retry to double.
+    let mut tx = app.db.begin().await.map_err(failed)?;
     let id = sqlx::query_scalar!(
         "insert into ticket (title, body, urgency, bot_id, asked_by, ask_depth, mission_id)
          values ($1, $2, 'hour', (select id from bot where slug = $3), (select id from bot where slug = $4), $5, $6)
@@ -376,9 +381,9 @@ async fn handoff(app: &App, run: i64, asker: &str, request: &Value) -> Result<St
         depth + 1,
         mission
     )
-    .fetch_one(&app.db)
+    .fetch_one(&mut *tx)
     .await
-    .map_err(|e| format!("couldn't make the ticket: {e}"))?;
+    .map_err(failed)?;
     if mission.is_some() {
         sqlx::query!(
             "update mission set team = array_append(team, $2), updated_at = now()
@@ -386,10 +391,11 @@ async fn handoff(app: &App, run: i64, asker: &str, request: &Value) -> Result<St
             mission,
             to
         )
-        .execute(&app.db)
+        .execute(&mut *tx)
         .await
-        .map_err(|e| format!("couldn't update the mission: {e}"))?;
+        .map_err(failed)?;
     }
+    tx.commit().await.map_err(failed)?;
     match crate::tickets::start(app, id).await {
         Ok(()) => Ok(format!(
             "Asked {} (ticket OB-{id}). Their answer will come to you as a new message when they finish; carry on with anything that doesn't need it.",
@@ -769,6 +775,11 @@ mod tests {
         check(&app).await;
         assert_eq!(state().await, "todo");
         sqlx::query!("update run set status = 'cancelled' where id = $1", busy)
+            .execute(&db)
+            .await
+            .unwrap();
+        // However long it has waited.
+        sqlx::query!("update ticket set created_at = now() - interval '2 days'")
             .execute(&db)
             .await
             .unwrap();

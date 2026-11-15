@@ -16,13 +16,14 @@ The harness, the gate and placement don't change. No Composio, Orgo or Bops code
 | # | Item | Size | New protocol or schema | Touches the gate |
 |---|---|---|---|---|
 | 1 | Steps: live "doing now" line and a "Worked for 2m 10s · 7 steps" fold-up | Small | Two thread events, one reducer item | No |
+| 1A | Animated bots: robots show what they're doing, and bots visibly hand work to each other | Medium | A `kind` on each step, two team events, new inputs in the Rive files | No |
 | 2 | Dressed screens: a home page with the bot's name, role and a clock | Small | Three env vars to the computer | No |
 | 3 | Soul and notes panel per bot | Small–medium | One file per bot in the vault, two endpoints | No |
 | 4 | `x_search`: research on X | Small | One bot setting, one dialog kind | Classed as a read, with a daily cap |
 | 5 | Voice calls with any bot | Medium | One endpoint, one bot setting, one message flag | No (approvals stay taps) |
 | 6 | Group chat; email inbox per bot | Not planned | | |
 
-Build in that order. Items 1–4 are independent of each other. Item 5 is better after 1, because the call shows its work as steps.
+Build in that order. Kelvin asked on 2026-11-15 for more animated feedback, especially bots interacting, so 1A comes straight after 1, which it builds on. Items 2–4 are independent. Item 5 is better after 1, because the call shows its work as steps.
 
 ---
 
@@ -50,6 +51,51 @@ So this needs no change to the node, the bridge or the engine.
 **Not taken:** rotating joke phrases, the mascot on a pill, per-step screenshots and expandable arguments.
 
 **Tests:** reducer tests in `proto` (folding, closing, a denied call, a run that ends mid-step); a label table test, including that no label contains the input's values other than a base name.
+
+---
+
+## 1A. Animated bots, and bots working together
+
+**Asked for by Kelvin (2026-11-15):** more animated feedback from the bots, especially when they interact with each other.
+
+**What bot-hq does.** Little: a mascot on a pill with a pulsing status word and a lightbulb, and a "From Barbie" label on a message from another bot. Nothing moves between bots. This item goes past the video.
+
+**What we have.** Every bot has a Rive face and a full-body robot (`design/bot-avatar`, built by `gen.py`), with a `state` input (0 idle, 1 thinking, 2 working, 3 needs you, 4 done, 5 failed) and a `poke` trigger. "Working" looks the same whatever the bot is doing. When one bot asks another (`ask_bot`), the only sign is a labelled message when the answer comes back. A discussion is a list of posts.
+
+**Design, in three layers.**
+
+*1. Robots show what kind of work it is.*
+
+- Each step (item 1) gets a `kind` beside its label: `read`, `write`, `command`, `browse`, `search`, `talk` (to a teammate), `google`, `media`, `phone`, `other`. `steps::label` returns both.
+- The Rive state machine `Bot` gains a number input `doing`, used while `state` is 2. `gen.py` adds a small prop per kind, drawn once and shared by every style: a book (read), a pencil (write), a terminal with a blinking cursor (command), a globe (browse), a magnifying glass (search), a speech bubble (talk), an envelope (google), a paintbrush (media), a phone (phone). `other` keeps today's swinging arms.
+- `ThreadView` already drives `state` through `mood`; it gains `doing` from the newest unfinished step. The face in the chat's top pill, the robot in an empty chat and the faces in the menu all follow it.
+
+*2. Hand-offs you can see.*
+
+- **Events:** two new thread events, published to both bots' threads: `Asked { from, to, ticket }` when `team::ask` makes the ticket, and `Answered { from, to, ticket, ok }` when the answer goes back. System 1's `Routed` event already exists for the Inbox.
+- **In the chat:** an `Asked` item is a small strip with the two faces. The asker's face leans in, a note flies across in an arc, and the teammate's face catches it and switches to working. `Answered` plays it back the other way, and the asker does its "done" wiggle. After playing once the strip rests as a plain line ("Researcher asked Coder · OB-142"), which opens the ticket.
+- **Rive:** two triggers, `give` and `receive`, each about a second, generated per locomotion the way `poke` is (a drone dips, a wheeled bot rolls forward and back). The note itself and its flight are a Flutter widget, so the Rive files stay one bot each.
+
+*3. The team stage.*
+
+- A **Team** screen in the menu (and a strip above the bot list on wide windows): every bot's full-body robot standing in its own spot, each in its current `state` and `doing`.
+- When one bot asks another, the asker moves across to the teammate (its own locomotion plays while Flutter moves it), `give` and `receive` fire, and it goes back. While the teammate works on that ticket a thin line joins the two. A routed Inbox message is the Inbox bot tossing a note to the bot it chose.
+- **Discussions** use the same stage: the chosen bots gather in a ring, the one whose turn it is steps forward with a speech bubble showing the first words of its post, and the chair holds up the verdict at the end.
+- Tapping a robot opens its chat. Tapping a line opens the ticket.
+- **Feed:** the stage needs every bot's state at once. The stream that already feeds the menu's statuses and needs-you badges gains `doing` and the two team events. No new connection.
+
+**Calm by default (accessibility, hard rule 3, and the ADHD-first profiles).**
+
+- Motion happens when something changes and then stops. An idle stage is still, apart from the fidgets the robots already have.
+- A setting, **Animation: full, calm or off**. Calm keeps state changes and drops travel across the stage and the idle fidgets. Off shows static faces and plain lines. The system's reduce-motion setting forces at least calm.
+- Every animation has a text twin: the strip's resting line, the step label. Nothing is told by motion alone.
+- No new sounds. The Ideas Room's cues stay where they are.
+
+**Where it shows.** The Flutter app first. The Omarchy bar panel's faces get `doing` for free if it loads the same files. The Leptos web UI gets the resting lines only. The wearable is not involved.
+
+**Not taken:** bot-hq's mascot pill and lightbulb; chat bubbles between robots on the stage beyond the first words of a discussion post (the thread is where text lives).
+
+**Tests:** reducer tests for `Asked` and `Answered` (pairing by ticket, an answer that never comes, a denied ask); `gen.py`'s existing frame renders extended to every `doing` value and both triggers, so each style is checked by eye from one sheet.
 
 ---
 
@@ -154,6 +200,8 @@ Numbers are assigned when each is built. D-059 and D-060 are on another branch.
 
 **Steps come from the gate's own events.** *Decided:* the thread shows each tool call as a step, labelled by the server from the tool's name and at most a file or service name; arguments are not put in the thread. *Why:* the server already sees every call start and end, so no new channel is needed, and keeping arguments out means nothing secret reaches the thread. *Alternatives:* the node forwarding Orphus's `tool_execution_start` (a second source for what the gate already has); showing arguments (needs redaction, and leaks when it misses). *Revisit if:* Kelvin wants to see commands without opening the ledger.
 
+**Bots show their work and their hand-offs in motion, calm by default.** *Decided:* each step has a kind that the robot acts out with a prop; `ask_bot` and its answer are thread events that play as a note passing between two faces; a Team screen shows every robot and moves them when they work together; a setting offers full, calm or off, and reduce-motion is honoured. *Why:* Kelvin asked for it, and seeing who is doing what, and who is waiting on whom, is information the text hides. *Alternatives:* status words only, as bot-hq does (no sense of the team); one Rive scene holding every bot (the files are generated per style, and a shared scene would have to be rebuilt whenever a bot is added). *Revisit if:* the motion distracts more than it informs.
+
 **A bot's screen opens on its own home page.** *Decided:* the desktop image renders a local page with the bot's name, remit and colour, set as Chromium's home and new tab; the browser is not started for the bot. *Why:* a watcher can tell whose screen it is, at no memory cost. *Alternatives:* starting a browser for every bot, as bot-hq does (memory on a 2 GB computer); a dock and app tiles (decoration). *Revisit if:* bots waste turns on an empty screen.
 
 **Each bot has a short notes file in the vault, read at every run.** *Decided:* `bots/<slug>/notes.md`, 2,000 characters loaded per run, editable by Kelvin in the app or Obsidian and by the bot. *Why:* corrections should stick without Kelvin editing instructions, and he should be able to see and fix what a bot has taken on. *Alternatives:* Honcho (a service, and not readable in the vault); pointing at the file without loading it (edits don't reliably take effect); putting notes in the wiki (it is shared and query-only). *Revisit if:* notes grow past the cap or bots stop keeping them. Depends on Q1.
@@ -169,4 +217,5 @@ Numbers are assigned when each is built. D-059 and D-060 are on another branch.
 1. **Q1 (notes):** load a bot's notes into every run, or only point at them?
 2. **Q2 (calls):** build calls with any bot now, or after the desktop app is settled?
 3. **Q3 (X search):** which bots get it first? The plan assumes off by default, switched on per bot.
-4. **Q4 (order):** is 1 → 2 → 3 → 4 → 5 right, or should calls move up?
+4. **Q4 (order):** is 1 → 1A → 2 → 3 → 4 → 5 right, or should calls move up?
+5. **Q5 (animation):** should the Team stage be its own screen, the app's home, or both? And should the default be full or calm?

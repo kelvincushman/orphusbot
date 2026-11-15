@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into memory_fact (text, embedding) values ($1, $2) returning id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "memory_fact",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Float4Array"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fa313d36c18800868dc79555b744497c1ffec26262a3a7f3ef3a6f7cb6b7fdf2"
+}

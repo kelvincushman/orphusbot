@@ -6,6 +6,10 @@ Every pull request that changes something a user or operator would notice adds a
 
 ## [Unreleased]
 
+### Added
+
+- **Learned memory (first stage):** OrphusBot can now learn facts about you from what you say to your bots, with no one having to write them down. Each fact is one sentence, linked to the messages it came from. If you say something again it is counted, and if you change your mind the old fact is replaced. It runs on local models, so your words stay on your own machine, and private bots' conversations are never used. It is off until switched on, and bots don't read it yet: this stage only collects. Operators: set `ORPHUSBOT_MEMORY_LLM_URL` and `ORPHUSBOT_MEMORY_EMBED_URL` (and the model names) to turn it on; `GET /api/memory` lists what was learned and `DELETE /api/memory/{id}` forgets a fact.
+
 ### Changed
 
 - **Reverse-engineering bots:** a bot's computer can now be **Reverse engineering (REA and Ghidra)**, picked under the bot's desktop in Settings. The bot decompiles and studies binaries with REA and Ghidra inside its own computer, never on the box itself, and loads only the tools and results each step needs, so a small local model's context isn't flooded. Its REA steps need your approval only if bash does, so it can work through a job on its own. REABOT is the first, on the box's local Qwen. Operators: build `images/rea` (after `images/desktop`); the new setting `ORPHUSBOT_REA_IMAGE` picks the image.

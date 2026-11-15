@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update memory_heard set attempts = attempts + 1,\n                        learned_at = case when attempts + 1 >= $2 then now() end\n                 where id = any($1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8Array",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9b2ebc8544b780e02fecada11cce035d8bfffafe29d3401c61a86e4b9f808c7a"
+}

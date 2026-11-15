@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select text, times_seen from memory_fact where replaced_by is null order by id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "text",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "memory_fact",
+            "name": "text"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "times_seen",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "memory_fact",
+            "name": "times_seen"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "9aedee34f3dfd8b561ce18bbf50c1e06db1599b36906fda65032a4629d52eeb5"
+}

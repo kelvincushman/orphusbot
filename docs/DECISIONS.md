@@ -11,6 +11,16 @@ Format:
 
 ---
 
+## D-061: Learned memory is built into the server, on the box's own models (2026-11-15)
+
+**Decided:** OrphusBot learns facts about the owner from his messages itself: a Rust module in the server, tables in its own Postgres, the box's local chat model for extraction and its local embedding model for finding similar facts. The behaviour follows our study of Honcho ([research/honcho-2026-11-15.md](research/honcho-2026-11-15.md) §1), written from that description in our own words. No Honcho code or prompt text is used, and its source is not consulted while building.
+
+**Why:** The owner chose it. The wiki only holds what a bot decides to write down, so nothing was learned unless someone filed it. Honcho does this well, but its server is AGPL-3.0 and can't be mixed into an MIT project, and running it beside OrphusBot would add Python, Redis, a second database and a store the owner can't read in his vault. Local models keep every message on the box and cost nothing per call.
+
+**Alternatives:** Running Honcho unmodified as a separate service (its real system at once, but the extra services above); a nightly routine in which a bot writes facts into the vault (no new code, but no per-message sources and no search). pgvector for the embeddings (needs a different Postgres image; unnecessary at this size). Deciding "same or different" by embedding distance alone (measured: opposites score higher than rewordings, so it would merge contradictions).
+
+**Revisit if:** the local model's facts are often wrong or it can't keep up; the fact count makes loading them all slow (then pgvector); or the owner wants memory shared with other tools, which a separate service would do better.
+
 ## D-058: Reverse engineering runs in its own computer, with REA's MCP server inside it (2026-11-05)
 
 **Decided:** A third bot desktop, `rea` (`images/rea`): the Debian desktop plus REA 6.8.0, Ghidra 12.1.4, JDK 21 and Node 24, with 6 GB of memory instead of 2. For such a bot, the node starts REA's MCP server inside the computer (`podman exec -i <computer> rea mcp`) as an extra MCP server named `rea`. The first such bot is REABOT, on the box's local Qwen (`local/qwen3.8-27b-abl`, 64k context). Context is kept small in the way REA is built for: the bot reaches REA's tools only through Orphus's `mcp` tool, which searches them and describes one at a time, so the 229 schemas (about 300 KB) never enter its context; its replies are summaries, with the detail retained in REA under an Evidence ID that the bot pages with `inspect_analysis_view`; compact input schemas and no output schemas; and instructions that tell it to load only what each step needs (search with a specific word and no schemas, never `connect` or list all tools). REA's calls on such a bot follow the owner's rule for `bash`, since they run inside the same computer; otherwise each of the 229 tools would need its own "always", and the bot couldn't work on its own.

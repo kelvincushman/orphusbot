@@ -21,6 +21,7 @@ mod gallery;
 mod gate;
 mod google;
 mod links;
+mod memory;
 mod nodes;
 mod notify;
 mod oauth;
@@ -180,6 +181,8 @@ struct App {
     notifier: notify::Notifier,
     /// ContentSwarm's owner console, for the Social screen (DESIGN §11.6).
     social: social::Social,
+    /// What is learned about the owner from his messages (DESIGN §11.9).
+    memory: memory::Memory,
     /// The built web UI (crates/ui/dist), served at `/`.
     ui_dir: String,
 }
@@ -246,6 +249,7 @@ async fn main() -> anyhow::Result<()> {
         devices: device::Devices::default(),
         notifier,
         social: social::Social::from_env(),
+        memory: memory::Memory::from_env(),
         ui_dir,
     });
     calibrate::load(&app).await;
@@ -255,6 +259,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(capture::mine_forever(app.clone()));
     tokio::spawn(profiles::tend_forever(app.clone()));
     tokio::spawn(social::watch_forever(app.clone()));
+    tokio::spawn(memory::learn_forever(app.clone()));
 
     let router = router(app);
 
@@ -300,6 +305,8 @@ fn router(app: Shared) -> Router {
                 .layer(axum::extract::DefaultBodyLimit::disable()),
         )
         .route("/api/gallery/{id}/file", get(gallery::file))
+        .route("/api/memory", get(memory::list))
+        .route("/api/memory/{id}", axum::routing::delete(memory::forget))
         .route("/api/gallery/update", post(gallery::update))
         .route("/api/gallery/delete", post(gallery::delete))
         .route("/api/gallery/from-artifact", post(gallery::from_artifact))
@@ -485,6 +492,10 @@ async fn send_message(
             role: Role::User,
             text: text.clone(),
         });
+        // Private bots' conversations aren't learned from.
+        if let (ThreadEvent::Message { text, .. }, "team") = (&event, bot.scope.as_str()) {
+            memory::heard(&app, thread.id, text).await;
+        }
         record(&app, &thread, event).await;
     }
     for (id, name, size, image) in &files {

@@ -6,10 +6,6 @@ Every pull request that changes something a user or operator would notice adds a
 
 ## [Unreleased]
 
-### Added
-
-- **Learned memory (first stage):** OrphusBot can now learn facts about you from what you say to your bots, with no one having to write them down. Each fact is one sentence, linked to the messages it came from. If you say something again it is counted, and if you change your mind the old fact is replaced. It runs on local models, so your words stay on your own machine, and private bots' conversations are never used. It is off until switched on, and bots don't read it yet: this stage only collects. Operators: set `ORPHUSBOT_MEMORY_LLM_URL` and `ORPHUSBOT_MEMORY_EMBED_URL` (and the model names) to turn it on; `GET /api/memory` lists what was learned and `DELETE /api/memory/{id}` forgets a fact.
-
 ### Changed
 
 - **Reverse-engineering bots:** a bot's computer can now be **Reverse engineering (REA and Ghidra)**, picked under the bot's desktop in Settings. The bot decompiles and studies binaries with REA and Ghidra inside its own computer, never on the box itself, and loads only the tools and results each step needs, so a small local model's context isn't flooded. Its REA steps need your approval only if bash does, so it can work through a job on its own. REABOT is the first, on the box's local Qwen. Operators: build `images/rea` (after `images/desktop`); the new setting `ORPHUSBOT_REA_IMAGE` picks the image.
@@ -47,6 +43,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Added
 
+- **Learned memory (first stage):** OrphusBot can now learn facts about you from what you say to your bots, with no one having to write them down. Each fact is one sentence, linked to the messages it came from. If you say something again it is counted, and if you change your mind the old fact is replaced. It runs on local models, so your words stay on your own machine, and private bots' conversations are never used. It is off until switched on, and bots don't read it yet: this stage only collects. Operators: set `ORPHUSBOT_MEMORY_LLM_URL` and `ORPHUSBOT_MEMORY_EMBED_URL` (and the model names) to turn it on; `GET /api/memory` lists what was learned and `DELETE /api/memory/{id}` forgets a fact.
 - **Phone and social bots:** a new bot setting, **Phone and social accounts**: none, read accounts and queue drafts, or also use the phone. Bots with it can read your accounts' voice, queue posts and replies for your approval, and (if allowed) look at and use your phone. Anything that could post, reply, like, follow or confirm on the phone asks you every time, even if you've said "always" before.
 - **Social:** the megaphone in the header opens your X and LinkedIn drafts, shown the way they'll be posted, to approve, edit, schedule or reject (say why and the next drafts learn). Replies show under the comment they answer, the Calendar shows what's scheduled and what went out, the Phone tab shows the phone's screen live, and Voice holds each account's voice and what it knows. A notification tells you when new drafts arrive. Posting goes through your own phone, plugged into the server, and nothing goes out without your tap.
 - **Omarchy computers:** give a bot an Omarchy desktop in its settings (Its computer's desktop → Omarchy). Its computer becomes Arch Linux with Omarchy's look, bar, terminal and keys, which you can watch and take over as before, and the bot can take screenshots, click and type on it itself. Its home folder carries over when you switch.

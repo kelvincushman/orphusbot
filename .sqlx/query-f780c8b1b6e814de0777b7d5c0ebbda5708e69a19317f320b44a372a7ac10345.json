@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "insert into memory_fact (text, embedding) values ($1, $2) returning id",
+  "query": "insert into memory_fact (text, embedding, last_seen_at)\n                     values ($1, $2, coalesce(\n                         (select max(heard_at) from memory_heard where id = any($3)), now()))\n                     returning id",
   "describe": {
     "columns": [
       {
@@ -18,12 +18,13 @@
     "parameters": {
       "Left": [
         "Text",
-        "Float4Array"
+        "Float4Array",
+        "Int8Array"
       ]
     },
     "nullable": [
       false
     ]
   },
-  "hash": "fa313d36c18800868dc79555b744497c1ffec26262a3a7f3ef3a6f7cb6b7fdf2"
+  "hash": "f780c8b1b6e814de0777b7d5c0ebbda5708e69a19317f320b44a372a7ac10345"
 }

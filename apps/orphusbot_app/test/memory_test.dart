@@ -11,6 +11,14 @@ void main() {
     expect(at(DateTime(2026, 11, 12, 9)), '3 days ago');
     expect(at(DateTime(2026, 10, 2)), '2 Oct');
     expect(at(DateTime(2025, 12, 30)), '30 Dec 2025');
+    // The day after the clocks go forward is still "yesterday" the next morning.
+    expect(
+      heardWhen(
+        DateTime(2026, 3, 29, 0, 30).toIso8601String(),
+        DateTime(2026, 3, 30, 0, 10),
+      ),
+      'yesterday',
+    );
     expect(heardWhen(null, now), '');
     expect(heardWhen('not a date', now), '');
   });

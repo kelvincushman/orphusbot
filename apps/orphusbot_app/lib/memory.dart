@@ -10,11 +10,13 @@ import 'api.dart';
 String heardWhen(String? iso, DateTime now) {
   final at = DateTime.tryParse(iso ?? '')?.toLocal();
   if (at == null) return '';
-  final days = DateTime(
+  // Whole calendar days, counted in UTC so a clock change (a 23-hour day)
+  // can't turn "yesterday" into "today".
+  final days = DateTime.utc(
     now.year,
     now.month,
     now.day,
-  ).difference(DateTime(at.year, at.month, at.day)).inDays;
+  ).difference(DateTime.utc(at.year, at.month, at.day)).inDays;
   if (days <= 0) return 'today';
   if (days == 1) return 'yesterday';
   if (days < 7) return '$days days ago';
@@ -117,10 +119,11 @@ class _MemoryScreenState extends State<MemoryScreen> {
     if (sure != true) return;
     try {
       await widget.api.delete('/api/memory/${fact['id']}');
-      asked++;
-      if (mounted) {
-        setState(() => facts.removeWhere((f) => f['id'] == fact['id']));
-      }
+      if (!mounted) return;
+      setState(() => facts.removeWhere((f) => f['id'] == fact['id']));
+      // A fresh load: it overtakes any answer from before the delete, and
+      // picks up a search typed while the dialog was open.
+      await _load();
     } catch (e) {
       if (mounted) setState(() => note = explain(e));
     }

@@ -286,11 +286,19 @@ async fn file(
     heard: &[i64],
 ) -> sqlx::Result<()> {
     let mut tx = db.begin().await?;
+    // Facts this batch has already replaced. Two of its facts can replace the
+    // same old one (a general preference split into two specific ones): the
+    // second is then simply added.
+    let mut replaced_here: Vec<i64> = Vec::new();
     for (fact, vector, verdict) in plan {
+        let verdict = match verdict {
+            Verdict::Same(t) | Verdict::Replaces(t) if replaced_here.contains(&t) => Verdict::New,
+            other => other,
+        };
         // The model was asked outside this transaction. If the fact it
-        // compared with was forgotten (or replaced) meanwhile, this one is
-        // dropped: filing it would bring a forgotten fact back with no new
-        // message from the owner.
+        // compared with was forgotten (or replaced) by something else
+        // meanwhile, this one is dropped: filing it would bring a forgotten
+        // fact back with no new message from the owner.
         if let Verdict::Same(target) | Verdict::Replaces(target) = verdict {
             let still = sqlx::query_scalar!(
                 "select id from memory_fact where id = $1 and replaced_by is null for update",
@@ -304,9 +312,15 @@ async fn file(
         }
         let id = match verdict {
             Verdict::Same(id) => {
+                // When he last said it, not when it was read: a batch can
+                // wait out an outage.
                 sqlx::query!(
-                    "update memory_fact set times_seen = times_seen + 1, last_seen_at = now() where id = $1",
-                    id
+                    "update memory_fact set times_seen = times_seen + 1,
+                            last_seen_at = greatest(last_seen_at,
+                                (select max(heard_at) from memory_heard where id = any($2)))
+                     where id = $1",
+                    id,
+                    &fact.sources
                 )
                 .execute(&mut *tx)
                 .await?;
@@ -314,9 +328,13 @@ async fn file(
             }
             Verdict::New | Verdict::Replaces(_) => {
                 let id = sqlx::query_scalar!(
-                    "insert into memory_fact (text, embedding) values ($1, $2) returning id",
+                    "insert into memory_fact (text, embedding, last_seen_at)
+                     values ($1, $2, coalesce(
+                         (select max(heard_at) from memory_heard where id = any($3)), now()))
+                     returning id",
                     fact.text,
-                    &vector
+                    &vector,
+                    &fact.sources
                 )
                 .fetch_one(&mut *tx)
                 .await?;
@@ -328,6 +346,7 @@ async fn file(
                     )
                     .execute(&mut *tx)
                     .await?;
+                    replaced_here.push(old);
                 }
                 id
             }
@@ -936,6 +955,45 @@ mod tests {
             !learn_due(&memory, &db).await.unwrap(),
             "the message counts as read"
         );
+    }
+
+    #[sqlx::test]
+    async fn two_facts_can_replace_one_and_keep_when_it_was_said(db: PgPool) {
+        let (memory, _) = fake(vec![
+            facts(&[("Sam prefers appointments after 11:00.", &[1])]),
+            facts(&[
+                ("Sam prefers dentist appointments after 14:00.", &[1]),
+                ("Sam prefers doctor appointments before 10:00.", &[1]),
+            ]),
+            json!({ "relation": "replaces", "number": 1 }),
+            json!({ "relation": "replaces", "number": 1 }),
+        ])
+        .await;
+        say(&db, "appointments after 11 please").await;
+        learn_due(&memory, &db).await.unwrap();
+        say(&db, "dentist after 2, doctor before 10").await;
+        learn_due(&memory, &db).await.unwrap();
+        assert_eq!(
+            current(&db).await,
+            [
+                (
+                    "Sam prefers dentist appointments after 14:00.".to_owned(),
+                    1
+                ),
+                (
+                    "Sam prefers doctor appointments before 10:00.".to_owned(),
+                    1
+                ),
+            ]
+        );
+        // `say` dates its messages five minutes back: that is when it was said.
+        let late = sqlx::query_scalar!(
+            "select count(*) from memory_fact where last_seen_at > now() - interval '4 minutes'"
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(late, Some(0));
     }
 
     #[sqlx::test]

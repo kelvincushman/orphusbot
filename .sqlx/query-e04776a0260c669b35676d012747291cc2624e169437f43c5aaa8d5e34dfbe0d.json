@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into memory_heard (thread_id, text) values (1, 'just now')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "e04776a0260c669b35676d012747291cc2624e169437f43c5aaa8d5e34dfbe0d"
+}

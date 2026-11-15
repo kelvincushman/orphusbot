@@ -72,9 +72,13 @@ class LiveVoice {
     required this.onReply,
     required this.onError,
     this.onTurn,
+    this.path = '/api/room/voice',
   });
 
   final Api api;
+
+  /// Where the session comes from: the Ideas Room's, or the Orchestrator chat's.
+  final String path;
 
   /// Answers a function call (`ask_orchestrator`, `save_idea`) with text.
   final Future<String> Function(String name, Map<String, dynamic> args) ask;
@@ -198,7 +202,7 @@ class LiveVoice {
     await openRoomLog();
     _set(LiveState.connecting);
     final got =
-        await api.postJson('/api/room/voice', {}) as Map<String, dynamic>;
+        await api.postJson(path, {}) as Map<String, dynamic>;
     sessionId = (got['session_id'] as num?)?.toInt();
     if (!SoLoud.instance.isInitialized) await SoLoud.instance.init();
     _ws = await WebSocket.connect(

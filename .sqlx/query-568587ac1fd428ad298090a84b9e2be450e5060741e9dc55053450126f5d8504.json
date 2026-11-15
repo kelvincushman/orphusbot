@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update run set status = 'cancelled', updated_at = now()\n         where status = 'queued'\n           and thread_id = (select t.id from thread t join bot b on b.id = t.bot_id where b.slug = $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "568587ac1fd428ad298090a84b9e2be450e5060741e9dc55053450126f5d8504"
+}

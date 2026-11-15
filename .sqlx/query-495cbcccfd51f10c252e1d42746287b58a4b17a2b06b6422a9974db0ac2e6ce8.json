@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update run set status = 'cancelled' where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "495cbcccfd51f10c252e1d42746287b58a4b17a2b06b6422a9974db0ac2e6ce8"
+}

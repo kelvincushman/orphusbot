@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select t.mission_id from run r join ticket t on t.id = r.ticket_id where r.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mission_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ticket",
+            "name": "mission_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "46affe99598e1db9f183e9f499b4c4da5054942224a040982a99213cfb13f6c9"
+}

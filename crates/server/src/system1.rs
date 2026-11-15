@@ -754,6 +754,7 @@ pub(crate) mod tests {
             desktop: "debian".into(),
             phone: "none".into(),
             media: false,
+            session_gen: 0,
         }
     }
 

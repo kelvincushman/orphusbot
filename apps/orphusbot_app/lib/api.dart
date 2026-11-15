@@ -136,11 +136,13 @@ class Api {
     String text, {
     List<int> attachments = const [],
     bool room = false,
+    bool voice = false,
   }) => post('/api/messages', {
     'bot': bot,
     'text': text,
     'attachments': attachments,
     if (room) 'room': true,
+    if (voice) 'voice': true,
   });
 
   /// Uploads a file for `bot`; returns its id, to send with the message.

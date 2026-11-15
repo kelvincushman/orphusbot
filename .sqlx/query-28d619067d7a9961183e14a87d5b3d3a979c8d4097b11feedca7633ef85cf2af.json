@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into action_rule (tool, input) values ($1, $2) on conflict do nothing",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "28d619067d7a9961183e14a87d5b3d3a979c8d4097b11feedca7633ef85cf2af"
+}

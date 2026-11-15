@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update bot set session_gen = session_gen + 1 where slug = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "438ccdc7b3c07bd897f47dc7e95999da4675e7624d1bf776e71f93e849055858"
+}

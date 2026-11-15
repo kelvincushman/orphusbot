@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media\n         from bot order by disabled, slug <> 'orchestrator', slug <> 'inbox', name",
+  "query": "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media, session_gen\n         from bot order by disabled, slug <> 'orchestrator', slug <> 'inbox', name",
   "describe": {
     "columns": [
       {
@@ -167,6 +167,17 @@
             "name": "media"
           }
         }
+      },
+      {
+        "ordinal": 15,
+        "name": "session_gen",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "session_gen"
+          }
+        }
       }
     ],
     "parameters": {
@@ -187,8 +198,9 @@
       true,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "34ba12bd200c95dd8e5c9a22506d44141ae5b0bb3a03150d57da1ad787065b34"
+  "hash": "312761615439645a0aa2172ce80d19b310373611f880912046f04c1fbadc32ed"
 }

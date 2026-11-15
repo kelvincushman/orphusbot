@@ -42,6 +42,10 @@ export const GATE_TITLE = "orphusbot-gate";
 export const TAKEOVER_TITLE = "orphusbot-takeover";
 /** Title of the dialog that hands a teammate a task (DESIGN §5.3). */
 export const ASK_TITLE = "orphusbot-ask";
+export const TEAM_TITLE = "orphusbot-team";
+export const ACCEPT_TITLE = "orphusbot-accept";
+export const MISSION_TITLE = "orphusbot-mission";
+export const MISSION_UPDATE_TITLE = "orphusbot-mission-update";
 /** Title of the dialog that starts a discussion among teammates (DESIGN §11.4). */
 export const DISCUSS_TITLE = "orphusbot-discuss";
 
@@ -67,7 +71,7 @@ const HELPER_TOOLS = ["subagent", "fleet", "roundtable"];
 // Plus `mcp`, Orphus's MCP gateway, when the owner granted the bot a connection:
 // it only talks to those servers, so it is safe to run outside the computer.
 const COMPUTER_TOOLS = [
-  "read", "write", "edit", "bash", "request_takeover", "ask_owner", "share_file", "ask_bot", "discuss", "install_skill",
+  "read", "write", "edit", "bash", "request_takeover", "ask_owner", "share_file", "ask_bot", "team_status", "accept_card", "start_mission", "update_mission", "discuss", "install_skill",
   ...(process.env.ORPHUSBOT_MCP ? ["mcp"] : []),
   // Fleets: helpers whose calls come back through this gate and into the computer.
   ...(process.env.ORPHUSBOT_HELPERS_GATED === "1" ? HELPER_TOOLS : []),
@@ -338,6 +342,81 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
+  // What the team's hand-offs are doing right now, so a bot looks instead of guessing.
+  pi.registerTool({
+    name: "team_status",
+    label: "Check on the team",
+    description:
+      "See every unfinished hand-off: who has it, and whether it's working, not started, or blocked waiting for Kelvin. Use it before saying anything is pending.",
+    promptSnippet: "See what teammates are doing",
+    parameters: Type.Object({}),
+    async execute(_id, _params, _signal, _onUpdate, ctx) {
+      const ui = dialogs(ctx as unknown as { mode: string; ui: Dialogs }) ?? ctx.ui;
+      const answer = String((await ui.input(TEAM_TITLE, "{}")) ?? "error:the server didn't answer");
+      if (answer.startsWith("error:")) throw new Error(answer.slice("error:".length));
+      return { content: [{ type: "text", text: answer.replace(/^ok:/, "") }], details: {} };
+    },
+  });
+
+  // The Orchestrator accepts a teammate's safe card; the server decides what's safe.
+  pi.registerTool({
+    name: "accept_card",
+    label: "Accept a teammate's card",
+    description:
+      "Orchestrator only: accept a teammate's card that team_status marks safe for you, so it carries on. Anything else stays Kelvin's.",
+    promptSnippet: "Accept a teammate's safe card",
+    parameters: Type.Object({
+      card: Type.String({ description: "The card's id, from team_status" }),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const ui = dialogs(ctx as unknown as { mode: string; ui: Dialogs }) ?? ctx.ui;
+      const answer = String((await ui.input(ACCEPT_TITLE, JSON.stringify({ card: params.card }))) ?? "error:the server didn't answer");
+      if (answer.startsWith("error:")) throw new Error(answer.slice("error:".length));
+      return { content: [{ type: "text", text: answer.replace(/^ok:/, "") }], details: {} };
+    },
+  });
+
+  // A new piece of work gets its own Chief of Staff (DESIGN §5.5).
+  pi.registerTool({
+    name: "start_mission",
+    label: "Start a mission",
+    description:
+      "Orchestrator only: give a big new piece of work its own Chief of Staff, with a clean context and a team. Not for everyday jobs like blog posts or social media. The team can see it unless it's private.",
+    promptSnippet: "Give a new piece of work its own Chief of Staff",
+    parameters: Type.Object({
+      title: Type.String({ description: "A short title" }),
+      goal: Type.String({ description: "What done looks like, with everything the chief needs" }),
+      team: Type.Optional(Type.Array(Type.String(), { description: "Teammates' short names, such as coder" })),
+      private: Type.Optional(Type.Boolean({ description: "True only if Kelvin says it's private" })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const ui = dialogs(ctx as unknown as { mode: string; ui: Dialogs }) ?? ctx.ui;
+      const answer = String((await ui.input(MISSION_TITLE, JSON.stringify(params))) ?? "error:the server didn't answer");
+      if (answer.startsWith("error:")) throw new Error(answer.slice("error:".length));
+      return { content: [{ type: "text", text: answer.replace(/^ok:/, "") }], details: {} };
+    },
+  });
+
+  pi.registerTool({
+    name: "update_mission",
+    label: "Update a mission",
+    description:
+      "A Chief of Staff records its mission's progress in one line, and closes it when finished. The Orchestrator can do the same for a mission it names, or mark one private.",
+    promptSnippet: "Record a mission's progress, or close it",
+    parameters: Type.Object({
+      update: Type.Optional(Type.String({ description: "Where things stand, in one line; the result when closing" })),
+      status: Type.Optional(Type.String({ description: "done or dropped, to close the mission" })),
+      private: Type.Optional(Type.Boolean({ description: "True to mark it private" })),
+      mission: Type.Optional(Type.Number({ description: "Orchestrator only: the mission's number" })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const ui = dialogs(ctx as unknown as { mode: string; ui: Dialogs }) ?? ctx.ui;
+      const answer = String((await ui.input(MISSION_UPDATE_TITLE, JSON.stringify(params))) ?? "error:the server didn't answer");
+      if (answer.startsWith("error:")) throw new Error(answer.slice("error:".length));
+      return { content: [{ type: "text", text: answer.replace(/^ok:/, "") }], details: {} };
+    },
+  });
+
   // A discussion among teammates: the server runs it; the verdict comes back as a message.
   pi.registerTool({
     name: "discuss",
@@ -438,6 +517,23 @@ export default function (pi: ExtensionAPI) {
       if (!on) throw new Error("No phone is connected to ContentSwarm.");
       return encodeURIComponent(on.name);
     };
+    /**
+     * Security and sign-in prompts (Google's "Are you trying to sign in?", verify-it's-you
+     * screens, codes, passwords). Kelvin's rule: a bot never touches them, not even to
+     * dismiss one, because a wrong tap can block his own sign-in.
+     */
+    const SECURITY_TEXT =
+      /trying to sign in|sign-in attempt|verify it.?s you|confirm it.?s you|(is|was) (this|it) you|security (alert|check|code)|2-step|two-step|verification code|one-time (code|password)|\bpasskey|\bpassword\b/i;
+    const security = (elements: any[]) =>
+      elements.some((e) =>
+        (typeof e.id === "string" && e.id.startsWith("com.google.android.gms:")) ||
+        [e.text, e.desc].some((t) => typeof t === "string" && SECURITY_TEXT.test(t)));
+    /**
+     * What the bot last saw on each phone, so an action that waited long for approval
+     * can be checked. `null` means that look was thrown away: no acting until a new one.
+     */
+    const looks = new Map<string, { at: number; app: string } | null>();
+    const STALE_MS = 2 * 60_000;
     const account = async (key: string) => {
       const { accounts } = await json("/social/accounts");
       const a = (accounts as any[]).find((x) => x.id === key || x.handle === key || x.name === key);
@@ -537,6 +633,7 @@ export default function (pi: ExtensionAPI) {
               .map(({ text, desc, id, clickable, scrollable, center }) =>
                 ({ ...(text ? { text } : {}), ...(desc ? { desc } : {}), ...(id ? { id } : {}),
                    ...(clickable ? { clickable } : {}), ...(scrollable ? { scrollable } : {}), center }));
+            looks.set(n, { at: Date.now(), app: String(now.current_app) });
             return text(UNTRUSTED + `App: ${now.current_app}\n` + JSON.stringify(shown));
           }
           case "screenshot": {
@@ -550,6 +647,27 @@ export default function (pi: ExtensionAPI) {
           case "key":
           case "type":
           case "swipe": {
+            // Check the screen as it is now, not as it was when the bot looked: the
+            // owner's approval can take hours, and the phone moves on meanwhile.
+            const [{ elements }, now] = await Promise.all([
+              json(`/phones/${n}/ui`, undefined, signal), json(`/phones/${n}/current_app`, undefined, signal),
+            ]);
+            if (security(elements as any[])) {
+              looks.set(n, null);
+              throw new Error(
+                "A security or sign-in prompt is on the phone's screen. Never touch these, not even to dismiss one: " +
+                "leave it, tell Kelvin with ask_owner what it says, and stop until he has dealt with it.");
+            }
+            const seen = looks.get(n);
+            if (seen === null) throw new Error(`Look at the phone again before you ${p.action}: what you saw last no longer holds.`);
+            const waited = seen ? Date.now() - seen.at : 0;
+            if (seen && waited > STALE_MS && String(now.current_app) !== seen.app) {
+              const was = seen.app;
+              looks.set(n, null);
+              throw new Error(
+                `This ${p.action} waited ${Math.round(waited / 60_000)} min and the phone has moved on ` +
+                `(you looked at ${was}, it now shows ${now.current_app}), so it wasn't done. Look again and decide afresh.`);
+            }
             const body: Record<string, unknown> = { action: p.action };
             if (p.action === "tap") Object.assign(body, { confirm: true, text: p.text, desc: p.desc, id: p.id });
             if (p.action === "key") Object.assign(body, { confirm: true, key: need(p.key, "key") });

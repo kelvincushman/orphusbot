@@ -250,20 +250,22 @@ pub async fn release(db: &PgPool, node: Option<&str>) -> sqlx::Result<Vec<Releas
 
 /// Hands back one claimed run that couldn't be started, so it's queued again
 /// (or failed, once it has been tried too often). `fence` must be the claim's.
-pub async fn unclaim(db: &PgPool, run: i64, fence: i64) -> sqlx::Result<()> {
-    sqlx::query!(
-        "update run set
+/// True if this failed the run, so the caller can say that it ended.
+pub async fn unclaim(db: &PgPool, run: i64, fence: i64) -> sqlx::Result<bool> {
+    let row = sqlx::query!(
+        r#"update run set
             status = case when attempts >= $3 then 'failed'::run_status else 'queued'::run_status end,
             error = case when attempts >= $3 then 'The run could not be set up' else error end,
             node = null, lease_expires_at = null, updated_at = now()
-         where id = $1 and fence = $2 and status = 'running'",
+         where id = $1 and fence = $2 and status = 'running'
+         returning status::text as "status!""#,
         run,
         fence,
         MAX_ATTEMPTS
     )
-    .execute(db)
+    .fetch_optional(db)
     .await?;
-    Ok(())
+    Ok(row.is_some_and(|r| r.status == "failed"))
 }
 
 /// On server start no node is connected, so every running run is orphaned.
@@ -331,14 +333,19 @@ mod tests {
         };
         let c = claim(&db, run, "laptop").await.unwrap().unwrap();
         // A claim that has moved on isn't touched.
-        unclaim(&db, run, c.fence - 1).await.unwrap();
+        assert!(!unclaim(&db, run, c.fence - 1).await.unwrap());
         assert_eq!(status(&db, run).await, "running");
-        unclaim(&db, run, c.fence).await.unwrap();
+        assert!(!unclaim(&db, run, c.fence).await.unwrap());
         assert_eq!(status(&db, run).await, "queued");
         // It can be claimed again, and gives up after too many tries.
-        for _ in 1..MAX_ATTEMPTS {
+        for attempt in 2..=MAX_ATTEMPTS {
             let c = claim(&db, run, "laptop").await.unwrap().unwrap();
-            unclaim(&db, run, c.fence).await.unwrap();
+            let failed = unclaim(&db, run, c.fence).await.unwrap();
+            assert_eq!(
+                failed,
+                attempt == MAX_ATTEMPTS,
+                "only the last try fails it"
+            );
         }
         assert_eq!(status(&db, run).await, "failed");
     }

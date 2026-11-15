@@ -1101,8 +1101,16 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
                 // Hand the claim back, or the node's lease renewals would keep
                 // this run "running" with nothing running it.
                 warn!("finding the run's mission session: {e}");
-                if let Err(e) = runs::unclaim(&app.db, run, claimed.fence).await {
-                    warn!("handing back run {run}: {e}");
+                match runs::unclaim(&app.db, run, claimed.fence).await {
+                    // Its last try: say it ended, so a ticket or a waiting
+                    // teammate isn't left hanging.
+                    Ok(true) => {
+                        lock(&app.rt).waiting.remove(&run);
+                        let error = Some("The run could not be set up".to_owned());
+                        run_ended(app, &thread, run, RunOutcome::Failed, error).await;
+                    }
+                    Ok(false) => {}
+                    Err(e) => warn!("handing back run {run}: {e}"),
                 }
                 return;
             }

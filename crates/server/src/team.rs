@@ -265,7 +265,7 @@ pub async fn check(app: &App) {
 
 /// Tells one bot about a stuck card, once. The claim is one statement, so two
 /// checks can't both send; it's only marked delivered once the message got
-/// through, and a claim that never was is free to take again after two minutes,
+/// through (stored, and its run queued), and a claim that never was is free to take again after two minutes,
 /// whether the message failed or the server stopped half way.
 async fn report(app: &App, ticket: i64, card: &str, to: &str, text: &str) {
     let claimed = sqlx::query!(
@@ -304,7 +304,7 @@ async fn report(app: &App, ticket: i64, card: &str, to: &str, text: &str) {
 }
 
 /// Gives a bot a message from the team and starts its next run. `false`: the
-/// message wasn't stored, or the run couldn't be started.
+/// message wasn't stored, or its run couldn't be queued.
 pub(crate) async fn tell(app: &App, bot: &str, text: &str) -> bool {
     let thread = match db::bot_thread(&app.db, bot).await {
         Ok(Some(thread)) => thread,

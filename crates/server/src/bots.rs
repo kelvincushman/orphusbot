@@ -139,6 +139,8 @@ impl Bot {
             desktop: (self.desktop != "debian").then(|| self.desktop.clone()),
             phone: (self.phone != "none").then(|| self.phone.clone()),
             media: self.media,
+            // Set when a run starts, for a team bot while memory is on.
+            recall: false,
         }
     }
 

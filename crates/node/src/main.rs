@@ -689,6 +689,11 @@ impl Engine {
         if let (true, Ok(key)) = (bot.media, std::env::var("ORPHUSBOT_KIE_KEY")) {
             command.env("ORPHUSBOT_KIE_KEY", key);
         }
+        // The `recall` tool (DESIGN §11.9): the server answers it and decides who gets it.
+        command.env_remove("ORPHUSBOT_RECALL");
+        if bot.recall {
+            command.env("ORPHUSBOT_RECALL", "1");
+        }
         let mut child = command
             .args([
                 "--mode",

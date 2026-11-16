@@ -791,7 +791,7 @@ async fn expire_dialogs(app: &App, run: i64) {
 }
 
 /// The engine is waiting on a dialog: decide gates here, ask the owner otherwise.
-async fn on_dialog(app: &App, active: Active, request: Value) {
+async fn on_dialog(app: &Shared, active: Active, request: Value) {
     let attempt = active.attempt;
     let Some(id) = request["id"].as_str().map(str::to_owned) else {
         return warn!("dialog without an id");
@@ -818,6 +818,21 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
     if method == "input" && title == team::STATUS_TITLE {
         let answer = format!("ok:{}", team::status(app, Some(&active.thread.bot)).await);
         return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
+    }
+    if method == "input" && title == memory::RECALL_TITLE {
+        let request: Value = request["placeholder"]
+            .as_str()
+            .and_then(|p| serde_json::from_str(p).ok())
+            .unwrap_or_default();
+        // On its own task: the search waits on the embedding server, and this
+        // one reads everything the node sends. `respond` drops the answer if
+        // the attempt has ended meanwhile.
+        let app = app.clone();
+        tokio::spawn(async move {
+            let answer = memory::recall(&app, &active.thread.bot, &request).await;
+            respond(&app, attempt, ui_response(&id, "value", json!(answer))).await;
+        });
+        return;
     }
     if method == "input" && title == team::ACCEPT_TITLE {
         let accept: Value = request["placeholder"]
@@ -1184,6 +1199,13 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
     {
         spec.instructions.push_str(&note);
     }
+    // A team bot is also told what has been learned about the owner, and may
+    // look up more (DESIGN §11.9). In the instructions, so it is said once and
+    // not again in every message; the engine restarts when it changes.
+    spec.recall = memory::readable_by(&app.memory, bot);
+    if let Some(known) = memory::profile(app, bot).await {
+        spec.instructions.push_str(&known);
+    }
     // The date and time, in the owner's time zone: models don't know them, and
     // in the message (not the instructions) so the engine isn't restarted for it.
     let now = time_line(chrono::Utc::now(), profiles::current(&app.db).await.tz);
@@ -1506,7 +1528,7 @@ async fn run_node(app: Shared, socket: WebSocket) {
     }
 }
 
-async fn on_node_message(app: &App, node: &str, msg: FromNode) {
+async fn on_node_message(app: &Shared, node: &str, msg: FromNode) {
     // Frames for an attempt that's no longer current (a fenced-off retry) are dropped.
     let current = |attempt: Attempt| lock(&app.rt).current(attempt).cloned();
     match msg {

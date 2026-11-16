@@ -35,6 +35,8 @@ const READ_ONLY: &[&str] = &[
     "discuss",
     // Reads what the team's hand-offs are doing.
     "team_status",
+    // Reads what has been learned about the owner (DESIGN §11.9).
+    "recall",
     // Only answers a card the gate already marked safe (`safe_to_accept`).
     "accept_card",
     // A fleet's blueprints, read only; and its rooms, where the bot's own
@@ -512,6 +514,12 @@ mod tests {
         let input = json!({"path": "x"});
         assert_eq!(
             decide(&db, &call(a, "c1", "read", &input)).await.unwrap(),
+            Verdict::Allow
+        );
+        // Looking up what has been learned about the owner only reads (DESIGN §11.9).
+        let query = json!({"query": "dentist"});
+        assert_eq!(
+            decide(&db, &call(a, "c0", "recall", &query)).await.unwrap(),
             Verdict::Allow
         );
         assert_eq!(

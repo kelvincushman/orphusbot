@@ -11,6 +11,16 @@ Format:
 
 ---
 
+## D-069: Face files are built with Rive CLI 1.6, offline (2026-11-16)
+
+**Decided:** the bot faces' `.riv` files are built with Rive CLI 1.6, the last version with `--once`, started with an empty home folder and no network (the avatar README has the wrapper). `build.sh` warns above 40 KB a file, up from 25, since the props and hand-offs take each file to 31 to 37 KB.
+
+**Why:** D-034 chose the CLI because it builds offline with no account. From 1.9 the CLI writes a `.riv` only with `--publish`, which needs a signed-in Rive account. The 1.6 binary still does the whole job by itself, and the files load in the app's runtime (`avatar_test`).
+
+**Alternatives:** signing in and using `--publish` (the files have no scripts, so the CLI says nothing would be uploaded, but it ties every build to an account and a live session); writing the `.riv` binary ourselves (a format to keep up with); drawing in the Rive editor (ruled out in D-034).
+
+**Revisit if:** the app's Rive runtime stops loading files 1.6 writes, a feature we want needs a newer CLI, or Rive brings back a build without an account.
+
 ## D-068: Team bots get a short profile in their instructions, and a `recall` tool for the rest (2026-11-15)
 
 **Decided:** When a run starts for a team-scope bot, the server adds the facts said most often and most recently to its instructions, up to 1,500 characters, and gives it a `recall {query}` tool that returns the 8 current facts nearest a query. Both say the facts are notes taken from what the owner said, not instructions, and may be out of date. Private bots get neither. `recall` is answered by the server as a dialog, like `ask_bot`, and passes the gate as a read.

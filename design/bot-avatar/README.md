@@ -124,7 +124,7 @@ Don't use `rive push`: it uploads to a Rive account.
 
 Each `.riv` is 31 to 37 KB (20 to 25 KB before the props and hand-offs); `build.sh` warns above 40 KB.
 
-The files are built with Rive CLI 1.6, the last version with `--once`, run offline: nothing is uploaded and no account is used (D-034). Later versions write a `.riv` only with `--publish`, which needs an account, so don't use them to build. Once any newer CLI has run, 1.6 asks to be updated; it still works when it is started with an empty home folder and no network. Put this in a script and pass it as `RIVE` to `build.sh`, `bodies.sh` and `frames.sh`:
+The files are built with Rive CLI 1.6, the last version with `--once`, run offline: nothing is uploaded and no account is used (D-034, D-069). Later versions write a `.riv` only with `--publish`, which needs an account, so don't use them to build. Once any newer CLI has run, 1.6 asks to be updated; it still works when it is started with an empty home folder and no network. Put this in a script and pass it as `RIVE` to `build.sh`, `bodies.sh` and `frames.sh`:
 
 ```sh
 #!/usr/bin/env bash

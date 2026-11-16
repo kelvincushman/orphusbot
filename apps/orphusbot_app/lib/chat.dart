@@ -133,8 +133,12 @@ class _ChatScreenState extends State<ChatScreen> {
     changed.value++;
   }
 
+  // Counts the loads below, so an answer that comes back late is dropped.
+  int _teamLoads = 0;
+
   /// How many hand-offs each bot is waiting on, for its face.
   Future<void> _loadTeam() async {
+    final load = ++_teamLoads;
     try {
       final got =
           await widget.api.get('/api/team/open') as Map<String, dynamic>;
@@ -144,7 +148,8 @@ class _ChatScreenState extends State<ChatScreen> {
         final asker = o['asked_by'] as String;
         counts[asker] = (counts[asker] ?? 0) + 1;
       }
-      if (!mounted) return;
+      // A newer load is out: its answer is the one to show.
+      if (!mounted || load != _teamLoads) return;
       setState(() {
         open = list;
         for (final slug in {...threads.keys, ...counts.keys}) {

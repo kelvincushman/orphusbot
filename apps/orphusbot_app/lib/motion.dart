@@ -26,9 +26,14 @@ Future<void> loadMotion() async {
   }
 }
 
-Future<void> saveMotion(Motion m) async {
+// The last save, so saves are written in the order they were chosen.
+Future<void> _saved = Future.value();
+
+Future<void> saveMotion(Motion m) {
   motion.value = m;
-  await (await _file()).writeAsString(m.name);
+  Future<void> write() async => (await _file()).writeAsString(m.name);
+  // Whether or not the one before worked.
+  return _saved = _saved.then((_) => write(), onError: (_) => write());
 }
 
 /// What applies here: the choice, or calm at most when the system asks for

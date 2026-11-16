@@ -74,7 +74,7 @@ So this needs no change to the node, the bridge or the engine.
 
 *2. Hand-offs you can see.* **Built** as [D-073](../DECISIONS.md) (DESIGN §12.7), with layer 3's basic stage and the setting. Not built: discussions and the routed Inbox toss on the stage, and the strip above the bot list.
 
-- **Events:** two new thread events, published to both bots' threads: `Asked { from, to, ticket }` when `team::ask` makes the ticket, and `Answered { from, to, ticket, ok }` when the answer goes back. System 1's `Routed` event already exists for the Inbox.
+- **Events:** two new thread events, published to both bots' threads (as built, a private mission's go only to its chief's thread; DESIGN §12.7): `Asked { from, to, ticket }` when `team::ask` makes the ticket, and `Answered { from, to, ticket, ok }` when the answer goes back. System 1's `Routed` event already exists for the Inbox.
 - **In the chat:** an `Asked` item is a small strip with the two faces. The asker's face leans in, a note flies across in an arc, and the teammate's face catches it and switches to working. `Answered` plays it back the other way, and the asker does its "done" wiggle. After playing once the strip rests as a plain line ("Researcher asked Coder · OB-142"), which opens the ticket.
 - **Rive:** two triggers, `give` and `receive`, each about a second, generated per locomotion the way `poke` is (a drone dips, a wheeled bot rolls forward and back). The note itself and its flight are a Flutter widget, so the Rive files stay one bot each.
 

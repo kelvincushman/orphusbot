@@ -147,11 +147,13 @@ class _TeamStageState extends State<TeamStage> {
                 // A visitor stands beside its host, on the left unless the
                 // host is at the left edge.
                 bool leftOf(String host) => spot[host]!.dx >= robot * 0.5;
+                // Whom a bot is visiting, if that bot has a spot: a closed
+                // mission's chief can still be answered, and isn't here.
+                String? hostOf(String slug) =>
+                    spot.containsKey(away[slug]) ? away[slug] : null;
                 Offset at(String slug) {
-                  final host = away[slug];
-                  if (host == null || !spot.containsKey(host)) {
-                    return spot[slug]!;
-                  }
+                  final host = hostOf(slug);
+                  if (host == null) return spot[slug]!;
                   return spot[host]! +
                       Offset(leftOf(host) ? -robot * 0.7 : robot * 0.7, 0);
                 }
@@ -159,7 +161,7 @@ class _TeamStageState extends State<TeamStage> {
                 // Give and receive reach to the right, so whoever has its
                 // partner on the left is mirrored.
                 bool flipped(String slug) {
-                  final host = away[slug];
+                  final host = hostOf(slug);
                   if (host != null) return !leftOf(host);
                   final visited = away.values.contains(slug);
                   return visited && leftOf(slug);
@@ -175,7 +177,8 @@ class _TeamStageState extends State<TeamStage> {
                 // up, higher the further it goes, so a long line clears a
                 // short one under it; a pair's second ticket arches higher
                 // still. The lines and their tickets then don't sit on each
-                // other.
+                // other. The arch stops short of the headroom, so its ticket
+                // stays on the stage, where it can be tapped.
                 Offset head(String slug) =>
                     spot[slug]! + Offset(cell.width / 2, headroom);
                 bool pair(Map<String, dynamic> a, Map<String, dynamic> b) =>
@@ -184,11 +187,10 @@ class _TeamStageState extends State<TeamStage> {
                   final from = head(o['asked_by'] as String);
                   final to = head(o['bot'] as String);
                   final before = open.take(i).where((p) => pair(p, o)).length;
+                  final rise = 28 + 0.22 * (to - from).distance + 52.0 * before;
+                  // The curve's top is half way to the bend.
                   return Offset.lerp(from, to, 0.5)! -
-                      Offset(
-                        0,
-                        28 + 0.22 * (to - from).distance + 52.0 * before,
-                      );
+                      Offset(0, min(rise, 2 * (headroom - 16)));
                 }
 
                 return SingleChildScrollView(

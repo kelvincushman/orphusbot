@@ -237,13 +237,17 @@ class ThreadView {
         bool same(Step s) => s.run == e['run'] && s.id == e['id'];
         // Not only the last fold-up: an approval card may sit between a
         // step's start and its end.
+        var found = false;
         for (final s in items.reversed.whereType<Steps>()) {
           final step = s.steps.where(same).firstOrNull;
           if (step == null) continue;
           step.done = e['ok'] as bool;
           if (at > s.to) s.to = at;
+          found = true;
           break;
         }
+        // An end that matches no step changes nothing.
+        if (!found) return;
         _now = items.reversed
             .whereType<Steps>()
             .expand((s) => s.steps.reversed)

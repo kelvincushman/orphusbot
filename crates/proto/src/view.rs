@@ -251,14 +251,20 @@ impl ThreadView {
             ThreadEvent::StepEnded { run, id, ok } => {
                 // Not only the last fold-up: an approval card may sit between
                 // a step's start and its end.
+                let mut found = false;
                 for item in self.items.iter_mut().rev() {
                     if let Item::Steps { steps, to, .. } = item
                         && let Some(step) = steps.iter_mut().find(|s| s.run == run && s.id == id)
                     {
                         step.done = Some(ok);
                         *to = at.max(*to);
+                        found = true;
                         break;
                     }
+                }
+                // An end that matches no step changes nothing.
+                if !found {
+                    return;
                 }
                 // ponytail: a step whose end never arrives (a helper's call,
                 // DESIGN §12.6) can come back here until the next step or the
@@ -532,6 +538,12 @@ mod tests {
         // The next run's steps don't join it.
         view.apply_at(start(3, "a", "Reading a file"), 70_000);
         assert_eq!(view.items.len(), 2);
+    }
+
+    #[test]
+    fn an_end_that_matches_no_step_leaves_the_line_alone() {
+        let view = timed(vec![start(1, "a", "Reading a file"), end(2, "a", true)]);
+        assert_eq!(view.doing.as_deref(), Some("Reading a file"));
     }
 
     #[test]

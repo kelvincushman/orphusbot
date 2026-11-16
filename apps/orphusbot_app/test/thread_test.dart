@@ -207,6 +207,14 @@ void main() {
       expect(v.doingKind, 0);
     });
 
+    test('an end that matches no step leaves the line and the face alone', () {
+      final v = ThreadView()
+        ..apply({...start(1, 'a', 'Reading a file', 1000), 'kind': 'read'})
+        ..apply(end(2, 'a', true, 1500));
+      expect(v.doing, 'Reading a file');
+      expect(v.doingKind, 1);
+    });
+
     test('long work is told in hours', () {
       final v = ThreadView()
         ..apply(start(1, 'a', 'Working', 0))

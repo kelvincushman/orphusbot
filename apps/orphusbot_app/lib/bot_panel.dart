@@ -86,6 +86,7 @@ class _BotPanelState extends State<BotPanel> {
   // A save of the notes is on its way: Reload and Save wait for it, so an
   // older answer can't land on top of what was just saved.
   bool saving = false;
+  bool savingSoul = false;
   bool soulSaved = false;
   String? notesProblem;
   String? soulProblem;
@@ -188,22 +189,33 @@ class _BotPanelState extends State<BotPanel> {
   }
 
   Future<void> _saveSoul() async {
+    // What is sent, not what is in the box when the answers come: an edit
+    // typed meanwhile stays unsaved. One save at a time, so two can't land
+    // out of order.
+    final sent = soul.text;
+    setState(() => savingSoul = true);
     try {
       // The bot as it is now, not as it was when this opened: the update
       // writes every setting, and one changed elsewhere meanwhile must stay.
       final now = (await widget.api.get('/api/bots') as List<dynamic>)
           .cast<Map<String, dynamic>>()
           .firstWhere((b) => b['slug'] == bot['slug'], orElse: () => bot);
-      final edited = {...now, 'instructions': soul.text};
+      final edited = {...now, 'instructions': sent};
       await widget.api.post('/api/bots/update', edited);
       if (!mounted) return;
       setState(() {
         bot = edited;
         soulSaved = true;
         soulProblem = null;
+        savingSoul = false;
       });
     } catch (e) {
-      if (mounted) setState(() => soulProblem = explain(e));
+      if (mounted) {
+        setState(() {
+          soulProblem = explain(e);
+          savingSoul = false;
+        });
+      }
     }
   }
 
@@ -281,7 +293,7 @@ class _BotPanelState extends State<BotPanel> {
               alignment: Alignment.centerRight,
               child: FilledButton(
                 key: const ValueKey('save-soul'),
-                onPressed: _soulDirty ? _saveSoul : null,
+                onPressed: _soulDirty && !savingSoul ? _saveSoul : null,
                 child: const Text('Save instructions'),
               ),
             ),

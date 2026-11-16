@@ -290,4 +290,63 @@ void main() {
     await settle(t);
     expect(find.text('- From the server'), findsOneWidget);
   });
+
+  testWidgets('a slow save of the instructions saves only what was sent', (
+    t,
+  ) async {
+    Completer<void>? hold;
+    final posts = <Object?>[];
+    final api = Api(
+      'http://server',
+      'session=x',
+      MockClient((r) async {
+        if (r.url.path == '/api/bots') {
+          await hold?.future;
+          return http.Response(
+            jsonEncode([
+              {'slug': 'coder', 'name': 'Coder', 'instructions': ''},
+            ]),
+            200,
+          );
+        }
+        if (r.method == 'POST') {
+          posts.add((jsonDecode(r.body) as Map)['instructions']);
+          return http.Response('{}', 200);
+        }
+        return http.Response(
+          jsonEncode({'notes': '', 'version': 1, 'loaded_chars': 2000}),
+          200,
+        );
+      }),
+    );
+    t.view.physicalSize = const Size(700, 1600);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(
+      MaterialApp(
+        home: BotPanel(
+          api: api,
+          bot: const {'slug': 'coder', 'name': 'Coder', 'instructions': ''},
+        ),
+      ),
+    );
+    await settle(t);
+    final box = find.byKey(const ValueKey('soul'));
+    FilledButton save() =>
+        t.widget<FilledButton>(find.byKey(const ValueKey('save-soul')));
+    await t.enterText(box, 'A');
+    await settle(t);
+    hold = Completer<void>();
+    await t.tap(find.byKey(const ValueKey('save-soul')));
+    await t.pump();
+    // One save at a time, and what is typed meanwhile is not part of it.
+    await t.enterText(box, 'B');
+    await t.pump();
+    expect(save().onPressed, isNull);
+    hold.complete();
+    hold = null;
+    await settle(t);
+    expect(posts, ['A']);
+    expect(save().onPressed, isNotNull, reason: 'B has not been saved');
+  });
 }

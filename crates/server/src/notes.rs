@@ -158,7 +158,13 @@ async fn remember(db: &PgPool, bot: &str, line: &str) -> sqlx::Result<String> {
     else {
         return Ok("error:No such bot.".into());
     };
-    if notes.lines().any(|l| l.trim() == line) {
+    // The same words count whether or not the owner wrote them with a bullet
+    // or the same spacing.
+    let bare = |l: &str| {
+        let words = l.split_whitespace().collect::<Vec<_>>().join(" ");
+        words.trim_start_matches("- ").to_owned()
+    };
+    if notes.lines().any(|l| bare(l) == bare(&line)) {
         return Ok("ok:That's already in your notes.".into());
     }
     let notes = notes.trim_end();
@@ -327,6 +333,12 @@ mod tests {
         assert_eq!(
             read(&db, "helper").await.unwrap().unwrap(),
             ("- Short replies, please\n- Cite sources".to_owned(), 2)
+        );
+        // A line the owner typed in the app, with no bullet and loose spacing.
+        save(&db, "helper", "Reply  in English\n", 2).await.unwrap();
+        assert_eq!(
+            say("Reply in English").await,
+            "ok:That's already in your notes."
         );
         assert!(say("  ").await.starts_with("error:"));
         assert!(

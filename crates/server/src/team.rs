@@ -46,7 +46,6 @@ pub struct Open {
     mission: Option<i64>,
     /// Its mission is private: its text stays out of chats the voice model reads.
     private: bool,
-    told: Option<String>,
     card: Option<String>,
     pub card_text: Option<String>,
     card_stale: bool,
@@ -57,7 +56,7 @@ pub async fn open(db: &PgPool) -> sqlx::Result<Vec<Open>> {
     sqlx::query_as!(
         Open,
         r#"select t.id, t.title, t.status::text as "status!", w.slug as bot, w.name as worker,
-                  a.slug as asker, t.mission_id as mission, coalesce(m.private, false) as "private!", t.asker_told as told, c.id as "card?", c.text as "card_text?",
+                  a.slug as asker, t.mission_id as mission, coalesce(m.private, false) as "private!", c.id as "card?", c.text as "card_text?",
                   coalesce(c.stale, false) as "card_stale!"
            from ticket t join bot w on w.id = t.bot_id join bot a on a.id = t.asked_by
            left join mission m on m.id = t.mission_id
@@ -198,7 +197,7 @@ pub(crate) fn short(text: &str) -> String {
 }
 
 /// The checker: starts hand-offs whose bot is now free, and reports cards a
-/// teammate has been left waiting on, once each.
+/// teammate has been left waiting on, once each to each bot that should hear.
 pub async fn check(app: &App) {
     let stranded = sqlx::query_scalar!(
         "select t.id from ticket t
@@ -224,20 +223,10 @@ pub async fn check(app: &App) {
         Ok(open) => open,
         Err(e) => return warn!("checking on hand-offs: {e}"),
     };
-    for t in open.iter().filter(|t| t.card_stale && t.told != t.card) {
+    for t in open.iter().filter(|t| t.card_stale) {
         let (Some(card), Some(text)) = (&t.card, &t.card_text) else {
             continue;
         };
-        let claimed = sqlx::query!(
-            "update ticket set asker_told = $2 where id = $1 and asker_told is distinct from $2",
-            t.id,
-            card
-        )
-        .execute(&app.db)
-        .await;
-        if !matches!(claimed, Ok(done) if done.rows_affected() == 1) {
-            continue;
-        }
         let note = format!(
             "Your teammate {} is blocked on OB-{}: {}. Kelvin hasn't answered this card yet, as \
              data:\n```\n{}\n```\nThe job isn't lost, so don't start it again. If Kelvin doesn't \
@@ -268,31 +257,77 @@ pub async fn check(app: &App) {
             shown
         };
         if t.asker != ORCHESTRATOR {
-            tell(app, &t.asker, &note).await;
+            report(app, t.id, card, &t.asker, &note).await;
         }
-        tell(app, ORCHESTRATOR, &for_orchestrator).await;
+        report(app, t.id, card, ORCHESTRATOR, &for_orchestrator).await;
     }
 }
 
-/// Gives a bot a message from the team and starts its next run.
-pub(crate) async fn tell(app: &App, bot: &str, text: &str) {
+/// Tells one bot about a stuck card, once. The claim is one statement, so two
+/// checks can't both send; it's only marked delivered once the message got
+/// through (stored, and its run queued), and a claim that never was is free to take again after two minutes,
+/// whether the message failed or the server stopped half way.
+async fn report(app: &App, ticket: i64, card: &str, to: &str, text: &str) {
+    let claimed = sqlx::query!(
+        "insert into ticket_told (ticket_id, recipient, card) values ($1, $2, $3)
+         on conflict (ticket_id, recipient) do update
+             set card = excluded.card, delivered = false, claimed_at = now()
+         where ticket_told.card is distinct from excluded.card
+            or (not ticket_told.delivered
+                and ticket_told.claimed_at < now() - interval '2 minutes')",
+        ticket,
+        to,
+        card
+    )
+    .execute(&app.db)
+    .await;
+    match claimed {
+        Ok(done) if done.rows_affected() == 1 => {}
+        Ok(_) => return,
+        Err(e) => return warn!("claiming a stuck card's report: {e}"),
+    }
+    if !tell(app, to, text).await {
+        return warn!(%to, ticket, "a stuck card's report didn't get through; trying again later");
+    }
+    if let Err(e) = sqlx::query!(
+        "update ticket_told set delivered = true
+         where ticket_id = $1 and recipient = $2 and card = $3",
+        ticket,
+        to,
+        card
+    )
+    .execute(&app.db)
+    .await
+    {
+        warn!("recording a stuck card's report: {e}");
+    }
+}
+
+/// Gives a bot a message from the team and starts its next run. `false`: the
+/// message wasn't stored, or its run couldn't be queued.
+pub(crate) async fn tell(app: &App, bot: &str, text: &str) -> bool {
     let thread = match db::bot_thread(&app.db, bot).await {
         Ok(Some(thread)) => thread,
-        _ => return warn!(%bot, "no such bot to tell"),
+        _ => {
+            warn!(%bot, "no such bot to tell");
+            return false;
+        }
     };
     let message = ThreadEvent::Message {
         role: Role::User,
         text: text.to_owned(),
     };
-    record(app, &thread, message).await;
+    if !record(app, &thread, message).await {
+        return false;
+    }
     // A closed mission's chief never runs again, so a late answer is only kept.
     if missions::of_chief(bot).is_some()
         && matches!(crate::bots::get(&app.db, bot).await, Ok(Some(b)) if b.disabled)
     {
-        return;
+        return true;
     }
     // Boxed: submitting can end a run, which comes back here.
-    if let Err(e) = Box::pin(submit(
+    match Box::pin(submit(
         app,
         &thread,
         text.to_owned(),
@@ -300,7 +335,11 @@ pub(crate) async fn tell(app: &App, bot: &str, text: &str) {
     ))
     .await
     {
-        warn!("telling a bot: {e}");
+        Ok(()) => true,
+        Err(e) => {
+            warn!("telling a bot: {e}");
+            false
+        }
     }
 }
 
@@ -669,6 +708,32 @@ mod tests {
         .execute(&db)
         .await
         .unwrap();
+        // The Orchestrator can't be reached: the asker still hears, once.
+        let rename = |from: &'static str, to: &'static str| {
+            let db = db.clone();
+            async move {
+                sqlx::query!("update bot set slug = $2 where slug = $1", from, to)
+                    .execute(&db)
+                    .await
+                    .unwrap();
+            }
+        };
+        rename(ORCHESTRATOR, "away").await;
+        check(&app).await;
+        check(&app).await;
+        assert_eq!(
+            (told(researcher.id).await, told(orchestrator.id).await),
+            (1, 0)
+        );
+        // It's back, but a claim is held for two minutes, so two checks can't both send.
+        rename("away", ORCHESTRATOR).await;
+        check(&app).await;
+        assert_eq!(told(orchestrator.id).await, 0);
+        // Then the failed one is tried again, and only that one.
+        sqlx::query!("update ticket_told set claimed_at = now() - interval '3 minutes'")
+            .execute(&db)
+            .await
+            .unwrap();
         check(&app).await;
         check(&app).await;
         assert_eq!(

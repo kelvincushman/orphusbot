@@ -770,12 +770,18 @@ async fn dialog_closed(app: &App, thread: &db::Thread, id: String, outcome: Stri
     record(app, thread, ThreadEvent::DialogClosed { id, outcome }).await;
 }
 
-/// Stores an event in a thread and sends it to browsers.
-async fn record(app: &App, thread: &db::Thread, event: ThreadEvent) {
+/// Stores an event in a thread and sends it to browsers. `false`: it wasn't stored.
+async fn record(app: &App, thread: &db::Thread, event: ThreadEvent) -> bool {
     let event = app.secrets.redact_event(event);
     match db::append(&app.db, thread.id, &event).await {
-        Ok(id) => publish(app, Some(id), Some(&thread.bot), event),
-        Err(e) => warn!("storing an event: {e}"),
+        Ok(id) => {
+            publish(app, Some(id), Some(&thread.bot), event);
+            true
+        }
+        Err(e) => {
+            warn!("storing an event: {e}");
+            false
+        }
     }
 }
 

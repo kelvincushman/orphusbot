@@ -13,6 +13,11 @@
 # Driving it from bash: /usr/local/bin/computer (grim, swaymsg, and VNC input to
 # wayvnc on the loopback port; see that script for why not ydotool or wtype).
 
+# The bot's home page (D-069) is the Debian desktop's, so there is one copy of the
+# render script, template and Chromium policy. Build images/desktop first.
+ARG DESKTOP=localhost/orphusbot-desktop:latest
+FROM $DESKTOP AS desktop
+
 # Omarchy v3.8.4: the last release with plain .conf files and waybar (v4 moved to
 # Lua config and its own Quickshell bar). Only config files are taken.
 FROM docker.io/library/archlinux:latest AS omarchy
@@ -47,6 +52,9 @@ RUN printf '%s\n' '[options]' \
 
 COPY --from=omarchy /out/ /
 COPY start-screen computer /usr/local/bin/
+COPY --from=desktop /usr/local/bin/render-home /usr/local/bin/render-home
+COPY --from=desktop /usr/local/share/orphusbot/home.html /usr/local/share/orphusbot/home.html
+COPY --from=desktop /etc/chromium/policies/managed/orphusbot.json /etc/chromium/policies/managed/orphusbot.json
 # The launcher's Chromium entry goes through the --no-sandbox wrapper too.
 RUN sed -i 's|^Exec=/usr/bin/chromium|Exec=chromium|' /usr/share/applications/chromium.desktop \
  && fc-cache -f >/dev/null

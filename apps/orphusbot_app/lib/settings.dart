@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'api.dart';
+import 'motion.dart';
 import 'avatar.dart';
 import 'decisions.dart';
 import 'wearable.dart';
@@ -469,6 +470,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
 
               heading('This device'),
+              const MotionSetting(),
               _buttons([
                 OutlinedButton.icon(
                   onPressed: () async {
@@ -1243,4 +1245,64 @@ class _ModelPickerState extends State<_ModelPicker> {
       ],
     );
   }
+}
+
+/// Animation: full, calm or off, for this device only (DESIGN §12.7).
+class MotionSetting extends StatelessWidget {
+  const MotionSetting({super.key});
+
+  Future<void> _choose(BuildContext context, Motion m) async {
+    try {
+      await saveMotion(m);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Couldn't save that, so it lasts until the app closes: $e",
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder(
+    valueListenable: motion,
+    builder: (context, chosen, _) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ListTile(
+          leading: const Icon(Icons.animation),
+          title: const Text('Animation'),
+          subtitle: Text(
+            motionOf(context) != chosen
+                ? 'Your system asks for less motion, so this device stays calm.'
+                : switch (chosen) {
+                    Motion.full =>
+                      'Bots move when something changes, and cross the Team '
+                          'stage to hand work over.',
+                    Motion.calm =>
+                      'Bots react where they stand: no travel across the '
+                          'stage and no idle fidgets.',
+                    Motion.off => 'Still faces and plain lines.',
+                  },
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: SegmentedButton<Motion>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: Motion.full, label: Text('Full')),
+              ButtonSegment(value: Motion.calm, label: Text('Calm')),
+              ButtonSegment(value: Motion.off, label: Text('Off')),
+            ],
+            selected: {chosen},
+            onSelectionChanged: (s) => _choose(context, s.first),
+          ),
+        ),
+      ],
+    ),
+  );
 }

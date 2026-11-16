@@ -3,7 +3,8 @@
 //! it, and when that run ends the answer goes back to the asker as a new message,
 //! so it carries on. Every action either bot takes still goes through the gate.
 //! Hand-offs stop three deep, a bot can't ask itself, and a job a teammate
-//! asked for can't be handed back to them.
+//! asked for can't be handed back to them. Each hand-off and its answer is also
+//! an event in both bots' threads, which clients draw ([show], DESIGN §12.7).
 //!
 //! A run that's blocked doesn't end, so the checker ([check], on the server's
 //! reconcile tick) speaks up for it: a card left unanswered reaches the asker
@@ -424,18 +425,20 @@ async fn handoff(app: &App, run: i64, asker: &str, request: &Value) -> Result<St
     let failed = |e: sqlx::Error| format!("couldn't make the ticket: {e}");
     // One transaction, so a failed request leaves no ticket for a retry to double.
     let mut tx = app.db.begin().await.map_err(failed)?;
+    let mut private = false;
     if let Some(mission) = mission {
         // The row lock waits out a close in progress, so no work starts on a
         // mission that has just ended.
-        let open = sqlx::query_scalar!(
-            r#"select status = 'open' as "open!" from mission where id = $1 for update"#,
+        let found = sqlx::query!(
+            r#"select status = 'open' as "open!", private from mission where id = $1 for update"#,
             mission
         )
         .fetch_optional(&mut *tx)
         .await
         .map_err(failed)?;
-        if open != Some(true) {
-            return Err("that mission has ended, so there's no more work to hand out".into());
+        match found {
+            Some(m) if m.open => private = m.private,
+            _ => return Err("that mission has ended, so there's no more work to hand out".into()),
         }
     }
     let id = sqlx::query_scalar!(
@@ -464,6 +467,12 @@ async fn handoff(app: &App, run: i64, asker: &str, request: &Value) -> Result<St
         .map_err(failed)?;
     }
     tx.commit().await.map_err(failed)?;
+    let asked = ThreadEvent::Asked {
+        from: asker.to_owned(),
+        to: to.clone(),
+        ticket: id,
+    };
+    show(app, private, asker, &to, asked).await;
     match crate::tickets::start(app, id).await {
         Ok(()) => Ok(format!(
             "Asked {} (ticket OB-{id}). Their answer will come to you as a new message when they finish; carry on with anything that doesn't need it.",
@@ -477,12 +486,35 @@ async fn handoff(app: &App, run: i64, asker: &str, request: &Value) -> Result<St
     }
 }
 
+/// Puts a hand-off's event in the asker's and the teammate's threads, for
+/// clients to draw (DESIGN §12.7). A private mission's goes only to its
+/// chief's, the asker's: the mission's own chat is where its details stay,
+/// and the teammate's may be one the voice model reads.
+async fn show(app: &App, private: bool, asker: &str, teammate: &str, event: ThreadEvent) {
+    let threads = if private {
+        vec![asker]
+    } else {
+        vec![asker, teammate]
+    };
+    for bot in threads {
+        match db::bot_thread(&app.db, bot).await {
+            Ok(Some(thread)) => {
+                record(app, &thread, event.clone()).await;
+            }
+            Ok(None) => warn!(%bot, "no thread to show a hand-off in"),
+            Err(e) => warn!("showing a hand-off: {e}"),
+        }
+    }
+}
+
 /// A run ended: if it was a teammate's ticket, give the asker the answer.
 pub async fn answered(app: &App, run: i64, outcome: RunOutcome, error: Option<&str>) {
     let found = sqlx::query!(
-        r#"select t.id, t.title, b.slug as "asker!", w.name as "worker!", r.thread_id
+        r#"select t.id, t.title, b.slug as "asker!", w.name as "worker!", w.slug as "teammate!",
+                  coalesce(m.private, false) as "private!", r.thread_id
            from run r join ticket t on t.id = r.ticket_id
            join bot b on b.id = t.asked_by join bot w on w.id = t.bot_id
+           left join mission m on m.id = t.mission_id
            where r.id = $1"#,
         run
     )
@@ -515,6 +547,13 @@ pub async fn answered(app: &App, run: i64, outcome: RunOutcome, error: Option<&s
         t.title,
         answer.replace("```", "'''")
     );
+    let event = ThreadEvent::Answered {
+        from: t.teammate.clone(),
+        to: t.asker.clone(),
+        ticket: t.id,
+        ok: outcome == RunOutcome::Completed,
+    };
+    show(app, t.private, &t.asker, &t.teammate, event).await;
     tell(app, &t.asker, &text).await;
 }
 
@@ -626,6 +665,19 @@ mod tests {
             .execute(db)
             .await
             .unwrap();
+    }
+
+    /// The hand-off events stored in a bot's thread, oldest first.
+    async fn handoffs(db: &PgPool, slug: &str) -> Vec<Value> {
+        sqlx::query_scalar!(
+            r#"select e.body as "body!" from event e join thread t on t.id = e.thread_id
+               join bot b on b.id = t.bot_id
+               where b.slug = $1 and e.body ->> 'type' in ('asked', 'answered') order by e.id"#,
+            slug
+        )
+        .fetch_all(db)
+        .await
+        .unwrap()
     }
 
     #[sqlx::test]
@@ -933,6 +985,10 @@ mod tests {
                 .fetch_one(&db)
                 .await
                 .unwrap();
+        // Both threads show the hand-off, and the refused asks showed nothing.
+        let asked = json!({ "type": "asked", "from": "researcher", "to": "coder", "ticket": t.id });
+        assert_eq!(handoffs(&db, "researcher").await, vec![asked.clone()]);
+        assert_eq!(handoffs(&db, "coder").await, vec![asked.clone()]);
         assert_eq!(
             (t.title.as_str(), t.status.as_str(), t.ask_depth),
             ("Write a benchmark", "doing", 1)
@@ -956,6 +1012,12 @@ mod tests {
         .await
         .unwrap();
         answered(&app, coder_run, RunOutcome::Completed, None).await;
+        let answer = json!({ "type": "answered", "from": "coder", "to": "researcher", "ticket": t.id, "ok": true });
+        assert_eq!(
+            handoffs(&db, "researcher").await,
+            [asked.clone(), answer.clone()]
+        );
+        assert_eq!(handoffs(&db, "coder").await, [asked, answer]);
         let back: String = sqlx::query_scalar!(
             r#"select body ->> 'text' as "t!" from event where thread_id = $1 and body ->> 'role' = 'user' order by id desc limit 1"#,
             researcher.id

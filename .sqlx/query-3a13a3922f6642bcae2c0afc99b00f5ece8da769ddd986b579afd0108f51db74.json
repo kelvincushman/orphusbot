@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select e.body ->> 'type' as \"kind!\" from event e\n                   join thread t on t.id = e.thread_id join bot b on b.id = t.bot_id\n                   where b.slug = $1 and e.body ->> 'type' in ('asked', 'answered') order by e.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3a13a3922f6642bcae2c0afc99b00f5ece8da769ddd986b579afd0108f51db74"
+}

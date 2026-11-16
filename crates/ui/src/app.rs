@@ -6,7 +6,7 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use std::collections::HashMap;
 
-use orphusbot_proto::view::{Item, RunState, ThreadView, steps_line};
+use orphusbot_proto::view::{Item, RunState, ThreadView, answered_line, asked_line, steps_line};
 use orphusbot_proto::{Dialog, DialogKind, Envelope, NodeView, Role, ThreadEvent};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -647,6 +647,14 @@ fn Log(thread: Memo<ThreadView>) -> impl IntoView {
     let items = Memo::new(move |_| thread.with(|v| v.items.clone()));
     let streaming = Memo::new(move |_| thread.with(|v| v.streaming.clone()));
     let log = NodeRef::<leptos::html::Div>::new();
+    let desk = expect_context::<Desk>();
+    // A bot's name for a hand-off's line, or its slug if it's gone.
+    let name = move |slug: &str| {
+        desk.bots.with(|bots| {
+            let bot = bots.iter().find(|b| b.slug == slug);
+            bot.map_or_else(|| slug.to_owned(), |b| b.name.clone())
+        })
+    };
     Effect::new(move |_| {
         items.track();
         streaming.track();
@@ -662,7 +670,7 @@ fn Log(thread: Memo<ThreadView>) -> impl IntoView {
                 if items.is_empty() && streaming.get().is_none() {
                     return view! { <p class="empty">"Ask Orphus to do something."</p> }.into_any();
                 }
-                items.into_iter().map(item).collect_view().into_any()
+                items.into_iter().map(|i| item(i, &name)).collect_view().into_any()
             }}
             {move || streaming.get().map(|text| view! { <div class="msg assistant">{text}</div> })}
         </div>
@@ -675,8 +683,27 @@ thread_local! {
 }
 
 /// Bot text always goes in as text, never as HTML.
-fn item(item: Item) -> AnyView {
+fn item(item: Item, name: &dyn Fn(&str) -> String) -> AnyView {
     match item {
+        // A hand-off between bots, as its plain line (DESIGN §12.7).
+        Item::Asked {
+            from,
+            to,
+            ticket,
+            answered,
+        } => {
+            let line = asked_line(&name(&from), &name(&to), ticket, answered);
+            view! { <p class="notice">{line}</p> }.into_any()
+        }
+        Item::Answered {
+            from,
+            to,
+            ticket,
+            ok,
+        } => {
+            let line = answered_line(&name(&from), &name(&to), ticket, ok);
+            view! { <p class="notice">{line}</p> }.into_any()
+        }
         Item::Message { role, text } => {
             let class = if role == Role::User {
                 "msg user"

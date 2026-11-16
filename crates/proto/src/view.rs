@@ -44,6 +44,42 @@ pub enum Item {
         from: i64,
         to: i64,
     },
+    /// One bot handed another a job (DESIGN §12.7); `from` and `to` are slugs.
+    /// `answered` is how it ended, `None` while the answer hasn't come.
+    Asked {
+        from: String,
+        to: String,
+        ticket: i64,
+        answered: Option<bool>,
+    },
+    /// The answer went back from the teammate (`from`) to the asker (`to`).
+    Answered {
+        from: String,
+        to: String,
+        ticket: i64,
+        ok: bool,
+    },
+}
+
+/// The line for an `Asked` item, given the bots' names:
+/// "Researcher asked Coder · OB-142", and "· waiting" until the answer comes.
+pub fn asked_line(from: &str, to: &str, ticket: i64, answered: Option<bool>) -> String {
+    let waiting = if answered.is_none() {
+        " · waiting"
+    } else {
+        ""
+    };
+    format!("{from} asked {to} · OB-{ticket}{waiting}")
+}
+
+/// The line for an `Answered` item, given the bots' names.
+pub fn answered_line(from: &str, to: &str, ticket: i64, ok: bool) -> String {
+    let how = if ok {
+        "answered"
+    } else {
+        "couldn't finish for"
+    };
+    format!("{from} {how} {to} · OB-{ticket}")
 }
 
 /// One tool call. `id` is only unique within `run`.
@@ -276,6 +312,38 @@ impl ThreadView {
                         .find(|s| s.run == run && s.done.is_none())
                         .map(|s| s.label.clone()),
                     _ => None,
+                });
+            }
+            ThreadEvent::Asked { from, to, ticket } => self.items.push(Item::Asked {
+                from,
+                to,
+                ticket,
+                answered: None,
+            }),
+            ThreadEvent::Answered {
+                from,
+                to,
+                ticket,
+                ok,
+            } => {
+                // The answer settles the ask it belongs to; one with no ask in
+                // this thread still shows.
+                for item in &mut self.items {
+                    if let Item::Asked {
+                        ticket: t,
+                        answered,
+                        ..
+                    } = item
+                        && *t == ticket
+                    {
+                        *answered = Some(ok);
+                    }
+                }
+                self.items.push(Item::Answered {
+                    from,
+                    to,
+                    ticket,
+                    ok,
                 });
             }
         }
@@ -544,6 +612,116 @@ mod tests {
     fn an_end_that_matches_no_step_leaves_the_line_alone() {
         let view = timed(vec![start(1, "a", "Reading a file"), end(2, "a", true)]);
         assert_eq!(view.doing.as_deref(), Some("Reading a file"));
+    }
+
+    fn asked(ticket: i64) -> ThreadEvent {
+        ThreadEvent::Asked {
+            from: "researcher".into(),
+            to: "coder".into(),
+            ticket,
+        }
+    }
+
+    fn answered(ticket: i64, ok: bool) -> ThreadEvent {
+        ThreadEvent::Answered {
+            from: "coder".into(),
+            to: "researcher".into(),
+            ticket,
+            ok,
+        }
+    }
+
+    /// The hand-off lines in a view, with the slugs standing in for names.
+    fn handoffs(view: &ThreadView) -> Vec<String> {
+        view.items
+            .iter()
+            .filter_map(|i| match i {
+                Item::Asked {
+                    from,
+                    to,
+                    ticket,
+                    answered,
+                } => Some(asked_line(from, to, *ticket, *answered)),
+                Item::Answered {
+                    from,
+                    to,
+                    ticket,
+                    ok,
+                } => Some(answered_line(from, to, *ticket, *ok)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn an_answer_settles_the_ask_with_its_ticket_and_no_other() {
+        let view = fold(vec![asked(142), asked(143), answered(143, true)]);
+        assert_eq!(
+            handoffs(&view),
+            [
+                "researcher asked coder · OB-142 · waiting",
+                "researcher asked coder · OB-143",
+                "coder answered researcher · OB-143",
+            ]
+        );
+    }
+
+    #[test]
+    fn an_answer_that_never_comes_leaves_the_ask_waiting() {
+        let view = fold(vec![
+            asked(142),
+            ThreadEvent::RunEnded {
+                run: 1,
+                outcome: RunOutcome::Completed,
+                error: None,
+            },
+        ]);
+        assert_eq!(
+            handoffs(&view),
+            ["researcher asked coder · OB-142 · waiting"]
+        );
+    }
+
+    #[test]
+    fn a_teammate_that_failed_answers_with_not_ok_and_a_lone_answer_still_shows() {
+        let view = fold(vec![asked(142), answered(142, false), answered(7, true)]);
+        assert_eq!(
+            handoffs(&view),
+            [
+                "researcher asked coder · OB-142",
+                "coder couldn't finish for researcher · OB-142",
+                "coder answered researcher · OB-7",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_denied_ask_is_a_failed_step_and_no_hand_off() {
+        // The server refused ask_bot, so it made no ticket and sent no `Asked`.
+        let view = timed(vec![
+            start(1, "a", "Checking with Coder"),
+            end(1, "a", false),
+        ]);
+        assert!(handoffs(&view).is_empty());
+        assert_eq!(
+            folds(&view)[0].0,
+            [("Checking with Coder".into(), Some(false))]
+        );
+    }
+
+    #[test]
+    fn a_hand_off_closes_the_fold_up_and_its_step_still_ends() {
+        let view = timed(vec![
+            start(1, "a", "Checking with Coder"),
+            asked(142),
+            end(1, "a", true),
+        ]);
+        assert_eq!(view.items.len(), 2);
+        assert_eq!(view.doing, None);
+        assert_eq!(
+            folds(&view)[0].0,
+            [("Checking with Coder".into(), Some(true))]
+        );
     }
 
     #[test]

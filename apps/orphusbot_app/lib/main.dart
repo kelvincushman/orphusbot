@@ -10,11 +10,13 @@ import 'package:rive/rive.dart' show RiveNative;
 import 'api.dart';
 import 'chat.dart';
 import 'intro.dart';
+import 'motion.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await RiveNative.init();
   MediaKit.ensureInitialized();
+  await loadMotion();
   runApp(const OrphusBotApp());
 }
 

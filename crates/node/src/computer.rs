@@ -40,6 +40,9 @@ pub struct Spec<'a> {
     pub team: bool,
     /// The memory limit, such as `2g`; set when the computer is created.
     pub memory: &'a str,
+    /// For the computer's home page (images/desktop/render-home, which escapes the
+    /// text and checks the colour): the bot's name, remit and face colour.
+    pub dress: [&'a str; 3],
 }
 
 /// Stops a bot's computer, if it's running. Its home volume stays.
@@ -117,6 +120,12 @@ impl Spec<'_> {
                 let label = format!("orphusbot.team={team}");
                 let home = format!("orphusbot-home-{}:{HOME}", self.bot);
                 let env = format!("HOME={HOME}");
+                // One argument each, never through a shell.
+                let dress = ["NAME", "REMIT", "COLOUR"]
+                    .iter()
+                    .zip(self.dress)
+                    .map(|(k, v)| format!("ORPHUSBOT_BOT_{k}={v}"));
+                let dress: Vec<String> = dress.collect();
                 let memory = format!("--memory={}", self.memory);
                 let mut args = vec![
                     "run",
@@ -141,6 +150,9 @@ impl Spec<'_> {
                     "--env",
                     &env,
                 ];
+                for d in &dress {
+                    args.extend(["--env", d]);
+                }
                 if self.team {
                     args.extend(["--volume", "orphusbot-team:/shared"]);
                 }
@@ -218,6 +230,67 @@ impl Spec<'_> {
 mod tests {
     use super::*;
 
+    /// The home page a computer renders at start: the owner's text is escaped
+    /// and a colour that isn't `#RRGGBB` is replaced, so neither can add markup,
+    /// CSS or (through `xsetroot` in start-screen) a shell command.
+    #[test]
+    fn the_home_page_escapes_what_the_owner_wrote() {
+        let images = concat!(env!("CARGO_MANIFEST_DIR"), "/../../images/desktop");
+        let page = std::env::temp_dir().join(format!("home-{}.html", std::process::id()));
+        let render = |name: &str, remit: &str, colour: &str| {
+            let out = std::process::Command::new("python3")
+                .arg(format!("{images}/render-home"))
+                .arg(format!("{images}/home.html"))
+                .arg(&page)
+                .env("ORPHUSBOT_BOT_NAME", name)
+                .env("ORPHUSBOT_BOT_REMIT", remit)
+                .env("ORPHUSBOT_BOT_COLOUR", colour)
+                .output()
+                .expect("python3 is installed");
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            let html = std::fs::read_to_string(&page).unwrap();
+            (String::from_utf8(out.stdout).unwrap(), html)
+        };
+
+        let (colour, html) = render(
+            "<script>alert(1)</script>\"'</style>$name",
+            "a & b </style><img src=x onerror=1> ${colour}",
+            "red;}</style><script>x</script>$(touch /tmp/x)",
+        );
+        assert_eq!(colour, "#2F6BFF\n", "a bad colour becomes the default");
+        assert!(html.contains(
+            "<h1>&lt;script&gt;alert(1)&lt;/script&gt;&quot;&#x27;&lt;/style&gt;$name</h1>"
+        ));
+        assert!(
+            html.contains("<p>a &amp; b &lt;/style&gt;&lt;img src=x onerror=1&gt; ${colour}</p>")
+        );
+        assert!(!html.contains("alert(1)</script>") && !html.contains("<img"));
+        // Only the template's own tags: one style block, one script block.
+        assert_eq!(html.matches("</style>").count(), 1);
+        assert_eq!(html.matches("<script").count(), 1);
+        assert!(!html.contains("red;") && !html.contains("touch"));
+
+        for bad in [
+            "#FFF",
+            "#12345G",
+            "#1234567",
+            "#123456\n",
+            " #123456",
+            "blue",
+            "",
+        ] {
+            assert_eq!(render("Rex", "", bad).0, "#2F6BFF\n", "{bad:?}");
+        }
+        let (colour, html) = render("Rex", "Reads the post", "#ff9a1f");
+        assert_eq!(colour, "#ff9a1f\n");
+        assert!(html.contains("solid #ff9a1f") && html.contains("<h1>Rex</h1>"));
+        let _ = std::fs::remove_file(page);
+    }
+
     /// `cargo test -p orphusbot-node -- --ignored` on a machine with rootless Podman.
     #[tokio::test]
     #[ignore = "needs rootless podman and a network to pull the image"]
@@ -228,6 +301,7 @@ mod tests {
             bot: "fence-test",
             team: true,
             memory: "2g",
+            dress: ["Fence", "", ""],
         };
         let name = spec.ensure().await.unwrap();
         let ok = |args: &[&str]| {

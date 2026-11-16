@@ -5,7 +5,7 @@
 | Date | 2026-11-15 |
 | Follows | [bot-hq-2026-11-15.md](bot-hq-2026-11-15.md) (§3 "Take" rows, §5 brief) |
 | Read for this | Our `crates/proto` (`lib.rs`, `view.rs`), `crates/node/src/engine.rs`, `crates/server/src/{room,bots,team}.rs`, `bridge/orphusbot-bridge.ts`, `images/desktop`, DESIGN §3.4, §4.3, §5.3, §7.4, §11.4, §11.8, §12.4, §12.5. bot-hq at `decf9a21`: `web/src/components/{ActivityLine,Transcript}.tsx`, `web/src/lib/phrases.ts`, `web/src/voice/call.ts`, `server/src/agent/tools.ts`, `server/box/home.html` |
-| Status | **A plan for Kelvin to review.** Item 1 is built (D-067, DESIGN §12.6). Nothing else here is decided or built, and the other decision drafts in §7 have no numbers yet |
+| Status | **A plan for Kelvin to review.** Item 1 is built (D-067, DESIGN §12.6), and other items where their section says so. Nothing else here is decided or built, and the other decision drafts in §7 have no numbers yet |
 
 The harness, the gate and placement don't change. No Composio, Orgo or Bops code is used. bot-hq is MIT, but nothing below needs its code: each item is rebuilt on what we already have.
 
@@ -102,6 +102,8 @@ So this needs no change to the node, the bridge or the engine.
 ---
 
 ## 2. Dressed screens
+
+**Built** as [D-070](../DECISIONS.md), with one change: `omarchy` copies the script, template and policy from the built desktop image.
 
 **What bot-hq does.** Before a bot's first turn its screen gets a wallpaper, a dock and a Chrome whose new-tab page is a home screen: clock, the bot's name and role, its apps. The agent never meets an empty desktop, and a person watching knows whose screen it is.
 

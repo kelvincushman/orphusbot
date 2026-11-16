@@ -1,0 +1,31 @@
+#!/usr/bin/python3
+"""Writes the bot's home page (Chromium's home and new tab, by policy) and prints
+the bot's colour for the desktop background.
+
+  render-home [template] [output]
+
+The name, remit and colour come from the environment the node set when it made the
+computer. They are the owner's text, so every value is HTML-escaped, and the colour
+is used only if it is exactly #RRGGBB: it goes into CSS here and into a shell
+command in start-screen. Shared by images/desktop and images/omarchy.
+"""
+import html, os, re, string, sys
+
+DEFAULT_COLOUR = "#2F6BFF"  # the default face's head (design/bot-avatar)
+
+template = sys.argv[1] if len(sys.argv) > 1 else "/usr/local/share/orphusbot/home.html"
+output = sys.argv[2] if len(sys.argv) > 2 else "/tmp/home.html"
+
+colour = os.environ.get("ORPHUSBOT_BOT_COLOUR", "")
+if not re.fullmatch(r"#[0-9a-fA-F]{6}", colour):
+    colour = DEFAULT_COLOUR
+
+with open(template, encoding="utf-8") as f:
+    page = string.Template(f.read()).substitute(
+        name=html.escape(os.environ.get("ORPHUSBOT_BOT_NAME") or "OrphusBot"),
+        remit=html.escape(os.environ.get("ORPHUSBOT_BOT_REMIT", "")),
+        colour=colour,
+    )
+with open(output, "w", encoding="utf-8") as f:
+    f.write(page)
+print(colour)

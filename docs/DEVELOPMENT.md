@@ -97,11 +97,13 @@ podman build -t localhost/orphusbot-desktop images/desktop
 export ORPHUSBOT_COMPUTER_IMAGE=localhost/orphusbot-desktop
 ```
 
-For bots set to the Omarchy desktop (Settings → the bot → Its computer's desktop):
+For bots set to the Omarchy desktop (Settings → the bot → Its computer's desktop). It copies the bot's home page from the desktop image, so build that first:
 
 ```sh
 podman build -t localhost/orphusbot-omarchy images/omarchy
 ```
+
+An existing computer keeps the image it was made from. After rebuilding an image, wait until no bot on the node has work running (stopping the node interrupts every bot's run on it), stop the node, remove the computer (`podman rm -f -t 0 orphusbot-<bot>`), and start the node again. A running engine keeps using the computer it started with, so the node is stopped first; the new computer is made on the bot's next run. Its home volume stays; files in `/tmp` are lost.
 
 **The same screen in E2B.** Build the image as an E2B template once (needs `E2B_API_KEY` in your shell):
 

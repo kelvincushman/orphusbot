@@ -194,61 +194,97 @@ class _TeamStageState extends State<TeamStage> {
                 }
 
                 return SingleChildScrollView(
-                  child: SizedBox(
-                    width: box.maxWidth,
-                    height: rows * cell.height + 16,
-                    child: Stack(
-                      children: [
-                        // The lines, under the robots.
-                        Positioned.fill(
-                          child: CustomPaint(
-                            painter: _Lines([
-                              for (final (i, o) in open.indexed)
-                                (
-                                  head(o['asked_by'] as String),
-                                  bend(i, o),
-                                  head(o['bot'] as String),
-                                  o['blocked'] == true
-                                      ? scheme.error
-                                      : scheme.outline,
-                                ),
-                            ]),
-                          ),
-                        ),
-                        // Each bot's spot: its name and status stay put, and
-                        // take the tap, while its robot may be away.
-                        for (final b in bots)
-                          _spot(b, spot[b['slug'] as String]!, scheme),
-                        for (final b in bots)
-                          _robot(
-                            b,
-                            at(b['slug'] as String),
-                            flipped(b['slug'] as String),
-                            full,
-                          ),
-                        // Each line's ticket, at the top of its arch (the
-                        // curve passes half way to its bend).
-                        for (final (i, o) in open.indexed)
-                          _ticket(
-                            o,
-                            Offset.lerp(
-                              Offset.lerp(
-                                head(o['asked_by'] as String),
-                                head(o['bot'] as String),
-                                0.5,
+                  child: Column(
+                    children: [
+                      SizedBox(
+                        width: box.maxWidth,
+                        height: rows * cell.height + 16,
+                        child: Stack(
+                          children: [
+                            // The lines, under the robots.
+                            Positioned.fill(
+                              child: CustomPaint(
+                                painter: _Lines([
+                                  for (final (i, o) in open.indexed)
+                                    (
+                                      head(o['asked_by'] as String),
+                                      bend(i, o),
+                                      head(o['bot'] as String),
+                                      o['blocked'] == true
+                                          ? scheme.error
+                                          : scheme.outline,
+                                    ),
+                                ]),
                               ),
-                              bend(i, o),
-                              0.5,
-                            )!,
-                            name,
-                            scheme,
-                          ),
-                      ],
-                    ),
+                            ),
+                            // Each bot's spot: its name and status stay put, and
+                            // take the tap, while its robot may be away.
+                            for (final b in bots)
+                              _spot(b, spot[b['slug'] as String]!, scheme),
+                            for (final b in bots)
+                              _robot(
+                                b,
+                                at(b['slug'] as String),
+                                flipped(b['slug'] as String),
+                                full,
+                              ),
+                            // Each line's ticket, at the top of its arch (the
+                            // curve passes half way to its bend).
+                            for (final (i, o) in open.indexed)
+                              _ticket(
+                                o,
+                                Offset.lerp(
+                                  Offset.lerp(
+                                    head(o['asked_by'] as String),
+                                    head(o['bot'] as String),
+                                    0.5,
+                                  ),
+                                  bend(i, o),
+                                  0.5,
+                                )!,
+                                name,
+                                scheme,
+                              ),
+                          ],
+                        ),
+                      ),
+                      // The same hand-offs in words: who waits on whom. A
+                      // ticket hidden under another on the stage is still
+                      // here to open.
+                      for (final o in open) _waiting(o, name, scheme),
+                      const SizedBox(height: 16),
+                    ],
                   ),
                 );
               },
             ),
+    );
+  }
+
+  /// "Researcher is waiting on Coder · OB-142", which opens the ticket.
+  Widget _waiting(
+    Map<String, dynamic> o,
+    String Function(String) name,
+    ColorScheme scheme,
+  ) {
+    final blocked = o['blocked'] == true;
+    return Semantics(
+      button: true,
+      hint: 'Opens the ticket',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => showTicket(context, widget.api, o['id'] as int),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Text(
+            '${name(o['asked_by'] as String)} is waiting on '
+            '${name(o['bot'] as String)} · OB-${o['id']}'
+            '${blocked ? ' · blocked on a card' : ''}',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: blocked ? scheme.error : scheme.outline),
+          ),
+        ),
+      ),
     );
   }
 
@@ -326,22 +362,15 @@ class _TeamStageState extends State<TeamStage> {
   ) {
     final id = o['id'] as int;
     final blocked = o['blocked'] == true;
-    final said =
-        '${name(o['asked_by'] as String)} is waiting on '
-        '${name(o['bot'] as String)}, OB-$id${blocked ? ', blocked on a card' : ''}';
     return Positioned(
       left: at.dx - 60,
       top: at.dy - 14,
       width: 120,
       child: Center(
-        child: Tooltip(
-          message: said,
-          child: Semantics(
-            button: true,
-            label: said,
-            hint: 'Opens the ticket',
-            onTap: () => showTicket(context, widget.api, id),
-            excludeSemantics: true,
+        // Said in words by the line under the stage, so not said twice.
+        child: ExcludeSemantics(
+          child: Tooltip(
+            message: 'Opens the ticket',
             child: Material(
               color: scheme.surfaceContainerHigh,
               shape: const StadiumBorder(),

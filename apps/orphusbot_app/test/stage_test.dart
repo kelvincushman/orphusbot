@@ -102,8 +102,9 @@ void main() {
     await t.tap(find.text('Blogger'));
     expect(opened, ['blogger']);
     // The open hand-off's line has its ticket, which opens it.
+    // In words under the stage too, which opens it as well.
     expect(
-      find.bySemanticsLabel('Researcher is waiting on Coder, OB-142'),
+      find.text('Researcher is waiting on Coder · OB-142'),
       findsOneWidget,
     );
     await t.tap(find.text('OB-142'));
@@ -111,6 +112,14 @@ void main() {
     await t.pump();
     expect(find.text('OB-142 · Write a benchmark'), findsOneWidget);
     expect(find.text('doing · coder'), findsOneWidget);
+    await t.tap(find.text('Close'));
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 300));
+    expect(find.text('OB-142 · Write a benchmark'), findsNothing);
+    await t.tap(find.text('Researcher is waiting on Coder · OB-142'));
+    await t.pump();
+    await t.pump();
+    expect(find.text('OB-142 · Write a benchmark'), findsOneWidget);
   });
 
   testWidgets('on full, the asker goes across to its teammate and back', (

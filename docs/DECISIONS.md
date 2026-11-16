@@ -20,6 +20,7 @@ Format:
 **Alternatives:** Starting a browser for every bot, as bot-hq does (memory). A dock and app tiles (decoration). Reading the colour out of the `.riv` files or sending the avatar generator to the server (a parser or Python on the server for 30 fixed values). A second copy of the script in `images/omarchy` (two files to keep the same; the cost of the choice made is that the desktop image is built first, as for `images/rea`). Replacing a computer whenever its bot's name or remit changes (throws away what is open on its screen for a label).
 
 **Revisit if:** bots waste turns on an empty screen, or a stale name on the home page after a rename confuses anyone.
+
 ## D-069: Face files are built with Rive CLI 1.6, offline (2026-11-16)
 
 **Decided:** the bot faces' `.riv` files are built with Rive CLI 1.6, the last version with `--once`, started with an empty home folder and no network (the avatar README has the wrapper). `build.sh` warns above 40 KB a file, up from 25, since the props and hand-offs take each file to 31 to 37 KB.

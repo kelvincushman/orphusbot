@@ -20,6 +20,15 @@ Format:
 **Alternatives:** Starting a browser for every bot, as bot-hq does (memory). A dock and app tiles (decoration). Reading the colour out of the `.riv` files or sending the avatar generator to the server (a parser or Python on the server for 30 fixed values). A second copy of the script in `images/omarchy` (two files to keep the same; the cost of the choice made is that the desktop image is built first, as for `images/rea`). Replacing a computer whenever its bot's name or remit changes (throws away what is open on its screen for a label).
 
 **Revisit if:** bots waste turns on an empty screen, or a stale name on the home page after a rename confuses anyone.
+## D-069: Face files are built with Rive CLI 1.6, offline (2026-11-16)
+
+**Decided:** the bot faces' `.riv` files are built with Rive CLI 1.6, the last version with `--once`, started with an empty home folder and no network (the avatar README has the wrapper). `build.sh` warns above 40 KB a file, up from 25, since the props and hand-offs take each file to 31 to 37 KB.
+
+**Why:** D-034 chose the CLI because it builds offline with no account. From 1.9 the CLI writes a `.riv` only with `--publish`, which needs a signed-in Rive account. The 1.6 binary still does the whole job by itself, and the files load in the app's runtime (`avatar_test`).
+
+**Alternatives:** signing in and using `--publish` (the files have no scripts, so the CLI says nothing would be uploaded, but it ties every build to an account and a live session); writing the `.riv` binary ourselves (a format to keep up with); drawing in the Rive editor (ruled out in D-034).
+
+**Revisit if:** the app's Rive runtime stops loading files 1.6 writes, a feature we want needs a newer CLI, or Rive brings back a build without an account.
 
 ## D-068: Team bots get a short profile in their instructions, and a `recall` tool for the rest (2026-11-15)
 

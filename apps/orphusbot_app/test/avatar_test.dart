@@ -5,6 +5,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:orphusbot_app/avatar.dart';
 import 'package:rive/rive.dart' as rive;
 
+// What the work is and the hand-off reactions (bot-avatar README).
+void _handOff(rive.RiveWidgetController c, String path) {
+  // ignore: deprecated_member_use
+  expect(c.stateMachine.number('doing'), isNotNull, reason: path);
+  for (final name in ['give', 'receive']) {
+    // ignore: deprecated_member_use
+    expect(c.stateMachine.trigger(name), isNotNull, reason: '$path $name');
+  }
+}
+
 void main() {
   // The names BotAvatar relies on (design/bot-avatar/gen.py makes them).
   testWidgets('every face keeps the contract', (t) async {
@@ -24,6 +34,7 @@ void main() {
         expect(c.stateMachine.number('state'), isNotNull, reason: path);
         // ignore: deprecated_member_use
         expect(c.stateMachine.trigger('poke'), isNotNull, reason: path);
+        _handOff(c, path);
         final body = rive.RiveWidgetController(
           f,
           artboardSelector: rive.ArtboardSelector.byName('Robot'),
@@ -32,6 +43,7 @@ void main() {
         expect(body.stateMachine.name, 'Bot', reason: path);
         // ignore: deprecated_member_use
         expect(body.stateMachine.trigger('poke'), isNotNull, reason: path);
+        _handOff(body, path);
       }
       // A bot without its own style gets the default face.
       expect(await faceFile('someone-new'), isNotNull);

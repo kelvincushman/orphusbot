@@ -64,17 +64,21 @@ pub async fn append(db: &PgPool, thread: i64, event: &ThreadEvent) -> sqlx::Resu
     Ok(id)
 }
 
-/// Every persisted event after event id `after`, oldest first, with its bot.
-pub async fn since(db: &PgPool, after: i64) -> sqlx::Result<Vec<(i64, String, ThreadEvent)>> {
+/// Every persisted event after event id `after`, oldest first, with its bot
+/// and when it was stored (milliseconds since 1970 UTC).
+pub async fn since(db: &PgPool, after: i64) -> sqlx::Result<Vec<(i64, String, i64, ThreadEvent)>> {
     let rows = sqlx::query!(
-        r#"select e.id, b.slug, e.body as "body: Json<ThreadEvent>" from event e
+        r#"select e.id, b.slug, e.created_at, e.body as "body: Json<ThreadEvent>" from event e
            join thread t on t.id = e.thread_id join bot b on b.id = t.bot_id
            where e.id > $1 order by e.id"#,
         after
     )
     .fetch_all(db)
     .await?;
-    Ok(rows.into_iter().map(|r| (r.id, r.slug, r.body.0)).collect())
+    Ok(rows
+        .into_iter()
+        .map(|r| (r.id, r.slug, r.created_at.timestamp_millis(), r.body.0))
+        .collect())
 }
 
 /// Closes dialogs left open by an earlier server process: their engines are gone.
@@ -144,6 +148,9 @@ mod tests {
         assert_eq!(seqs, [1, 2, 3]);
         let replay = since(&db, ids[0]).await.unwrap();
         let inbox_slug = || "inbox".to_owned();
+        // Each comes with the time it was stored.
+        assert!(replay.iter().all(|r| r.2 > 1_700_000_000_000));
+        let replay: Vec<_> = replay.into_iter().map(|r| (r.0, r.1, r.3)).collect();
         assert_eq!(
             replay,
             vec![

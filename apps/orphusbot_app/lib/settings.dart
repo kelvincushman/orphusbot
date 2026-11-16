@@ -653,6 +653,7 @@ class _BotEditorState extends State<BotEditor> {
     'desktop': 'debian',
     'phone': 'none',
     'media': false,
+    'x_search': false,
     ...?widget.bot,
   };
   late final name = TextEditingController(text: bot['name'] as String);
@@ -851,6 +852,15 @@ class _BotEditorState extends State<BotEditor> {
                 ),
                 value: bot['media'] as bool? ?? false,
                 onChanged: (m) => setState(() => bot['media'] = m),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('X search'),
+                subtitle: const Text(
+                  'Research posts on X through xAI (costs money per search)',
+                ),
+                value: bot['x_search'] as bool? ?? false,
+                onChanged: (x) => setState(() => bot['x_search'] = x),
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,

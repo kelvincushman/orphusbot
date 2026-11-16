@@ -39,6 +39,8 @@ const READ_ONLY: &[&str] = &[
     "recall",
     // Reads the calling bot's own notes (DESIGN §5.6).
     "read_notes",
+    // Reads X through the server, which caps the searches a day (DESIGN §11.10).
+    "x_search",
     // Only answers a card the gate already marked safe (`safe_to_accept`).
     "accept_card",
     // A fleet's blueprints, read only; and its rooms, where the bot's own
@@ -552,6 +554,13 @@ mod tests {
         let query = json!({"query": "dentist"});
         assert_eq!(
             decide(&db, &call(a, "c0", "recall", &query)).await.unwrap(),
+            Verdict::Allow
+        );
+        // So does researching X; the server caps how often (DESIGN §11.10).
+        assert_eq!(
+            decide(&db, &call(a, "c3", "x_search", &query))
+                .await
+                .unwrap(),
             Verdict::Allow
         );
         assert_eq!(

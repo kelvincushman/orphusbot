@@ -123,9 +123,15 @@ void main() {
       find.widgetWithText(TextField, 'Instructions'),
       'Write tests first',
     );
+    // X search is off until switched on.
+    await t.ensureVisible(find.text('X search'));
+    await t.tap(find.text('X search'));
+    await settle(t);
+    await t.ensureVisible(find.text('Save'));
     await t.tap(find.text('Save'));
     await settle(t);
     final saved = posted['/api/bots/update'] as Map<String, dynamic>;
+    expect(saved['x_search'], isTrue);
     expect(saved['instructions'], 'Write tests first');
     expect(saved['model'], 'openai-codex/gpt-5.5');
     expect(saved['scope'], 'team');

@@ -74,6 +74,7 @@ pub fn label(tool: &str, input: &Value, names: &Names) -> (String, StepKind) {
         // Its own notes (DESIGN §5.6); what it wrote stays out of the thread.
         "read_notes" => fixed("Reading its notes", StepKind::Read),
         "remember" | "rewrite_notes" => fixed("Updating its notes", StepKind::Write),
+        "x_search" => fixed("Searching X", StepKind::Search),
         // Orphus's web tools, which only run for a bot without a computer.
         "web_search" | "code_search" => fixed("Searching the web", StepKind::Search),
         "fetch_content" | "get_search_content" => fixed("Reading a web page", StepKind::Browse),
@@ -255,6 +256,12 @@ mod tests {
                 StepKind::Write,
             ),
             (
+                "x_search",
+                json!({ "query": "rust async", "handles": ["rustlang"] }),
+                "Searching X",
+                StepKind::Search,
+            ),
+            (
                 "mcp:github_search_code",
                 json!({}),
                 "Using github",
@@ -343,6 +350,7 @@ mod tests {
             "read_notes",
             "remember",
             "rewrite_notes",
+            "x_search",
             "mcp",
             "web_search",
             "fetch_content",
@@ -369,6 +377,7 @@ mod tests {
             "Looking through its memory",
             "Reading its notes",
             "Updating its notes",
+            "Searching X",
             "Using github",
             "Using a connection",
             "Searching the web",

@@ -11,6 +11,18 @@ Format:
 
 ---
 
+## D-072: X research goes through the server (2026-11-16)
+
+**Decided:** bots research X with an `x_search` tool that the server answers by asking xAI's Responses API with its `x_search` tool. It is a per-bot setting, off by default, read-class at the gate (no card), with a daily cap counted in the database (`ORPHUSBOT_X_SEARCH_PER_DAY`, default 50 across all bots). A bot filters by handles to include or to leave out, not both, because xAI refuses both in one request.
+
+**Why:** the xAI key stays on the server, where the Ideas Room already uses it, so no engine or computer ever holds it, and one counter bounds how many searches xAI can charge for in a day. A read that asked for a tap each time would not get used.
+
+**Alternatives:** the key on the node, as with media (one more place for it, and no single cap); reading X through the phone (slow, and that phone is for posting); counting the cap in memory (a restart would reset it); on for every bot (every bot's queries would go to xAI without the owner choosing).
+
+**Revisit if:** the cap is hit often, xAI's prices or terms change, or bots put private material in queries despite the tool's instructions.
+
+---
+
 ## D-071: Each bot has short notes in the database, read at every run (2026-11-16)
 
 **Decided:** a `notes` column on `bot`, with a version counter. The first 2,000 characters are loaded into every run under "Your notes", for team and private bots alike. The owner edits them in the app's bot panel; the bot keeps them with `remember`, `read_notes` and `rewrite_notes`, which the server answers for the calling bot only and which need no approval card. A rewrite, from the bot or the app, is applied only if it carries the current version.
@@ -30,6 +42,8 @@ Format:
 **Alternatives:** Starting a browser for every bot, as bot-hq does (memory). A dock and app tiles (decoration). Reading the colour out of the `.riv` files or sending the avatar generator to the server (a parser or Python on the server for 30 fixed values). A second copy of the script in `images/omarchy` (two files to keep the same; the cost of the choice made is that the desktop image is built first, as for `images/rea`). Replacing a computer whenever its bot's name or remit changes (throws away what is open on its screen for a label).
 
 **Revisit if:** bots waste turns on an empty screen, or a stale name on the home page after a rename confuses anyone.
+
+---
 
 ## D-069: Face files are built with Rive CLI 1.6, offline (2026-11-16)
 

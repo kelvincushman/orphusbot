@@ -8,6 +8,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Changed
 
+- **Bot faces can show what the work is:** the face and robot files gain a prop for each kind of work (a book for reading, a pencil for writing, a terminal, a globe, a magnifying glass, a speech bubble, an envelope, a paintbrush, a phone) and two short reactions for handing work to a teammate and taking it. The app doesn't use them yet. Each face file grows from about 22 KB to about 35 KB.
 - **Missions:** the Orchestrator can give a big new piece of work its own Chief of Staff, which appears in the bot list with a clean context and hands parts to teammates. Teammates work on it in a separate session. The team can see what a mission is up to unless it's marked private, and only you can make a private mission visible again.
 - **New conversation:** the menu in a bot's chat starts a fresh session, carrying over the last 8 messages. The old session is kept.
 - **Talk to the Orchestrator in its chat:** the mic button opens the Ideas Room's live voice right there, and it knows what the team is doing. Its chat's recent messages go to xAI while you talk.

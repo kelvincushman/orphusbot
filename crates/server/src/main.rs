@@ -36,6 +36,7 @@ mod runs;
 mod screens;
 mod secrets;
 mod social;
+mod steps;
 mod system1;
 mod team;
 mod tickets;
@@ -83,6 +84,8 @@ const NODE_SILENCE_LIMIT: Duration = Duration::from_secs(75);
 struct Live {
     id: Option<i64>,
     bot: Option<String>,
+    /// When it was sent, in milliseconds since 1970 UTC.
+    at: i64,
     event: ThreadEvent,
 }
 
@@ -151,6 +154,8 @@ struct Runtime {
     waiting: HashMap<i64, String>,
     /// Open dialogs by Orphus request id.
     dialogs: HashMap<String, Pending>,
+    /// Tool calls shown as started and not yet ended, by run and tool-call id (`steps`).
+    steps: std::collections::HashSet<(i64, String)>,
     /// Capture windows sent to a node for extraction and not yet answered.
     extracting: std::collections::HashSet<i64>,
     /// Open screen viewers by stream number, with the node serving each.
@@ -749,6 +754,9 @@ async fn resolve_dialog(app: &App, answer: Answer) -> Result<StatusCode, ApiErro
         },
     };
     respond(app, pending.attempt, response).await;
+    if let (Some(call), Some("deny")) = (&pending.tool_call_id, answer.decision.as_deref()) {
+        steps::ended(app, &pending.thread, pending.attempt.run, call, false).await;
+    }
     dialog_closed(app, &pending.thread, id, outcome).await;
     Ok(StatusCode::ACCEPTED)
 }
@@ -899,6 +907,7 @@ async fn on_dialog(app: &Shared, active: Active, request: Value) {
             },
             helpers_gated: call["helpersGated"].as_bool().unwrap_or(false),
         };
+        steps::started(app, &active.thread, attempt.run, call_id, &tool, &input).await;
         let verdict = gate::decide(&app.db, &app.system1, &gate_call)
             .await
             .unwrap_or_else(|e| {
@@ -915,6 +924,7 @@ async fn on_dialog(app: &Shared, active: Active, request: Value) {
                 return respond(app, attempt, ui_response(&id, "value", json!("allow"))).await;
             }
             gate::Verdict::Deny(reason) => {
+                steps::ended(app, &active.thread, attempt.run, call_id, false).await;
                 let value = json!(format!("deny:{reason}"));
                 return respond(app, attempt, ui_response(&id, "value", value)).await;
             }
@@ -1292,6 +1302,7 @@ async fn announce_released(app: &App, released: Vec<runs::Released>) {
             run_ended(app, &thread, r.run, RunOutcome::Failed, error).await;
         } else {
             lock(&app.rt).waiting.remove(&r.run);
+            steps::abandon(app, &thread, r.run).await;
             let event = ThreadEvent::RunQueued {
                 run: r.run,
                 waiting: None,
@@ -1332,19 +1343,20 @@ async fn events(
 
     let stream = async_stream::stream! {
         let mut last = after;
-        for (id, bot, event) in history {
+        for (id, bot, at, event) in history {
             last = id;
-            yield Ok(sse(Some(id), Some(bot), event));
+            yield Ok(sse(Some(id), Some(bot), at, event));
         }
+        let now = chrono::Utc::now().timestamp_millis();
         for (bot, event) in current {
-            yield Ok(sse(None, bot, event));
+            yield Ok(sse(None, bot, now, event));
         }
         loop {
             match rx.recv().await {
                 Ok(Live { id: Some(id), .. }) if id <= last => continue,
-                Ok(Live { id, bot, event }) => {
+                Ok(Live { id, bot, at, event }) => {
                     if let Some(id) = id { last = id; }
-                    yield Ok(sse(id, bot, event));
+                    yield Ok(sse(id, bot, at, event));
                 }
                 // ponytail: a slow client that lags just reconnects and replays from Last-Event-ID.
                 Err(_) => break,
@@ -1387,8 +1399,8 @@ async fn current_state(app: &App) -> sqlx::Result<Vec<(Option<String>, ThreadEve
     Ok(out)
 }
 
-fn sse(id: Option<i64>, bot: Option<String>, event: ThreadEvent) -> Event {
-    let data = serde_json::to_string(&Envelope { bot, event }).unwrap_or_default();
+fn sse(id: Option<i64>, bot: Option<String>, at: i64, event: ThreadEvent) -> Event {
+    let data = serde_json::to_string(&Envelope { bot, at, event }).unwrap_or_default();
     let ev = Event::default().data(data);
     match id {
         Some(id) => ev.id(id.to_string()),
@@ -1674,10 +1686,12 @@ async fn on_node_message(app: &Shared, node: &str, msg: FromNode) {
             ok,
             result,
         } => {
-            if current(attempt).is_some()
-                && let Err(e) = gate::tool_done(&app.db, attempt, &tool_call_id, ok, &result).await
-            {
-                warn!("recording tool result: {e}");
+            if let Some(a) = current(attempt) {
+                if let Err(e) = gate::tool_done(&app.db, attempt, &tool_call_id, ok, &result).await
+                {
+                    warn!("recording tool result: {e}");
+                }
+                steps::ended(app, &a.thread, attempt.run, &tool_call_id, ok).await;
             }
         }
     }
@@ -1691,6 +1705,7 @@ async fn run_ended(
     error: Option<String>,
 ) {
     expire_dialogs(app, run).await;
+    lock(&app.rt).steps.retain(|(r, _)| *r != run);
     tickets::run_ended(&app.db, run, outcome).await;
     // Boxed: starting the next ticket can lead back here when its run ends.
     Box::pin(device::start_waiting(app, &thread.bot)).await;
@@ -1759,7 +1774,8 @@ fn publish(app: &App, id: Option<i64>, bot: Option<&str>, event: ThreadEvent) {
     let event = app.secrets.redact_event(event);
     // No receivers is normal when no browser is open.
     let bot = bot.map(str::to_owned);
-    let _ = app.live.send(Live { id, bot, event });
+    let at = chrono::Utc::now().timestamp_millis();
+    let _ = app.live.send(Live { id, bot, at, event });
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {

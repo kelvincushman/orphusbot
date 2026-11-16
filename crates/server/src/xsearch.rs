@@ -409,7 +409,8 @@ mod tests {
         assert_eq!(ok.handles, ["rustlang", "tokio_rs"]);
         assert_eq!(ok.from_date, NaiveDate::from_ymd_opt(2026, 11, 1));
         // Left out, null and empty all mean "not given".
-        let plain = Search::check(&json!({ "query": "q", "handles": null, "to_date": "" })).unwrap();
+        let plain =
+            Search::check(&json!({ "query": "q", "handles": null, "to_date": "" })).unwrap();
         assert!(plain.handles.is_empty() && plain.to_date.is_none());
 
         let bad = |request: Value| Search::check(&request).unwrap_err();
@@ -451,8 +452,10 @@ mod tests {
             body["tools"],
             json!([{ "type": "x_search", "allowed_x_handles": ["rustlang"], "from_date": "2026-11-01" }])
         );
-        let search = Search::check(&json!({ "query": "q", "exclude_handles": ["spam"], "to_date": "2026-11-15" }))
-            .unwrap();
+        let search = Search::check(
+            &json!({ "query": "q", "exclude_handles": ["spam"], "to_date": "2026-11-15" }),
+        )
+        .unwrap();
         assert_eq!(
             super::body("m", &search)["tools"],
             json!([{ "type": "x_search", "excluded_x_handles": ["spam"], "to_date": "2026-11-15" }])
@@ -486,7 +489,11 @@ mod tests {
         let request = json!({ "query": "rust async", "handles": ["@rustlang"] });
 
         let answer = ask(&app, "scout", &request).await;
-        let text = answer.strip_prefix("ok:").unwrap().strip_prefix(NOTE).unwrap();
+        let text = answer
+            .strip_prefix("ok:")
+            .unwrap()
+            .strip_prefix(NOTE)
+            .unwrap();
         assert_eq!(text.chars().count(), MAX_ANSWER_CHARS);
         assert_eq!(asked.lock().unwrap()[0].handles, ["rustlang"]);
 
@@ -537,7 +544,11 @@ mod tests {
         // A cap of nothing turns it off.
         let (xsearch, asked) = testkit::fake(Some("fine"), 0);
         let app = app_with(&db, xsearch);
-        assert!(ask(&app, "scout", &request).await.starts_with("error:Today"));
+        assert!(
+            ask(&app, "scout", &request)
+                .await
+                .starts_with("error:Today")
+        );
         assert!(asked.lock().unwrap().is_empty());
     }
 
@@ -551,6 +562,10 @@ mod tests {
             ask(&app, "scout", &request).await,
             "error:X search isn't answering just now."
         );
-        assert!(ask(&app, "scout", &request).await.starts_with("error:Today"));
+        assert!(
+            ask(&app, "scout", &request)
+                .await
+                .starts_with("error:Today")
+        );
     }
 }

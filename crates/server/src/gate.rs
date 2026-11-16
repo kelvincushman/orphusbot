@@ -548,7 +548,9 @@ mod tests {
         );
         // So does researching X; the server caps how often (DESIGN §11.10).
         assert_eq!(
-            decide(&db, &call(a, "c3", "x_search", &query)).await.unwrap(),
+            decide(&db, &call(a, "c3", "x_search", &query))
+                .await
+                .unwrap(),
             Verdict::Allow
         );
         assert_eq!(

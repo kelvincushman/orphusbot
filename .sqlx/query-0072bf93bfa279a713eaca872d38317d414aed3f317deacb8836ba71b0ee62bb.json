@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select searches from x_search_day",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "searches",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "x_search_day",
+            "name": "searches"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0072bf93bfa279a713eaca872d38317d414aed3f317deacb8836ba71b0ee62bb"
+}

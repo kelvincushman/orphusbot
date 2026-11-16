@@ -11,6 +11,16 @@ Format:
 
 ---
 
+## D-071: Each bot has short notes in the database, read at every run (2026-11-16)
+
+**Decided:** a `notes` column on `bot`, with a version counter. The first 2,000 characters are loaded into every run under "Your notes", for team and private bots alike. The owner edits them in the app's bot panel; the bot keeps them with `remember`, `read_notes` and `rewrite_notes`, which the server answers for the calling bot only and which need no approval card. A rewrite, from the bot or the app, is applied only if it carries the current version.
+
+**Why:** corrections should stick without the owner editing instructions, and he should be able to see and fix what a bot has taken on. Keeping the notes in the bot's row means no bot can reach another's, and none can trick the server into writing somewhere else. Loading them every run is what makes an edit take effect every time; the cap keeps that small, and the wiki stays something a bot reads by choice. They are a different thing from learned memory (D-066, D-068): that is what OrphusBot picks up about the owner, shared by team bots; notes are kept by hand, per bot, about how that bot works.
+
+**Alternatives:** a file per bot in the vault (readable in Obsidian, but every team bot can write there, so one could read or change another's notes or swap the folder for a link); Honcho or another memory service; pointing at the notes with a tool instead of loading them (stricter about context, but an edit then takes effect only when the bot thinks to look); asking the owner before each `remember` (a card for every correction he has just given); folding notes into learned memory (private bots have none, and its facts aren't the owner's to edit line by line).
+
+**Revisit if:** notes keep growing past the cap, bots stop keeping them, a bot is found keeping something it read rather than something the owner said, or the owner wants to read them in Obsidian (then the server writes a read-only copy that is never read back).
+
 ## D-069: Face files are built with Rive CLI 1.6, offline (2026-11-16)
 
 **Decided:** the bot faces' `.riv` files are built with Rive CLI 1.6, the last version with `--once`, started with an empty home folder and no network (the avatar README has the wrapper). `build.sh` warns above 40 KB a file, up from 25, since the props and hand-offs take each file to 31 to 37 KB.

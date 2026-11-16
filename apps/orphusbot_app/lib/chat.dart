@@ -14,6 +14,7 @@ import 'package:markdown_widget/markdown_widget.dart';
 
 import 'api.dart';
 import 'avatar.dart';
+import 'bot_panel.dart';
 import 'discuss.dart';
 import 'gallery.dart';
 import 'memory.dart';
@@ -383,6 +384,19 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  /// The chosen bot's panel: its instructions, its notes and what it can do.
+  Future<void> _openPanel() async {
+    final bot = _bot;
+    if (bot == null) return;
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BotPanel(api: widget.api, bot: bot),
+      ),
+    );
+    if (changed == true) await _act(_loadBots);
+  }
+
   t.ThreadView get view => threads[chosen] ?? t.ThreadView();
 
   /// Filters the bot list in the menu.
@@ -653,45 +667,55 @@ class _ChatScreenState extends State<ChatScreen> {
               Expanded(
                 child: Center(
                   child: Tooltip(
-                    message: status,
-                    child: Container(
-                      padding: const EdgeInsets.fromLTRB(6, 4, 14, 4),
-                      decoration: ShapeDecoration(
-                        color: scheme.surfaceContainerHigh,
-                        shape: const StadiumBorder(),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          BotAvatar(
-                            key: ValueKey('pill-$chosen'),
-                            slug: faceOf(_bot, chosen),
-                            mood: v.mood,
-                            size: 26,
-                          ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.labelLarge,
-                                ),
-                                Text(
-                                  status,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.labelSmall
-                                      ?.copyWith(color: scheme.outline),
-                                ),
-                              ],
+                    message: '$status · Tap for its instructions and notes',
+                    // The pill opens the bot's panel (DESIGN §5.6).
+                    child: InkWell(
+                      key: const ValueKey('bot-pill'),
+                      customBorder: const StadiumBorder(),
+                      onTap: _openPanel,
+                      child: Ink(
+                        padding: const EdgeInsets.fromLTRB(6, 4, 14, 4),
+                        decoration: ShapeDecoration(
+                          color: scheme.surfaceContainerHigh,
+                          shape: const StadiumBorder(),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            BotAvatar(
+                              key: ValueKey('pill-$chosen'),
+                              slug: faceOf(_bot, chosen),
+                              mood: v.mood,
+                              size: 26,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelLarge,
+                                  ),
+                                  Text(
+                                    status,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(color: scheme.outline),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),

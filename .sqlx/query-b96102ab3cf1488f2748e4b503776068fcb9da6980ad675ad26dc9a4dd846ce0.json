@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update bot set notes = $2, notes_version = notes_version + 1\n         where slug = $1 and notes_version = $3 returning notes_version",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "notes_version",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "notes_version"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b96102ab3cf1488f2748e4b503776068fcb9da6980ad675ad26dc9a4dd846ce0"
+}

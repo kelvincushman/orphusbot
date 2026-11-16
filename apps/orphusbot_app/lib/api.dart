@@ -127,6 +127,17 @@ class Api {
 
   Future<void> post(String path, Object body) => _post(path, body);
 
+  /// A PUT whose answer matters, such as the new version of what was saved.
+  Future<dynamic> putJson(String path, Object body) async => jsonDecode(
+    (await _check(
+      _http.put(
+        Uri.parse('$server$path'),
+        headers: {...headers, 'content-type': 'application/json'},
+        body: jsonEncode(body),
+      ),
+    )).body,
+  );
+
   Future<void> delete(String path) =>
       _check(_http.delete(Uri.parse('$server$path'), headers: headers));
 

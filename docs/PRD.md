@@ -117,6 +117,7 @@ Priority: **P0** = v1 blocker, **P1** = v1 target, **P2** = later.
 | B-BOT-02 | Each bot is an Orphus role, so bots can sit in Orphus rooms and fleets; a group thread is a room | P1 |
 | B-BOT-03 | An "inbox" bot exists by default and receives anything System 1 can't route confidently | P0 |
 | B-BOT-04 | Per-bot memory and skills come from Orphus; OrphusBot shows and edits them | P2 |
+| B-BOT-05 | Each bot has its own short notes on how the owner likes it to work: the bot adds to them when corrected, the owner reads and edits them beside its instructions, they are read into every run, and no bot can reach another's | P1 |
 
 ### 7.3 Tickets and routines
 

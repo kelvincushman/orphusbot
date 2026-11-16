@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select notes, notes_version from bot where slug = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "notes",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "notes"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "notes_version",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "notes_version"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "152ba78e22ea34e7e26e31f7177a466d46d14fb2059930ae04078c6ed0d20f41"
+}

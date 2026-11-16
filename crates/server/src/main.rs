@@ -791,7 +791,7 @@ async fn expire_dialogs(app: &App, run: i64) {
 }
 
 /// The engine is waiting on a dialog: decide gates here, ask the owner otherwise.
-async fn on_dialog(app: &App, active: Active, request: Value) {
+async fn on_dialog(app: &Shared, active: Active, request: Value) {
     let attempt = active.attempt;
     let Some(id) = request["id"].as_str().map(str::to_owned) else {
         return warn!("dialog without an id");
@@ -824,8 +824,15 @@ async fn on_dialog(app: &App, active: Active, request: Value) {
             .as_str()
             .and_then(|p| serde_json::from_str(p).ok())
             .unwrap_or_default();
-        let answer = memory::recall(app, &active.thread.bot, &request).await;
-        return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
+        // On its own task: the search waits on the embedding server, and this
+        // one reads everything the node sends. `respond` drops the answer if
+        // the attempt has ended meanwhile.
+        let app = app.clone();
+        tokio::spawn(async move {
+            let answer = memory::recall(&app, &active.thread.bot, &request).await;
+            respond(&app, attempt, ui_response(&id, "value", json!(answer))).await;
+        });
+        return;
     }
     if method == "input" && title == team::ACCEPT_TITLE {
         let accept: Value = request["placeholder"]
@@ -1521,7 +1528,7 @@ async fn run_node(app: Shared, socket: WebSocket) {
     }
 }
 
-async fn on_node_message(app: &App, node: &str, msg: FromNode) {
+async fn on_node_message(app: &Shared, node: &str, msg: FromNode) {
     // Frames for an attempt that's no longer current (a fenced-off retry) are dropped.
     let current = |attempt: Attempt| lock(&app.rt).current(attempt).cloned();
     match msg {

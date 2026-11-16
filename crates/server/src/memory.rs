@@ -684,6 +684,12 @@ pub async fn recall(app: &App, bot: &str, request: &Value) -> String {
             return "error:Memory's search isn't answering just now.".into();
         }
     };
+    // Again, since the search took a while: the owner may have made the bot
+    // private meanwhile.
+    match crate::bots::get(&app.db, bot).await {
+        Ok(Some(bot)) if readable_by(&app.memory, &bot) => {}
+        _ => return "error:Learned memory isn't available to this bot.".into(),
+    }
     if facts.is_empty() {
         return "ok:Nothing has been learned yet.".into();
     }

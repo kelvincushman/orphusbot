@@ -103,7 +103,7 @@ For bots set to the Omarchy desktop (Settings → the bot → Its computer's des
 podman build -t localhost/orphusbot-omarchy images/omarchy
 ```
 
-An existing computer keeps the image it was made from. After rebuilding an image, wait until the bot has no work running, then remove its computer (`podman rm -f -t 0 orphusbot-<bot>`), and the node makes a new one on the bot's next run. Its home volume stays; files in `/tmp` are lost.
+An existing computer keeps the image it was made from. After rebuilding an image, wait until the bot has no work running, then remove its computer (`podman rm -f -t 0 orphusbot-<bot>`) and restart the node. A running engine keeps using the computer it started with, so only an engine started afterwards makes a new one, on the bot's next run. Its home volume stays; files in `/tmp` are lost.
 
 **The same screen in E2B.** Build the image as an E2B template once (needs `E2B_API_KEY` in your shell):
 

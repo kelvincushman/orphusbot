@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update capture_settings set profile = $1, timezone = $2 where id = 1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "31805dcb437947e4b11e621550f3561e5b80f22a92e06bba2fcc1797feb7c627"
+}

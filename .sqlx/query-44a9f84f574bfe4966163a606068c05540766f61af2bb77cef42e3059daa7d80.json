@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into habitat_message (device_id, kind, cue, subject, tap) values ($1, 'ask', $2, $3, $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "44a9f84f574bfe4966163a606068c05540766f61af2bb77cef42e3059daa7d80"
+}

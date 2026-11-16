@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update decision set state = null where state is not null and created_at < now() - interval '30 days'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "61d97e6ebaf0b0ba04def6060d699b4736bc753143fdf25cb30de51322f53cee"
+}

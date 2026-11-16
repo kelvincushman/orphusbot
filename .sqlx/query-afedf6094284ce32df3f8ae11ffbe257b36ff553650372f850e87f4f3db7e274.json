@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select hands_free from device where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "hands_free",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "device",
+            "name": "hands_free"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "afedf6094284ce32df3f8ae11ffbe257b36ff553650372f850e87f4f3db7e274"
+}

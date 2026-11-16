@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update bot set media = true where id = (select bot_id from thread where id = 1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "6406cbfe9c7329176ba0b8e11fccf5d89dbe6cb24721166589e5ae4f2b6070c2"
+}

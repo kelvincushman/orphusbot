@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select exists (select 1 from habitat_message\n                          where device_id = $1 and kind = 'ask' and state in ('sent', 'delivered')) as \"b!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "b!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5e3806e1fb758216bacfd062cb2f6385ea723482459dad8c5c2a9041279ca5bb"
+}

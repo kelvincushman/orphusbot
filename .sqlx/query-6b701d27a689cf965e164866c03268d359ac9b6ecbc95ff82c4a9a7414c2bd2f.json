@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select d.id, d.answers -> 'bot' ->> 'choice' as choice, b.slug as \"slug?\"\n           from decision d join ticket t on t.id = d.ticket_id left join bot b on b.id = t.bot_id\n           where d.catalogue = 'triage' and d.ticket_id = $1\n             and not exists (select 1 from decision_label l where l.decision_id = d.id and l.label ? 'bot')\n           order by d.id desc limit 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "decision",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "choice",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "slug?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "slug"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false
+    ]
+  },
+  "hash": "6b701d27a689cf965e164866c03268d359ac9b6ecbc95ff82c4a9a7414c2bd2f"
+}

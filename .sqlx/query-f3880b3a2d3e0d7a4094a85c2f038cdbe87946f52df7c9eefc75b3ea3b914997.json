@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select url from connection where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "url",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "connection",
+            "name": "url"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "f3880b3a2d3e0d7a4094a85c2f038cdbe87946f52df7c9eefc75b3ea3b914997"
+}

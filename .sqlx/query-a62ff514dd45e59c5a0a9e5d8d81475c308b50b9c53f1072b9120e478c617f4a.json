@@ -1,0 +1,124 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select id, question, bots, chair, rounds, round, status, verdict, created_at from discussion where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "discussion",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "question",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "discussion",
+            "name": "question"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "bots",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "discussion",
+            "name": "bots"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "chair",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "discussion",
+            "name": "chair"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "rounds",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "discussion",
+            "name": "rounds"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "round",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "discussion",
+            "name": "round"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "discussion",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "verdict",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "discussion",
+            "name": "verdict"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "discussion",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "a62ff514dd45e59c5a0a9e5d8d81475c308b50b9c53f1072b9120e478c617f4a"
+}

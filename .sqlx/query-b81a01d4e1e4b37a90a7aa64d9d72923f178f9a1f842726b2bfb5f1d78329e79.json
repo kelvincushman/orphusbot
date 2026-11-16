@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update device set hands_free = $2 where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b81a01d4e1e4b37a90a7aa64d9d72923f178f9a1f842726b2bfb5f1d78329e79"
+}

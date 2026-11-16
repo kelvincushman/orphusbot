@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select heard_id from memory_fact_source s join memory_fact f on f.id = s.fact_id where f.text like '%appointments%'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "heard_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "memory_fact_source",
+            "name": "heard_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "89cd422312530910be9fe02bb8dc8668a49fe740e75aabef360c38652ea731e6"
+}

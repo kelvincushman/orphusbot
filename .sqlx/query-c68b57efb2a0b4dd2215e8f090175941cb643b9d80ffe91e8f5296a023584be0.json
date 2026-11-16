@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update decision_model set active = true\n         where id = (select id from decision_model\n                     where applied_at < (select applied_at from decision_model where id = $1)\n                     order by applied_at desc limit 1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c68b57efb2a0b4dd2215e8f090175941cb643b9d80ffe91e8f5296a023584be0"
+}

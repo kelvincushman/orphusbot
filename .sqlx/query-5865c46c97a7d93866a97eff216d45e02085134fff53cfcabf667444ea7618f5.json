@@ -1,0 +1,95 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select t.id, t.title, t.body, t.status::text as \"status!\", t.urgency, b.slug as \"bot?\", t.act_now\n           from ticket t left join bot b on b.id = t.bot_id where t.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ticket",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ticket",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "body",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ticket",
+            "name": "body"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "status!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "urgency",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ticket",
+            "name": "urgency"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "bot?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "slug"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "act_now",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "ticket",
+            "name": "act_now"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "5865c46c97a7d93866a97eff216d45e02085134fff53cfcabf667444ea7618f5"
+}

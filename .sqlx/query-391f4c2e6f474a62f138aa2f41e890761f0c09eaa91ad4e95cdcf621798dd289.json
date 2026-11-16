@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select nonce, ciphertext, tag from secret where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "nonce",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "secret",
+            "name": "nonce"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "ciphertext",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "secret",
+            "name": "ciphertext"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "tag",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "secret",
+            "name": "tag"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "391f4c2e6f474a62f138aa2f41e890761f0c09eaa91ad4e95cdcf621798dd289"
+}

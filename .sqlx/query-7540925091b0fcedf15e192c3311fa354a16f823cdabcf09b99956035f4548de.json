@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update room_session set ended_at = now(), transcript = $2 where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7540925091b0fcedf15e192c3311fa354a16f823cdabcf09b99956035f4548de"
+}

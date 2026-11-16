@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update ticket set status = $2::text::ticket_status, updated_at = now()\n         where id = (select ticket_id from run where id = $1) and status = 'doing'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9bc90af0cbd22a193229475c01f549d46984bac9bd06fa48b63d689ccfc8a6d1"
+}

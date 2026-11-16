@@ -1,0 +1,57 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select id, title, status::text as \"status!\", ask_depth from ticket",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ticket",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ticket",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "status!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "ask_depth",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "ticket",
+            "name": "ask_depth"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      false
+    ]
+  },
+  "hash": "08e5139c55104bc9901fde940cda143b08988cb3833399f78f3ada4d4f529749"
+}

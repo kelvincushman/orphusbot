@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into proposal (kind, title, state, due_at) values ('appointment', 'Dentist', 'accepted', $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2b9bc9e5756ae29d34115d1bf8caaabda126197c039a829e920e4e5ff3e17e3b"
+}

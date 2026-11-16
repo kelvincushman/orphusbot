@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update device set captures_to = 'room'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "d0248ba0134b44be82e6998c8e5c6f3fb2fc44d7fa1f1495932a69c0877cfa58"
+}

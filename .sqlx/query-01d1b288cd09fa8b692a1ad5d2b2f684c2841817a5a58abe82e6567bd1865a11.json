@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update device_link set expires_at = now() - interval '1 second'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "01d1b288cd09fa8b692a1ad5d2b2f684c2841817a5a58abe82e6567bd1865a11"
+}

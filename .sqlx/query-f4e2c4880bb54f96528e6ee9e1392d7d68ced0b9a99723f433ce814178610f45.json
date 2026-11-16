@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update device set captures_to = $2 where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f4e2c4880bb54f96528e6ee9e1392d7d68ced0b9a99723f433ce814178610f45"
+}

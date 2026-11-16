@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select label, agrees from decision_label order by id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "label",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "decision_label",
+            "name": "label"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "agrees",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "decision_label",
+            "name": "agrees"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "77a034b74f070bf189d7b34e669e9850d92ced8d70b14dc97171ce9a63a4d2b6"
+}

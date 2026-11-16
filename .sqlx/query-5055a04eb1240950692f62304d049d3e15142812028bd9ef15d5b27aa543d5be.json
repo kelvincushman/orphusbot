@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select name, yaml, updated_at from fleet order by name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "fleet",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "yaml",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "fleet",
+            "name": "yaml"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "fleet",
+            "name": "updated_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "5055a04eb1240950692f62304d049d3e15142812028bd9ef15d5b27aa543d5be"
+}

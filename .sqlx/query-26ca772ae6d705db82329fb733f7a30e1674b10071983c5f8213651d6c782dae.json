@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select label from device_link\n         where user_code = $1 and expires_at > now() and passkey_id is null",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "label",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "device_link",
+            "name": "label"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "26ca772ae6d705db82329fb733f7a30e1674b10071983c5f8213651d6c782dae"
+}

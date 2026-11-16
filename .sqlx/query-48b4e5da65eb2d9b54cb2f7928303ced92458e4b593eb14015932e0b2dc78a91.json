@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into decision_label (decision_id, label, agrees, source)\n                   values ($1, '{\"verdict\": \"pass\"}', true, 'approved the card')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "48b4e5da65eb2d9b54cb2f7928303ced92458e4b593eb14015932e0b2dc78a91"
+}

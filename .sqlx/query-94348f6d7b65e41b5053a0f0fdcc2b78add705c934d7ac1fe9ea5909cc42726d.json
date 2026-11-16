@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select public_key from node where name = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "public_key",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "node",
+            "name": "public_key"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "94348f6d7b65e41b5053a0f0fdcc2b78add705c934d7ac1fe9ea5909cc42726d"
+}

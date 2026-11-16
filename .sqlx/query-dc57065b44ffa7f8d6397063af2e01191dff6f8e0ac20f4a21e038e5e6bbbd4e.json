@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update decision_model set active = false where active returning id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "decision_model",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "dc57065b44ffa7f8d6397063af2e01191dff6f8e0ac20f4a21e038e5e6bbbd4e"
+}

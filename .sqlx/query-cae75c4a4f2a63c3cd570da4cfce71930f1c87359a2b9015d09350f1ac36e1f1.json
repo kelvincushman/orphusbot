@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update thread set last_seq = last_seq + 1 where id = $1 returning last_seq",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "last_seq",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "thread",
+            "name": "last_seq"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "cae75c4a4f2a63c3cd570da4cfce71930f1c87359a2b9015d09350f1ac36e1f1"
+}

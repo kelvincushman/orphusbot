@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select ciphertext from secret where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ciphertext",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "secret",
+            "name": "ciphertext"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "721e21d5ecce613bbdcc91f1d6c250e0bcafb2cb397dc1213c0b7cd78334d026"
+}

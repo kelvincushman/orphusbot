@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select exists (select 1 from run where thread_id = $1 and status in ('queued', 'running')\n                          and discussion_id is not null) as \"in_turn!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "in_turn!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "bc568c4d7407fd67e4a23b872e619a3564a39acbbb22956e1402a1c6d89d3ad5"
+}

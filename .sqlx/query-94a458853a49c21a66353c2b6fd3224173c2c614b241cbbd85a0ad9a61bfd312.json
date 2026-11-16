@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update ticket_told set claimed_at = now() - interval '3 minutes'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "94a458853a49c21a66353c2b6fd3224173c2c614b241cbbd85a0ad9a61bfd312"
+}

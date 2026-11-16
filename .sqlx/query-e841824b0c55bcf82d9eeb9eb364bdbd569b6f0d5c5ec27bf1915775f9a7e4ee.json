@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select oauth as \"oauth!\", refresh_secret_id as \"refresh!\", url as \"url!\" from connection\n           where id = $1 and oauth is not null and refresh_secret_id is not null\n             and token_expires_at < now() + interval '1 minute'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "oauth!",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "connection",
+            "name": "oauth"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "refresh!",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "connection",
+            "name": "refresh_secret_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "url!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "connection",
+            "name": "url"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "e841824b0c55bcf82d9eeb9eb364bdbd569b6f0d5c5ec27bf1915775f9a7e4ee"
+}

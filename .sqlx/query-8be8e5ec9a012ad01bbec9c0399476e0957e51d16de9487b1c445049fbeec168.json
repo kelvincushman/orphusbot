@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update habitat_message set state = 'answered' where kind = 'ask'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "8be8e5ec9a012ad01bbec9c0399476e0957e51d16de9487b1c445049fbeec168"
+}

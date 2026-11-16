@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into decision (catalogue, state_hash, answers, abstained, threshold, latency_ms, outcome)\n                       values ($1, $2, $3, false, 0.85, 5, 'x') returning id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "decision",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bytea",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d3d77a5087419749ea2b19ff25e1b6240c4220cfcf9357a4dd12735d83a8102b"
+}

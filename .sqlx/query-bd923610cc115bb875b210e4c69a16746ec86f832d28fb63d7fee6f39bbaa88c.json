@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select r.id as \"id!\" from run r join ticket t on t.id = r.ticket_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "run",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "bd923610cc115bb875b210e4c69a16746ec86f832d28fb63d7fee6f39bbaa88c"
+}

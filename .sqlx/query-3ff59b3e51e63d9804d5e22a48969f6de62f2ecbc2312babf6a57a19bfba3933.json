@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update capture_window set state = 'failed' where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3ff59b3e51e63d9804d5e22a48969f6de62f2ecbc2312babf6a57a19bfba3933"
+}

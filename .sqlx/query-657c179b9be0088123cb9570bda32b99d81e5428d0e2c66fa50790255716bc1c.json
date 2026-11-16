@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update discussion set round = $2 where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "657c179b9be0088123cb9570bda32b99d81e5428d0e2c66fa50790255716bc1c"
+}

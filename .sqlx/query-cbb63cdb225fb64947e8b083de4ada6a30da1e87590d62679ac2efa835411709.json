@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "alter table room_idea drop constraint test_refuse",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "cbb63cdb225fb64947e8b083de4ada6a30da1e87590d62679ac2efa835411709"
+}

@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select device_id from run",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "device_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "run",
+            "name": "device_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "c9abd6dc7b92b51aa9e6d483e1efde499f698ee718d59bcaa0bee9748e676aa6"
+}

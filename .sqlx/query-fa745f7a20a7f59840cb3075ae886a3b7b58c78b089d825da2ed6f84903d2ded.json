@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select r.prompt, b.remit from run r join thread t on t.id = r.thread_id\n         join bot b on b.id = t.bot_id where r.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "prompt",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "run",
+            "name": "prompt"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "remit",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "remit"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "fa745f7a20a7f59840cb3075ae886a3b7b58c78b089d825da2ed6f84903d2ded"
+}

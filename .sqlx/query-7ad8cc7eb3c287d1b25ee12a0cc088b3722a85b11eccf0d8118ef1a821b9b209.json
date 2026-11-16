@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "delete from oauth_flow where created_at < now() - interval '10 minutes'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "7ad8cc7eb3c287d1b25ee12a0cc088b3722a85b11eccf0d8118ef1a821b9b209"
+}

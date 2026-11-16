@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select subject from habitat_message where kind = 'ask'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subject",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "habitat_message",
+            "name": "subject"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "58cf9dc408d354156ae9c1f31ab9535f5cc4500fa567f83a5aba2472be1a25a3"
+}

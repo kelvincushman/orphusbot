@@ -1,0 +1,208 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media, session_gen\n         from bot where slug = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "slug",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "slug"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "remit",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "remit"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "instructions",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "instructions"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "model",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "model"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "thinking",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "thinking"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "exclude_tools",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "exclude_tools"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "scope",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "scope"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "disabled",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "disabled"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "computer",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "computer"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "google",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "google"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "face",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "face"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "desktop",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "desktop"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "phone",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "phone"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "media",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "media"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "session_gen",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "session_gen"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "18d710f4c76a1b77a41db8d2ac3d8d15b51384cf0274913d9d24535dda42ab0a"
+}

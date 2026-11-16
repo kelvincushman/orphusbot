@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update run set status = 'queued', node = null, lease_expires_at = null, updated_at = now()\n         where status = 'running'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "2b0a7813aaca61c50a18d2f45b58c570fee8e6b7a2dee71bdd6fd238d7d840e7"
+}

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select hook_hash is not null as \"h!\" from routine where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "h!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9656b8ac8f4f5c2336eb17c3fa002bf63c6215ad8cee501e81ba161e3f3346ce"
+}

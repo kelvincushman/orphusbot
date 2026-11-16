@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update run set ticket_id = $2 where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f5514942c902ca94ab45cb835f659918357f57de5f76b2699aa9f6a76b7460bf"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update proposal set state = 'dismissed', decided_at = now() where id = $1 and state = 'proposed'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "88d8df09ddc70710ce4e230c6f609589346893fa9b215993461078b8a7234473"
+}

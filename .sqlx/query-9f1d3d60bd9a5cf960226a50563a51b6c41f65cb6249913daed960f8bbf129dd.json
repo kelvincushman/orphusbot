@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select true as \"waiting!\" from device_link where device_hash = $1 and expires_at > now()",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "waiting!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9f1d3d60bd9a5cf960226a50563a51b6c41f65cb6249913daed960f8bbf129dd"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update discussion set status = 'done', verdict = $2, finished_at = now() where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "234fcd431b2523c0d91e7f01835ecad75f41a01fa0f84e9e58a552a76f1c4603"
+}

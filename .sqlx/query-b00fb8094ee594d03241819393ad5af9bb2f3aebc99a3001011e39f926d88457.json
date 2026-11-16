@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update session set passkey_id = $2, expires_at = now() + make_interval(secs => $3)\n         where token_hash = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Int8",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b00fb8094ee594d03241819393ad5af9bb2f3aebc99a3001011e39f926d88457"
+}

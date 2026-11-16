@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select m.id from mission m\n         where m.status <> 'open' and not m.retired\n           and not exists (select 1 from run r join thread t on t.id = r.thread_id\n                           join bot b on b.id = t.bot_id\n                           where b.slug = 'chief--' || m.id and r.status in ('queued', 'running'))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "mission",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1b4b07fa54bf9a107a533cbe8358c60d524c8bc0a5fcd5f7ea33f0cc5c57fd5c"
+}

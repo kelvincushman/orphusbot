@@ -1,0 +1,86 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select id, question, bots, chair, rounds, round from discussion where status = 'running' order by id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "discussion",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "question",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "discussion",
+            "name": "question"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "bots",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "discussion",
+            "name": "bots"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "chair",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "discussion",
+            "name": "chair"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "rounds",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "discussion",
+            "name": "rounds"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "round",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "discussion",
+            "name": "round"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "df227f964e02c9534d6e15ea710fdffad14bc2437418d2fbf9666149765edede"
+}

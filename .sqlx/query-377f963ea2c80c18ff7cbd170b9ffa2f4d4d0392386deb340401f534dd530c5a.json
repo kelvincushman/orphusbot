@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update capture_window set state = 'mined' where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "377f963ea2c80c18ff7cbd170b9ffa2f4d4d0392386deb340401f534dd530c5a"
+}

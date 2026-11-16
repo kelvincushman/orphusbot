@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into node (name, public_key) values ($1, $2)\n         on conflict (name) do update set public_key = excluded.public_key, last_seen_at = null",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "97540c273d3d7a80ed4621e6218a4b24068741aaef0e7a665d731a9a19675d7a"
+}

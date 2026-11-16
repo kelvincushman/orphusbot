@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select e.body->>'text' from event e\n               join thread t on t.id = e.thread_id join bot b on b.id = t.bot_id\n               where e.thread_id = $1 and e.created_at < $2 and e.created_at > b.team_since\n                 and e.body->>'type' = 'message' and e.body->>'role' = 'assistant'\n               order by e.seq desc limit 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "?column?",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "94fe5d85079de2fa73651da937ad9c81d51bda79983de3d5b240c76f64385121"
+}

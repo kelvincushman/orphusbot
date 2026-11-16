@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update ticket set title = $2, body = $3, status = $4::text::ticket_status, urgency = $5,\n                bot_id = (select id from bot where slug = $6), updated_at = now()\n         where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b4efbd053630afcd7c60acfc736566eac48097a2b4ad63182309e75dbcebbefb"
+}

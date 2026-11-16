@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select b.slug, c.name from bot_connection g join bot b on b.id = g.bot_id\n         join connection c on c.id = g.connection_id order by c.name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "slug",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "slug"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "connection",
+            "name": "name"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "542c40a33bc0c9506e77b40d78e38a2bcf61d0c6746e046d7b447ef2221b6d5b"
+}

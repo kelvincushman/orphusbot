@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select abstained from decision",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "abstained",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "decision",
+            "name": "abstained"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "820f1eb2091df9cd9d8e60c6f4ecf402f8d843648a5cc595d7a6b78e08add1cf"
+}

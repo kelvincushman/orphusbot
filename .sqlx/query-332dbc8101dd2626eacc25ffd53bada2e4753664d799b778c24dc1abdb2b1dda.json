@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select (routine_id is not null or ticket_id is not null or device_id is not null) as \"u!\"\n           from run where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "u!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "332dbc8101dd2626eacc25ffd53bada2e4753664d799b778c24dc1abdb2b1dda"
+}

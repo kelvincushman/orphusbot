@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select b.media from run r join thread t on t.id = r.thread_id join bot b on b.id = t.bot_id where r.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "media",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "media"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "400aba8782db9f9147a0749ef8670a88e16a5c6a7f30edee61156de223fa64d0"
+}

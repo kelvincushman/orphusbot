@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update capture_window set text = null\n         where text is not null and closed_at < now() - make_interval(secs => $1::float8 * 86400)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b5ae463f832cdfae72d709dd3bbd9017e410870467cf51bc898e1cfcfa84cd0a"
+}

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update room_session set rating = $2, note = nullif($3, '') where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int2",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ae936f0006cb5ddde24f55c255772e484cc2004e46311eee8be6390cec5dd558"
+}

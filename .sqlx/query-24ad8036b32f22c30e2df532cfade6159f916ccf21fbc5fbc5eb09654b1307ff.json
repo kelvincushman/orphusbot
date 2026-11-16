@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select state::text as \"state!\", result from effect\n           where run_id = $1 and fence < $2 and tool = $3 and input = $4\n           order by id desc limit 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "result",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "effect",
+            "name": "result"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      null,
+      true
+    ]
+  },
+  "hash": "24ad8036b32f22c30e2df532cfade6159f916ccf21fbc5fbc5eb09654b1307ff"
+}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "delete from device_link\n           where device_hash = $1 and expires_at > now() and passkey_id is not null\n           returning passkey_id as \"passkey_id!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "passkey_id!",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "device_link",
+            "name": "passkey_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "59a725e3bec8c93961b876abf407771bc9eb6329fab933a6617be855f45a53c4"
+}

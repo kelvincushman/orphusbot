@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into memory_fact_source (fact_id, heard_id)\n             select $1, unnest($2::bigint[]) on conflict do nothing",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ae2ba1d56d6ab2481abdd370daea7b5b0ffe21bad6f1a1f4b1517a0f1dbd9f45"
+}

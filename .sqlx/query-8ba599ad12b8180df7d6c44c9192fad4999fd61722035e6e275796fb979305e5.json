@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update run set lease_expires_at = now() + make_interval(secs => $2)\n         where status = 'running' and node = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8ba599ad12b8180df7d6c44c9192fad4999fd61722035e6e275796fb979305e5"
+}

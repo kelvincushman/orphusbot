@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select passkey_id from session where token_hash = $1 and expires_at > now()",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "passkey_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "session",
+            "name": "passkey_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "7916b52e46352b9c8e2dee7ff4afbb629805c378cfadd4513392e1ec0a00cfdd"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update capture_window set state = 'closed', closed_at = now()\n         where state = 'open' and (last_at < now() - interval '20 seconds' or opened_at < now() - interval '10 minutes')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "53ae353c8971385c9aa80884999cd6a33f7be400f0a8ee710c026a7ccee4109e"
+}

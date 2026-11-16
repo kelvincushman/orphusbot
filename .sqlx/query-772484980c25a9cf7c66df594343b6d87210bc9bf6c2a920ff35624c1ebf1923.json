@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update run set status = 'completed' returning id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "run",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "772484980c25a9cf7c66df594343b6d87210bc9bf6c2a920ff35624c1ebf1923"
+}

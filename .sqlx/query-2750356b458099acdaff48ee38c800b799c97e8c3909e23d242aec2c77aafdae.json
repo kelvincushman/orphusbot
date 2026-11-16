@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into decision (catalogue, state_hash, answers, abstained, threshold, confidence, latency_ms, outcome)\n                   values ('gate', $1, '{\"verdict\": {\"choice\": \"pass\"}}', false, 0.95, 0.97, 5, 'x') returning id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "decision",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2750356b458099acdaff48ee38c800b799c97e8c3909e23d242aec2c77aafdae"
+}

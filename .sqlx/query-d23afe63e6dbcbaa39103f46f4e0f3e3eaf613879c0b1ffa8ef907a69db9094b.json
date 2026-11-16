@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update proposal set state = 'dismissed', decided_at = $1 where kind = 'commitment'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d23afe63e6dbcbaa39103f46f4e0f3e3eaf613879c0b1ffa8ef907a69db9094b"
+}

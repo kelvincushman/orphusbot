@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update bot set phone = $1 where id = (select bot_id from thread where id = 1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "98fc1913172d40c3e170a48ce33797994122518f48e379a15858997bf0be8c36"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update capture_settings set last_digest_at = $1 where id = 1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2209a5a51006521e94166a546206d26fca590534a5e887055181d2023864a125"
+}

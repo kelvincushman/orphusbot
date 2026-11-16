@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select coalesce(sum(input + output), 0)::bigint as \"n!\" from usage where created_at >= date_trunc('day', now())",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "n!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c3f533d9c8039d6637d21be09410c89c67cc8989c60df44f4ddf471601ba7540"
+}

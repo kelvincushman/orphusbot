@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select asked_by, question from discussion where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "asked_by",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "discussion",
+            "name": "asked_by"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "question",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "discussion",
+            "name": "question"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "852de9ab68c10141947de19de368e57581cb153a57d82b477b4c85318d0755d0"
+}

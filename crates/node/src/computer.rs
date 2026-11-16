@@ -247,7 +247,11 @@ mod tests {
                 .env("ORPHUSBOT_BOT_COLOUR", colour)
                 .output()
                 .expect("python3 is installed");
-            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
             let html = std::fs::read_to_string(&page).unwrap();
             (String::from_utf8(out.stdout).unwrap(), html)
         };
@@ -258,15 +262,27 @@ mod tests {
             "red;}</style><script>x</script>$(touch /tmp/x)",
         );
         assert_eq!(colour, "#2F6BFF\n", "a bad colour becomes the default");
-        assert!(html.contains("<h1>&lt;script&gt;alert(1)&lt;/script&gt;&quot;&#x27;&lt;/style&gt;$name</h1>"));
-        assert!(html.contains("<p>a &amp; b &lt;/style&gt;&lt;img src=x onerror=1&gt; ${colour}</p>"));
+        assert!(html.contains(
+            "<h1>&lt;script&gt;alert(1)&lt;/script&gt;&quot;&#x27;&lt;/style&gt;$name</h1>"
+        ));
+        assert!(
+            html.contains("<p>a &amp; b &lt;/style&gt;&lt;img src=x onerror=1&gt; ${colour}</p>")
+        );
         assert!(!html.contains("alert(1)</script>") && !html.contains("<img"));
         // Only the template's own tags: one style block, one script block.
         assert_eq!(html.matches("</style>").count(), 1);
         assert_eq!(html.matches("<script").count(), 1);
         assert!(!html.contains("red;") && !html.contains("touch"));
 
-        for bad in ["#FFF", "#12345G", "#1234567", "#123456\n", " #123456", "blue", ""] {
+        for bad in [
+            "#FFF",
+            "#12345G",
+            "#1234567",
+            "#123456\n",
+            " #123456",
+            "blue",
+            "",
+        ] {
             assert_eq!(render("Rex", "", bad).0, "#2F6BFF\n", "{bad:?}");
         }
         let (colour, html) = render("Rex", "Reads the post", "#ff9a1f");

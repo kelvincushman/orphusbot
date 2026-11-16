@@ -13,7 +13,7 @@
 # Driving it from bash: /usr/local/bin/computer (grim, swaymsg, and VNC input to
 # wayvnc on the loopback port; see that script for why not ydotool or wtype).
 
-# The bot's home page (D-069) is the Debian desktop's, so there is one copy of the
+# The bot's home page (D-070) is the Debian desktop's, so there is one copy of the
 # render script, template and Chromium policy. Build images/desktop first.
 ARG DESKTOP=localhost/orphusbot-desktop:latest
 FROM $DESKTOP AS desktop

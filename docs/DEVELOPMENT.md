@@ -97,11 +97,13 @@ podman build -t localhost/orphusbot-desktop images/desktop
 export ORPHUSBOT_COMPUTER_IMAGE=localhost/orphusbot-desktop
 ```
 
-For bots set to the Omarchy desktop (Settings → the bot → Its computer's desktop):
+For bots set to the Omarchy desktop (Settings → the bot → Its computer's desktop). It copies the bot's home page from the desktop image, so build that first:
 
 ```sh
 podman build -t localhost/orphusbot-omarchy images/omarchy
 ```
+
+An existing computer keeps the image it was made from. After rebuilding an image, remove the bot's computer (`podman rm -f -t 0 orphusbot-<bot>`; its home volume stays) and the node makes a new one on the bot's next run.
 
 **The same screen in E2B.** Build the image as an E2B template once (needs `E2B_API_KEY` in your shell):
 

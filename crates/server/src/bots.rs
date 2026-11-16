@@ -143,7 +143,9 @@ const FACE_COLOURS: &[(&str, &str)] = &[
 /// else the default (the order migration 0030 gives).
 fn face_colour(face: Option<&str>, slug: &str) -> &'static str {
     let of = |style: &str| FACE_COLOURS.iter().find(|(s, _)| *s == style).map(|f| f.1);
-    face.and_then(of).or_else(|| of(slug)).unwrap_or(FACE_COLOURS[0].1)
+    face.and_then(of)
+        .or_else(|| of(slug))
+        .unwrap_or(FACE_COLOURS[0].1)
 }
 
 fn debian() -> String {
@@ -568,8 +570,10 @@ mod tests {
             .filter_map(|l| l.strip_prefix("    \"")?.split_once("\": dict(head=\"FF"))
             .map(|(name, rest)| (name, format!("#{}", &rest[..6])))
             .collect();
-        let table: Vec<(&str, String)> =
-            FACE_COLOURS.iter().map(|(s, c)| (*s, (*c).to_owned())).collect();
+        let table: Vec<(&str, String)> = FACE_COLOURS
+            .iter()
+            .map(|(s, c)| (*s, (*c).to_owned()))
+            .collect();
         assert_eq!(table, styles);
         assert_eq!(face_colour(Some("fox"), "coder"), "#FF9A1F");
         assert_eq!(face_colour(None, "coder"), "#7A4DFF");

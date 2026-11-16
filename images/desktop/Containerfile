@@ -20,7 +20,7 @@ RUN curl -fsSL https://releases.rive.app/cli/install.sh -o /tmp/rive-install.sh 
  && rm /tmp/rive-install.sh \
  && rive --version
 
-# The bot's home page (D-069): start-screen renders it to /tmp/home.html, and the
+# The bot's home page (D-070): start-screen renders it to /tmp/home.html, and the
 # policy makes it Chromium's home and new tab. images/omarchy copies all three.
 COPY start-screen render-home /usr/local/bin/
 COPY home.html /usr/local/share/orphusbot/home.html

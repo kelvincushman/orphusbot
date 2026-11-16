@@ -1,9 +1,9 @@
 // The Team stage (DESIGN §12.7): every bot's robot standing in its own spot,
 // in its current state and holding what it's working with. When one bot asks
 // another it goes across, hands the note over and comes back, and while the
-// teammate has the job a thin line joins the two. Each robot has its name and
-// what it's doing in words, and each line its ticket, so the stage reads the
-// same with Animation set to off.
+// teammate has the job a thin line joins the two, arching over the robots
+// between them. Each spot has its bot's name and what it's doing in words,
+// and each line its ticket, so the stage reads the same with Animation off.
 import 'dart:async';
 import 'dart:math';
 
@@ -49,8 +49,10 @@ class TeamStage extends StatefulWidget {
 }
 
 class _TeamStageState extends State<TeamStage> {
-  static const cell = Size(150, 196);
+  static const cell = Size(150, 264);
   static const robot = 96.0;
+  // Room above each row's robots for the lines to arch through.
+  static const headroom = 84.0;
   static const walk = Duration(milliseconds: 700);
 
   final faces = <String, GlobalKey<BotAvatarState>>{};
@@ -144,7 +146,7 @@ class _TeamStageState extends State<TeamStage> {
                 };
                 // A visitor stands beside its host, on the left unless the
                 // host is at the left edge.
-                bool leftOf(String host) => spot[host]!.dx >= robot * 0.7;
+                bool leftOf(String host) => spot[host]!.dx >= robot * 0.5;
                 Offset at(String slug) {
                   final host = away[slug];
                   if (host == null || !spot.containsKey(host)) {
@@ -169,8 +171,26 @@ class _TeamStageState extends State<TeamStage> {
                         spot.containsKey(o['asked_by']))
                       o,
                 ];
-                Offset middle(String slug) =>
-                    spot[slug]! + Offset(cell.width / 2, robot * 0.65);
+                // A line leaves from just above a robot's head and arches
+                // up, higher the further it goes, so a long line clears a
+                // short one under it; a pair's second ticket arches higher
+                // still. The lines and their tickets then don't sit on each
+                // other.
+                Offset head(String slug) =>
+                    spot[slug]! + Offset(cell.width / 2, headroom);
+                bool pair(Map<String, dynamic> a, Map<String, dynamic> b) =>
+                    a['bot'] == b['bot'] && a['asked_by'] == b['asked_by'];
+                Offset bend(int i, Map<String, dynamic> o) {
+                  final from = head(o['asked_by'] as String);
+                  final to = head(o['bot'] as String);
+                  final before = open.take(i).where((p) => pair(p, o)).length;
+                  return Offset.lerp(from, to, 0.5)! -
+                      Offset(
+                        0,
+                        28 + 0.22 * (to - from).distance + 52.0 * before,
+                      );
+                }
+
                 return SingleChildScrollView(
                   child: SizedBox(
                     width: box.maxWidth,
@@ -181,10 +201,11 @@ class _TeamStageState extends State<TeamStage> {
                         Positioned.fill(
                           child: CustomPaint(
                             painter: _Lines([
-                              for (final o in open)
+                              for (final (i, o) in open.indexed)
                                 (
-                                  middle(o['asked_by'] as String),
-                                  middle(o['bot'] as String),
+                                  head(o['asked_by'] as String),
+                                  bend(i, o),
+                                  head(o['bot'] as String),
                                   o['blocked'] == true
                                       ? scheme.error
                                       : scheme.outline,
@@ -192,36 +213,31 @@ class _TeamStageState extends State<TeamStage> {
                             ]),
                           ),
                         ),
+                        // Each bot's spot: its name and status stay put, and
+                        // take the tap, while its robot may be away.
+                        for (final b in bots)
+                          _spot(b, spot[b['slug'] as String]!, scheme),
                         for (final b in bots)
                           _robot(
                             b,
                             at(b['slug'] as String),
                             flipped(b['slug'] as String),
                             full,
-                            scheme,
                           ),
-                        // Each line's ticket, at its middle; a pair's second
-                        // and later tickets sit below the first.
+                        // Each line's ticket, at the top of its arch (the
+                        // curve passes half way to its bend).
                         for (final (i, o) in open.indexed)
                           _ticket(
                             o,
                             Offset.lerp(
-                                  middle(o['asked_by'] as String),
-                                  middle(o['bot'] as String),
-                                  0.5,
-                                )! +
-                                Offset(
-                                  0,
-                                  28.0 *
-                                      open
-                                          .take(i)
-                                          .where(
-                                            (p) =>
-                                                p['bot'] == o['bot'] &&
-                                                p['asked_by'] == o['asked_by'],
-                                          )
-                                          .length,
-                                ),
+                              Offset.lerp(
+                                head(o['asked_by'] as String),
+                                head(o['bot'] as String),
+                                0.5,
+                              ),
+                              bend(i, o),
+                              0.5,
+                            )!,
                             name,
                             scheme,
                           ),
@@ -234,21 +250,10 @@ class _TeamStageState extends State<TeamStage> {
     );
   }
 
-  Widget _robot(
-    Map<String, dynamic> b,
-    Offset at,
-    bool flip,
-    bool full,
-    ColorScheme scheme,
-  ) {
+  Widget _spot(Map<String, dynamic> b, Offset at, ColorScheme scheme) {
     final slug = b['slug'] as String;
-    final v = widget.threads[slug];
-    final status = _status(v);
-    return AnimatedPositioned(
-      key: ValueKey(slug),
-      // Calm and off never travel, so nothing to animate.
-      duration: full ? walk : Duration.zero,
-      curve: Curves.easeInOut,
+    final status = _status(widget.threads[slug]);
+    return Positioned(
       left: at.dx,
       top: at.dy,
       width: cell.width,
@@ -264,16 +269,7 @@ class _TeamStageState extends State<TeamStage> {
           onTap: () => widget.onOpen(slug),
           child: Column(
             children: [
-              const SizedBox(height: 8),
-              BotAvatar(
-                key: faces.putIfAbsent(slug, GlobalKey<BotAvatarState>.new),
-                slug: faceOf(b, slug),
-                mood: v?.mood ?? 0,
-                doing: v?.doingKind ?? 0,
-                size: robot,
-                body: true,
-                flip: flip,
-              ),
+              const SizedBox(height: headroom + robot * 1.3),
               Text(
                 b['name'] as String,
                 maxLines: 1,
@@ -290,6 +286,31 @@ class _TeamStageState extends State<TeamStage> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _robot(Map<String, dynamic> b, Offset at, bool flip, bool full) {
+    final slug = b['slug'] as String;
+    final v = widget.threads[slug];
+    return AnimatedPositioned(
+      key: ValueKey(slug),
+      // Calm and off never travel, so nothing to animate.
+      duration: full ? walk : Duration.zero,
+      curve: Curves.easeInOut,
+      left: at.dx + (cell.width - robot) / 2,
+      top: at.dy + headroom,
+      // Taps go through to the spot underneath.
+      child: IgnorePointer(
+        child: BotAvatar(
+          key: faces.putIfAbsent(slug, GlobalKey<BotAvatarState>.new),
+          slug: faceOf(b, slug),
+          mood: v?.mood ?? 0,
+          doing: v?.doingKind ?? 0,
+          size: robot,
+          body: true,
+          flip: flip,
         ),
       ),
     );
@@ -346,19 +367,22 @@ class _TeamStageState extends State<TeamStage> {
   }
 }
 
-/// A thin line from each asker to the teammate that has its job.
+/// A thin line from each asker to the teammate that has its job, arched
+/// towards a bend point.
 class _Lines extends CustomPainter {
   _Lines(this.lines);
-  final List<(Offset, Offset, Color)> lines;
+  final List<(Offset, Offset, Offset, Color)> lines;
 
   @override
   void paint(Canvas canvas, Size size) {
-    for (final (from, to, colour) in lines) {
-      canvas.drawLine(
-        from,
-        to,
+    for (final (from, bend, to, colour) in lines) {
+      canvas.drawPath(
+        Path()
+          ..moveTo(from.dx, from.dy)
+          ..quadraticBezierTo(bend.dx, bend.dy, to.dx, to.dy),
         Paint()
           ..color = colour
+          ..style = PaintingStyle.stroke
           ..strokeWidth = 1.5,
       );
     }

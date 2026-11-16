@@ -13,9 +13,9 @@ Format:
 
 ## D-067: Steps come from the gate's own events (2026-11-15)
 
-**Decided:** The thread shows each tool call as a step. The server makes the step when the call reaches the gate and ends it when the tool's result comes back or the call is refused. The server writes the label from the tool's name and at most one name it already holds: a teammate's, a Google service's or a connection's. File names, commands, addresses and every other argument stay out of the thread. Each step also has a kind (read, write, command and so on) for the animation work that follows. Every event on the stream now carries the time it happened, so a run of steps can say how long it took after a reload.
+**Decided:** The thread shows each tool call as a step. The server makes the step when the call reaches the gate and ends it when the tool's result comes back, the call is refused, or the run loses its node. The server writes the label from the tool's name and at most one name it already holds: a teammate's, a Google service's or a connection's. File names, commands, addresses and every other argument stay out of the thread. Each step also has a kind (read, write, command and so on) for the animation work that follows. Every event on the stream now carries the time it happened, so a run of steps can say how long it took after a reload.
 
-**Why:** The server already sees every call start and end, so no new channel is needed. Keeping arguments out means nothing secret reaches the thread (hard rule 8) without a redaction pass that could miss.
+**Why:** The server already sees every call start, and the end of every call the bot itself makes, so no new channel is needed. A helper's call is the exception: its end doesn't reach the server, so its step gets no tick or cross. Keeping arguments out means nothing secret reaches the thread (hard rule 8) without a redaction pass that could miss.
 
 **Alternatives:** The node forwarding Orphus's `tool_execution_start` (a second source for what the gate already has). Showing arguments (needs redaction, and leaks when it misses).
 

@@ -124,6 +124,19 @@ pub async fn ended(app: &App, thread: &db::Thread, run: i64, id: &str, ok: bool)
     record(app, thread, ThreadEvent::StepEnded { run, id, ok }).await;
 }
 
+/// The run lost its node and goes back in the queue: its open calls died
+/// with the attempt, so they end as failed and none is left as the current step.
+pub async fn abandon(app: &App, thread: &db::Thread, run: i64) {
+    let open: Vec<String> = {
+        let rt = lock(&app.rt);
+        let of_run = rt.steps.iter().filter(|(r, _)| *r == run);
+        of_run.map(|(_, id)| id.clone()).collect()
+    };
+    for id in open {
+        ended(app, thread, run, &id, false).await;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

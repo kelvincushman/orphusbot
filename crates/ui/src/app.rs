@@ -666,6 +666,11 @@ fn Log(thread: Memo<ThreadView>) -> impl IntoView {
     }
 }
 
+thread_local! {
+    /// The step lists the owner has opened (see `Item::Steps` in `item`).
+    static OPENED: std::cell::RefCell<std::collections::HashSet<i64>> = Default::default();
+}
+
 /// Bot text always goes in as text, never as HTML.
 fn item(item: Item) -> AnyView {
     match item {
@@ -731,7 +736,20 @@ fn item(item: Item) -> AnyView {
                     view! { <li aria-label=said><span aria-hidden="true">{mark}</span>" "{s.label}</li> }
                 })
                 .collect_view();
-            view! { <details class="steps"><summary>{line}</summary><ul>{list}</ul></details> }
+            // The list is rebuilt on every event, so what the owner opened is kept
+            // here, by the fold-up's start time.
+            let opened = OPENED.with_borrow(|o| o.contains(&from));
+            let toggled = move |e: web_sys::Event| {
+                let open = event_target::<web_sys::HtmlDetailsElement>(&e).open();
+                OPENED.with_borrow_mut(|o| {
+                    if open {
+                        o.insert(from)
+                    } else {
+                        o.remove(&from)
+                    }
+                });
+            };
+            view! { <details class="steps" open=opened on:toggle=toggled><summary>{line}</summary><ul>{list}</ul></details> }
                 .into_any()
         }
     }

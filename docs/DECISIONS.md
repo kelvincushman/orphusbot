@@ -23,6 +23,18 @@ Format:
 
 ---
 
+## D-070: A bot's screen opens on its own home page (2026-11-16)
+
+**Decided:** The desktop image renders a local page, `/tmp/home.html`, with the bot's name, remit and face colour, and a Chromium policy baked into the image makes it the home page and new tab. The desktop background is the same colour. The node passes the three values as environment variables when it creates the computer; the image's `render-home` script HTML-escapes the text and uses the colour only if it is exactly `#RRGGBB`. The browser is not started for the bot. The Omarchy image keeps its own look and copies the script, template and policy from the desktop image. The colour comes from a table on the server of each face's head colour, checked by a test against `design/bot-avatar/gen.py`.
+
+**Why:** Someone watching can tell whose screen it is, at no memory cost: computers have 2 GB each and many bots never browse. One copy of the script and template means the policy can never point at a page an image doesn't render. Checking the values inside the image, where they are used, means the page is safe whatever created the computer.
+
+**Alternatives:** Starting a browser for every bot, as bot-hq does (memory). A dock and app tiles (decoration). Reading the colour out of the `.riv` files or sending the avatar generator to the server (a parser or Python on the server for 30 fixed values). A second copy of the script in `images/omarchy` (two files to keep the same; the cost of the choice made is that the desktop image is built first, as for `images/rea`). Replacing a computer whenever its bot's name or remit changes (throws away what is open on its screen for a label).
+
+**Revisit if:** bots waste turns on an empty screen, or a stale name on the home page after a rename confuses anyone.
+
+---
+
 ## D-069: Face files are built with Rive CLI 1.6, offline (2026-11-16)
 
 **Decided:** the bot faces' `.riv` files are built with Rive CLI 1.6, the last version with `--once`, started with an empty home folder and no network (the avatar README has the wrapper). `build.sh` warns above 40 KB a file, up from 25, since the props and hand-offs take each file to 31 to 37 KB.

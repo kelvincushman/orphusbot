@@ -107,6 +107,50 @@ you learn as you go (`set_address_name`, `set_comment`) so it's kept with the bi
 Evidence bundle when you finish. Write findings to the team wiki as short notes that say how you know \
 each claim (the function and address). Running a target is out of scope unless the owner asks.";
 
+/// The head colour of each face in the library, from `STYLES` in
+/// design/bot-avatar/gen.py (a test keeps the two the same).
+const FACE_COLOURS: &[(&str, &str)] = &[
+    ("default", "#2F6BFF"),
+    ("inbox", "#1F8FFF"),
+    ("researcher", "#0FA899"),
+    ("coder", "#7A4DFF"),
+    ("checker", "#1FAE5B"),
+    ("blogger", "#F0679B"),
+    ("orchestrator", "#E3E9F4"),
+    ("pa", "#F2C230"),
+    ("headphones", "#FF7F50"),
+    ("fox", "#FF9A1F"),
+    ("owl", "#8A5A36"),
+    ("sprout", "#8C9B32"),
+    ("bolt", "#A6D62C"),
+    ("nurse", "#62E0B3"),
+    ("astronaut", "#22C7E8"),
+    ("detective", "#B8A773"),
+    ("pirate", "#6F82A3"),
+    ("wizard", "#9D4EDD"),
+    ("cat", "#D84FC4"),
+    ("ninja", "#4F5BBF"),
+    ("bow", "#FF8FAB"),
+    ("tophat", "#F2E3C6"),
+    ("chef", "#5F6675"),
+    ("hood", "#BFE3F0"),
+    ("scarf", "#6EC1FF"),
+    ("mohawk", "#8F9BAD"),
+    ("captain", "#8F9DFF"),
+    ("flower", "#C9A0F2"),
+    ("bunny", "#FFC4A3"),
+    ("classic", "#C0703F"),
+];
+
+/// The colour of a bot's face: the face it picked, else the one named after it,
+/// else the default (the order migration 0030 gives).
+fn face_colour(face: Option<&str>, slug: &str) -> &'static str {
+    let of = |style: &str| FACE_COLOURS.iter().find(|(s, _)| *s == style).map(|f| f.1);
+    face.and_then(of)
+        .or_else(|| of(slug))
+        .unwrap_or(FACE_COLOURS[0].1)
+}
+
 fn debian() -> String {
     "debian".into()
 }
@@ -146,6 +190,9 @@ impl Bot {
             x_search: self.x_search,
             // Set when a run starts, for a team bot while memory is on.
             recall: false,
+            display_name: self.name.clone(),
+            remit: self.remit.clone(),
+            colour: face_colour(self.face.as_deref(), &self.slug).into(),
         }
     }
 
@@ -526,6 +573,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn face_colours_match_the_avatar_styles() {
+        let gen_py = include_str!("../../../design/bot-avatar/gen.py");
+        let styles: Vec<(&str, String)> = gen_py
+            .lines()
+            .filter_map(|l| l.strip_prefix("    \"")?.split_once("\": dict(head=\"FF"))
+            .map(|(name, rest)| (name, format!("#{}", &rest[..6])))
+            .collect();
+        let table: Vec<(&str, String)> = FACE_COLOURS
+            .iter()
+            .map(|(s, c)| (*s, (*c).to_owned()))
+            .collect();
+        assert_eq!(table, styles);
+        assert_eq!(face_colour(Some("fox"), "coder"), "#FF9A1F");
+        assert_eq!(face_colour(None, "coder"), "#7A4DFF");
+        assert_eq!(face_colour(Some("gone"), "my-bot"), "#2F6BFF");
+    }
+
+    #[test]
     fn slugs() {
         assert_eq!(slugify("Research Assistant!"), "research-assistant");
         assert_eq!(slugify("  Ünïcode & co "), "n-code-co");
@@ -561,6 +626,15 @@ mod tests {
         assert_eq!((ok.name.as_str(), ok.model), ("Researcher", None));
         assert!(bot("", None).check().is_err());
         assert!(bot("R", Some("turbo")).check().is_err());
+        let spec = Bot {
+            face: Some("fox".into()),
+            ..bot("Rex", None)
+        }
+        .spec();
+        assert_eq!(
+            (spec.display_name.as_str(), spec.colour.as_str()),
+            ("Rex", "#FF9A1F")
+        );
         let face = |f: &str| {
             Bot {
                 face: Some(f.into()),

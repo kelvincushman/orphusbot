@@ -1,0 +1,7 @@
+{
+  "HomepageLocation": "file:///tmp/home.html",
+  "HomepageIsNewTabPage": false,
+  "NewTabPageLocation": "file:///tmp/home.html",
+  "RestoreOnStartup": 4,
+  "RestoreOnStartupURLs": ["file:///tmp/home.html"]
+}

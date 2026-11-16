@@ -333,6 +333,7 @@ async fn open_screen(
         // Unused: opening a screen never creates or changes the computer.
         team: false,
         memory: "2g",
+        dress: [""; 3],
     };
     let mut child = spec.open_screen().await?;
     let pipe = child.stdin.take().context("screen stdin")?;
@@ -601,6 +602,7 @@ impl Engine {
                 bot: &bot.slug,
                 team: bot.team,
                 memory,
+                dress: [&bot.display_name, &bot.remit, &bot.colour],
             };
             let name = spec.ensure().await?;
             // REA's MCP server runs inside the computer, next to the files it reads,

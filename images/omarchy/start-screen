@@ -9,5 +9,7 @@ sway -c /etc/omarchy/sway.conf >/tmp/sway.log 2>&1 &
 for _ in $(seq 50); do [ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ] && break; sleep 0.1; done
 # No authentication: it listens only inside the container, and the node reaches it
 # through `podman exec … socat`.
+# The bot's home page for Chromium (set by policy); the desktop keeps Omarchy's look.
+render-home >/dev/null || true
 wayvnc --max-fps=15 127.0.0.1 5900 >/tmp/wayvnc.log 2>&1 &
 exec "$@"

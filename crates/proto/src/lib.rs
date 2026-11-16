@@ -87,6 +87,14 @@ pub struct BotSpec {
     /// (DESIGN §11.10).
     #[serde(default)]
     pub x_search: bool,
+    /// Shown on its computer's home page (DESIGN §4.4): its name as the owner
+    /// wrote it, its remit, and its face's colour as `#RRGGBB`.
+    #[serde(default)]
+    pub display_name: String,
+    #[serde(default)]
+    pub remit: String,
+    #[serde(default)]
+    pub colour: String,
 }
 
 /// An Orphus fleet blueprint the owner set up (DESIGN §11.2), written into the

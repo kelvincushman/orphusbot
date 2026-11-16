@@ -201,8 +201,7 @@ class LiveVoice {
   Future<void> start() async {
     await openRoomLog();
     _set(LiveState.connecting);
-    final got =
-        await api.postJson(path, {}) as Map<String, dynamic>;
+    final got = await api.postJson(path, {}) as Map<String, dynamic>;
     sessionId = (got['session_id'] as num?)?.toInt();
     if (!SoLoud.instance.isInitialized) await SoLoud.instance.init();
     _ws = await WebSocket.connect(

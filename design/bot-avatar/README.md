@@ -109,7 +109,7 @@ Edit `gen.py`, then:
 ```sh
 python3 gen.py default 0 > scene.rml    # scene.rml is the default style; `gen.py 0` means the same
 rive . --verify && rive . --screenshot --advance=1   # build/bot-avatar.png
-./build.sh                  # build/faces/<style>.riv for every style: verified, inspected, under 25 KB
+./build.sh                  # build/faces/<style>.riv for every style: verified, inspected, under 40 KB
 ./frames.sh build/webp      # build/webp/<style>-<state>.webp, for places that can't play Rive
 ./sheet.sh build/webp       # styles.png and styles-library.png
 ./bodies.sh                 # bodies.png and bodies-states.png (the Robot artboard), then doing.png and
@@ -122,4 +122,15 @@ To look at the robot: `rive . --artboard=Robot --screenshot --advance=30`. A tap
 
 Don't use `rive push`: it uploads to a Rive account.
 
-`build.sh` needs a Rive CLI that still has `--once` (1.6 did). CLI 1.9 removed it and writes a `.riv` only with `--publish`, which needs a Rive account; D-034 chose the CLI because it needed none, so that step waits for a decision. Checking (`--verify`, `rive inspect`) and screenshots work without an account.
+Each `.riv` is 31 to 37 KB (20 to 25 KB before the props and hand-offs); `build.sh` warns above 40 KB.
+
+The files are built with Rive CLI 1.6, the last version with `--once`, run offline: nothing is uploaded and no account is used (D-034). Later versions write a `.riv` only with `--publish`, which needs an account, so don't use them to build. Once any newer CLI has run, 1.6 asks to be updated; it still works when it is started with an empty home folder and no network. Put this in a script and pass it as `RIVE` to `build.sh`, `bodies.sh` and `frames.sh`:
+
+```sh
+#!/usr/bin/env bash
+HOME=/tmp/rive-home exec unshare -rn "$HOME/.rive/versions/1.6.0/rive" "$@"   # mkdir /tmp/rive-home first
+```
+
+```sh
+RIVE=/path/to/that/script ./build.sh
+```

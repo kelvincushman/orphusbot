@@ -1022,6 +1022,7 @@ mod tests {
             desktop: "debian".into(),
             phone: "none".into(),
             media: false,
+            x_search: false,
             session_gen: 0,
         };
         let roster = [

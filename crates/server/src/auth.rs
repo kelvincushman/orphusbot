@@ -473,6 +473,7 @@ pub(crate) mod tests {
             notifier: crate::notify::Notifier::off(),
             social: crate::social::Social::off(),
             memory: crate::memory::Memory::off(),
+            xsearch: crate::xsearch::XSearch::off(),
             ui_dir: String::new(),
         })
     }

@@ -71,6 +71,7 @@ pub fn label(tool: &str, input: &Value, names: &Names) -> (String, StepKind) {
         "media" => fixed("Making an image", StepKind::Media),
         "phone" => fixed("Using the phone", StepKind::Phone),
         "recall" => fixed("Looking through its memory", StepKind::Search),
+        "x_search" => fixed("Searching X", StepKind::Search),
         // Orphus's web tools, which only run for a bot without a computer.
         "web_search" | "code_search" => fixed("Searching the web", StepKind::Search),
         "fetch_content" | "get_search_content" => fixed("Reading a web page", StepKind::Browse),
@@ -239,6 +240,12 @@ mod tests {
                 StepKind::Search,
             ),
             (
+                "x_search",
+                json!({ "query": "rust async", "handles": ["rustlang"] }),
+                "Searching X",
+                StepKind::Search,
+            ),
+            (
                 "mcp:github_search_code",
                 json!({}),
                 "Using github",
@@ -324,6 +331,7 @@ mod tests {
             "media",
             "phone",
             "recall",
+            "x_search",
             "mcp",
             "web_search",
             "fetch_content",
@@ -348,6 +356,7 @@ mod tests {
             "Making an image",
             "Using the phone",
             "Looking through its memory",
+            "Searching X",
             "Using github",
             "Using a connection",
             "Searching the web",

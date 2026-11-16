@@ -41,6 +41,7 @@ mod team;
 mod tickets;
 mod usage;
 mod vault;
+mod xsearch;
 
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -191,6 +192,8 @@ struct App {
     social: social::Social,
     /// What is learned about the owner from his messages (DESIGN §11.9).
     memory: memory::Memory,
+    /// Research on X through xAI (DESIGN §11.10).
+    xsearch: xsearch::XSearch,
     /// The built web UI (crates/ui/dist), served at `/`.
     ui_dir: String,
 }
@@ -258,6 +261,7 @@ async fn main() -> anyhow::Result<()> {
         notifier,
         social: social::Social::from_env(),
         memory: memory::Memory::from_env(),
+        xsearch: xsearch::XSearch::from_env(),
         ui_dir,
     });
     calibrate::load(&app).await;
@@ -848,6 +852,20 @@ async fn on_dialog(app: &Shared, active: Active, request: Value) {
         });
         return;
     }
+    if method == "input" && title == xsearch::TITLE {
+        let request: Value = request["placeholder"]
+            .as_str()
+            .and_then(|p| serde_json::from_str(p).ok())
+            .unwrap_or_default();
+        // On its own task, like `recall`: xAI reads many posts before it answers.
+        let app = app.clone();
+        tokio::spawn(async move {
+            let wanted = || node_for(&app, attempt).is_some();
+            let answer = xsearch::ask(&app, &active.thread.bot, &request, wanted).await;
+            respond(&app, attempt, ui_response(&id, "value", json!(answer))).await;
+        });
+        return;
+    }
     if method == "input" && title == team::ACCEPT_TITLE {
         let accept: Value = request["placeholder"]
             .as_str()
@@ -1219,6 +1237,8 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
     // look up more (DESIGN §11.9). In the instructions, so it is said once and
     // not again in every message; the engine restarts when it changes.
     spec.recall = memory::readable_by(&app.memory, bot);
+    // X search needs the server's xAI key as well as the bot's setting.
+    spec.x_search &= app.xsearch.ready();
     if let Some(known) = memory::profile(app, bot).await {
         spec.instructions.push_str(&known);
     }

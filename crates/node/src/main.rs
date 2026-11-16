@@ -366,6 +366,8 @@ async fn open_screen(
 /// can't make anything happen. `ORPHUSBOT_EXTRACT_MODEL` picks a cheap model.
 async fn extract(orphus: &str, system: &str, text: &str) -> anyhow::Result<String> {
     let mut command = Command::new(orphus);
+    // The server's xAI key, where the two share a `keys.env` (DESIGN §11.10).
+    command.env_remove("ORPHUSBOT_XAI_KEY");
     command.args([
         "--print",
         "--no-session",
@@ -506,6 +508,7 @@ async fn deliver(cfg: &Config, bot: &BotSpec, files: &[SentFile]) -> anyhow::Res
 /// `orphus --list-models` as `provider/model` names.
 async fn list_models(orphus: &str) -> anyhow::Result<Vec<String>> {
     let out = Command::new(orphus)
+        .env_remove("ORPHUSBOT_XAI_KEY")
         .arg("--list-models")
         .output()
         .await
@@ -695,6 +698,14 @@ impl Engine {
         command.env_remove("ORPHUSBOT_RECALL");
         if bot.recall {
             command.env("ORPHUSBOT_RECALL", "1");
+        }
+        // The `x_search` tool (DESIGN §11.10): the server answers it and holds the xAI key,
+        // which a node sharing the server's `keys.env` must not pass on to an engine.
+        command
+            .env_remove("ORPHUSBOT_XAI_KEY")
+            .env_remove("ORPHUSBOT_X_SEARCH");
+        if bot.x_search {
+            command.env("ORPHUSBOT_X_SEARCH", "1");
         }
         let mut child = command
             .args([

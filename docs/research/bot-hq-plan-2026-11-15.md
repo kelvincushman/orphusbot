@@ -5,7 +5,7 @@
 | Date | 2026-11-15 |
 | Follows | [bot-hq-2026-11-15.md](bot-hq-2026-11-15.md) (§3 "Take" rows, §5 brief) |
 | Read for this | Our `crates/proto` (`lib.rs`, `view.rs`), `crates/node/src/engine.rs`, `crates/server/src/{room,bots,team}.rs`, `bridge/orphusbot-bridge.ts`, `images/desktop`, DESIGN §3.4, §4.3, §5.3, §7.4, §11.4, §11.8, §12.4, §12.5. bot-hq at `decf9a21`: `web/src/components/{ActivityLine,Transcript}.tsx`, `web/src/lib/phrases.ts`, `web/src/voice/call.ts`, `server/src/agent/tools.ts`, `server/box/home.html` |
-| Status | **A plan for Kelvin to review. Nothing here is decided or built, except where a section says so.** The decision drafts in §7 have no numbers yet |
+| Status | **A plan for Kelvin to review.** Item 1 is built (D-067, DESIGN §12.6), and other items where their section says so. Nothing else here is decided or built, and the other decision drafts in §7 have no numbers yet |
 
 The harness, the gate and placement don't change. No Composio, Orgo or Bops code is used. bot-hq is MIT, but nothing below needs its code: each item is rebuilt on what we already have.
 
@@ -204,7 +204,7 @@ So this needs no change to the node, the bridge or the engine.
 
 Numbers are assigned when each is built.
 
-**Steps come from the gate's own events.** *Decided:* the thread shows each tool call as a step, labelled by the server from the tool's name and at most a bot, service or connection name; file names and arguments are not put in the thread. *Why:* the server already sees every call start and end, so no new channel is needed, and keeping arguments out means nothing secret reaches the thread. *Alternatives:* the node forwarding Orphus's `tool_execution_start` (a second source for what the gate already has); showing arguments (needs redaction, and leaks when it misses). *Revisit if:* Kelvin wants to see commands without opening the ledger.
+**Steps come from the gate's own events (now D-067).** *Decided:* the thread shows each tool call as a step, labelled by the server from the tool's name and at most a bot, service or connection name; file names and arguments are not put in the thread. *Why:* the server already sees every call start, and the end of every call the bot itself makes (a helper's call is the exception, DESIGN §12.6), so no new channel is needed, and keeping arguments out means nothing secret reaches the thread. *Alternatives:* the node forwarding Orphus's `tool_execution_start` (a second source for what the gate already has); showing arguments (needs redaction, and leaks when it misses). *Revisit if:* Kelvin wants to see commands without opening the ledger.
 
 **Bots show their work and their hand-offs in motion, calm by default.** *Decided:* each step has a kind that the robot acts out with a prop; `ask_bot` and its answer are thread events that play as a note passing between two faces; a Team screen shows every robot and moves them when they work together; a setting offers full, calm or off, and reduce-motion is honoured. *Why:* Kelvin asked for it, and seeing who is doing what, and who is waiting on whom, is information the text hides. *Alternatives:* status words only, as bot-hq does (no sense of the team); one Rive scene holding every bot (the files are generated per style, and a shared scene would have to be rebuilt whenever a bot is added). *Revisit if:* the motion distracts more than it informs.
 

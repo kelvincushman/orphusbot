@@ -362,9 +362,9 @@ pub enum Role {
 
 /// What clients see on a thread's event stream.
 ///
-/// `Message` and `RunEnded` are stored in Postgres with a per-thread sequence
-/// number and replayed on reconnect. The rest are live only; a client that
-/// reconnects gets the current run state again on connect.
+/// Those for which [`ThreadEvent::is_persisted`] holds are stored in Postgres
+/// with a per-thread sequence number and replayed on reconnect. The rest are
+/// live only; a client that reconnects gets the current run state again on connect.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ThreadEvent {
@@ -434,6 +434,42 @@ pub enum ThreadEvent {
         version: i32,
         size: u64,
     },
+    /// A tool call reached the gate (DESIGN §12.6). `id` is the tool-call id,
+    /// which is only unique within `run`. `label` is the server's own words and
+    /// never holds the call's arguments.
+    StepStarted {
+        run: i64,
+        id: String,
+        label: String,
+        #[serde(default)]
+        kind: StepKind,
+    },
+    /// The tool call finished, or was refused (`ok: false`).
+    StepEnded {
+        run: i64,
+        id: String,
+        ok: bool,
+    },
+}
+
+/// What sort of work a step is, for clients that draw it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StepKind {
+    Read,
+    Write,
+    Command,
+    Browse,
+    Search,
+    /// Talking to a teammate.
+    Talk,
+    Google,
+    Media,
+    Phone,
+    /// Also what an older server's step, or a kind this client doesn't know, becomes.
+    #[default]
+    #[serde(other)]
+    Other,
 }
 
 /// A connected node, as clients see it.
@@ -452,6 +488,10 @@ pub struct NodeView {
 pub struct Envelope {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bot: Option<String>,
+    /// When it happened, in milliseconds since 1970 UTC: when a stored event
+    /// was stored, when a live one was sent.
+    #[serde(default)]
+    pub at: i64,
     #[serde(flatten)]
     pub event: ThreadEvent,
 }
@@ -476,6 +516,8 @@ impl ThreadEvent {
                 | Self::DialogClosed { .. }
                 | Self::Routed { .. }
                 | Self::Notice { .. }
+                | Self::StepStarted { .. }
+                | Self::StepEnded { .. }
         )
     }
 }
@@ -520,6 +562,7 @@ mod tests {
         );
         let env = Envelope {
             bot: Some("inbox".into()),
+            at: 5,
             event: ThreadEvent::RunQueued {
                 run: 1,
                 waiting: None,
@@ -527,8 +570,28 @@ mod tests {
         };
         assert_eq!(
             serde_json::to_string(&env).unwrap(),
-            r#"{"bot":"inbox","type":"run_queued","run":1,"waiting":null}"#
+            r#"{"bot":"inbox","at":5,"type":"run_queued","run":1,"waiting":null}"#
         );
+        let step = ThreadEvent::StepStarted {
+            run: 3,
+            id: "c1".into(),
+            label: "Reading a file".into(),
+            kind: StepKind::Read,
+        };
+        assert_eq!(
+            serde_json::to_string(&step).unwrap(),
+            r#"{"type":"step_started","run":3,"id":"c1","label":"Reading a file","kind":"read"}"#
+        );
+        assert!(step.is_persisted());
+        // A kind from a newer server falls back instead of dropping the event.
+        let newer = r#"{"type":"step_started","run":3,"id":"c1","label":"Flying","kind":"fly"}"#;
+        assert!(matches!(
+            serde_json::from_str(newer),
+            Ok(ThreadEvent::StepStarted {
+                kind: StepKind::Other,
+                ..
+            })
+        ));
         let ev = ThreadEvent::RunEnded {
             run: 3,
             outcome: RunOutcome::Cancelled,

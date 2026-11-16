@@ -89,6 +89,9 @@ select { font: inherit; color: inherit; background: var(--bg); border: 1px solid
 .msg.assistant { background: var(--bot); }
 .notice { font-size: .85rem; color: var(--muted); text-align: center; }
 .notice.error { color: var(--bad); }
+.steps { font-size: .85rem; color: var(--muted); }
+.steps summary { cursor: pointer; }
+.steps ul { list-style: none; margin: .25rem 0 0; padding-left: 1rem; }
 .empty { margin: auto; text-align: center; color: var(--muted); }
 
 .card { border: 1px solid var(--line); border-radius: var(--radius); padding: .8rem; display: flex; flex-direction: column; gap: .55rem; background: var(--bg); }

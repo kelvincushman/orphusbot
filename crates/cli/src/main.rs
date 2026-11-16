@@ -237,7 +237,7 @@ impl Session {
                 while let Some(end) = pending.find("\n\n") {
                     let block: String = pending.drain(..end + 2).collect();
                     let data: String = block.lines().filter_map(|l| l.strip_prefix("data:")).map(str::trim_start).collect();
-                    if let Ok(Envelope { bot: Some(bot), event }) = serde_json::from_str::<Envelope>(&data) {
+                    if let Ok(Envelope { bot: Some(bot), event, .. }) = serde_json::from_str::<Envelope>(&data) {
                         yield Some((bot, event));
                     }
                 }

@@ -365,6 +365,8 @@ async fn open_screen(
 /// can't make anything happen. `ORPHUSBOT_EXTRACT_MODEL` picks a cheap model.
 async fn extract(orphus: &str, system: &str, text: &str) -> anyhow::Result<String> {
     let mut command = Command::new(orphus);
+    // The server's xAI key, where the two share a `keys.env` (DESIGN §11.10).
+    command.env_remove("ORPHUSBOT_XAI_KEY");
     command.args([
         "--print",
         "--no-session",
@@ -505,6 +507,7 @@ async fn deliver(cfg: &Config, bot: &BotSpec, files: &[SentFile]) -> anyhow::Res
 /// `orphus --list-models` as `provider/model` names.
 async fn list_models(orphus: &str) -> anyhow::Result<Vec<String>> {
     let out = Command::new(orphus)
+        .env_remove("ORPHUSBOT_XAI_KEY")
         .arg("--list-models")
         .output()
         .await

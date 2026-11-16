@@ -297,8 +297,9 @@ async fn take_one(db: &PgPool, per_day: i32) -> sqlx::Result<bool> {
 }
 
 /// The bridge's `x_search` tool: the answer as text for the bot. Begins `ok:`
-/// or `error:`, like the other dialogs the server answers.
-pub async fn ask(app: &App, bot: &str, request: &Value) -> String {
+/// or `error:`, like the other dialogs the server answers. `wanted` says
+/// whether the bot is still waiting, asked just before anything is spent.
+pub async fn ask(app: &App, bot: &str, request: &Value, wanted: impl Fn() -> bool) -> String {
     match crate::bots::get(&app.db, bot).await {
         Ok(Some(bot)) if bot.x_search => {}
         Ok(_) => return "error:X search isn't switched on for this bot.".into(),
@@ -314,6 +315,10 @@ pub async fn ask(app: &App, bot: &str, request: &Value) -> String {
         Ok(search) => search,
         Err(why) => return format!("error:{why}"),
     };
+    // The run may have been stopped while the bot was looked up.
+    if !wanted() {
+        return "error:The run ended before the search started.".into();
+    }
     // Counted before the call: a search that fails may still have been charged.
     match take_one(&app.db, app.xsearch.per_day).await {
         Ok(true) => {}
@@ -488,7 +493,7 @@ mod tests {
         let app = app_with(&db, xsearch);
         let request = json!({ "query": "rust async", "handles": ["@rustlang"] });
 
-        let answer = ask(&app, "scout", &request).await;
+        let answer = ask(&app, "scout", &request, || true).await;
         let text = answer
             .strip_prefix("ok:")
             .unwrap()
@@ -503,7 +508,11 @@ mod tests {
             ("nobody", request.clone()),
             ("scout", json!({ "query": "" })),
         ] {
-            assert!(ask(&app, who, &request).await.starts_with("error:"));
+            assert!(
+                ask(&app, who, &request, || true)
+                    .await
+                    .starts_with("error:")
+            );
         }
         assert_eq!(asked.lock().unwrap().len(), 1);
         let counted = sqlx::query_scalar!("select searches from x_search_day")
@@ -512,9 +521,18 @@ mod tests {
             .unwrap();
         assert_eq!(counted, 1);
 
+        // Nor for a run that has ended.
+        let ended = ask(&app, "scout", &request, || false).await;
+        assert!(ended.starts_with("error:"));
+        assert_eq!(asked.lock().unwrap().len(), 1);
+
         // Without an xAI key there is nothing to ask.
         let off = app_with(&db, XSearch::off());
-        assert!(ask(&off, "scout", &request).await.starts_with("error:"));
+        assert!(
+            ask(&off, "scout", &request, || true)
+                .await
+                .starts_with("error:")
+        );
     }
 
     #[sqlx::test]
@@ -524,12 +542,20 @@ mod tests {
         let (xsearch, asked) = testkit::fake(Some("fine"), 2);
         let app = app_with(&db, xsearch);
         let request = json!({ "query": "rust" });
-        assert!(ask(&app, "scout", &request).await.starts_with("ok:"));
-        assert!(ask(&app, "other", &request).await.starts_with("ok:"));
+        assert!(
+            ask(&app, "scout", &request, || true)
+                .await
+                .starts_with("ok:")
+        );
+        assert!(
+            ask(&app, "other", &request, || true)
+                .await
+                .starts_with("ok:")
+        );
         // The cap is across all bots.
         for who in ["scout", "other"] {
             assert_eq!(
-                ask(&app, who, &request).await,
+                ask(&app, who, &request, || true).await,
                 "error:Today's X searches are used up. Try again tomorrow."
             );
         }
@@ -539,13 +565,17 @@ mod tests {
             .execute(&db)
             .await
             .unwrap();
-        assert!(ask(&app, "scout", &request).await.starts_with("ok:"));
+        assert!(
+            ask(&app, "scout", &request, || true)
+                .await
+                .starts_with("ok:")
+        );
 
         // A cap of nothing turns it off.
         let (xsearch, asked) = testkit::fake(Some("fine"), 0);
         let app = app_with(&db, xsearch);
         assert!(
-            ask(&app, "scout", &request)
+            ask(&app, "scout", &request, || true)
                 .await
                 .starts_with("error:Today")
         );
@@ -559,11 +589,11 @@ mod tests {
         let app = app_with(&db, xsearch);
         let request = json!({ "query": "rust" });
         assert_eq!(
-            ask(&app, "scout", &request).await,
+            ask(&app, "scout", &request, || true).await,
             "error:X search isn't answering just now."
         );
         assert!(
-            ask(&app, "scout", &request)
+            ask(&app, "scout", &request, || true)
                 .await
                 .starts_with("error:Today")
         );

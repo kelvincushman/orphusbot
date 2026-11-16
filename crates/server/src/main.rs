@@ -860,7 +860,8 @@ async fn on_dialog(app: &Shared, active: Active, request: Value) {
         // On its own task, like `recall`: xAI reads many posts before it answers.
         let app = app.clone();
         tokio::spawn(async move {
-            let answer = xsearch::ask(&app, &active.thread.bot, &request).await;
+            let wanted = || node_for(&app, attempt).is_some();
+            let answer = xsearch::ask(&app, &active.thread.bot, &request, wanted).await;
             respond(&app, attempt, ui_response(&id, "value", json!(answer))).await;
         });
         return;

@@ -77,27 +77,42 @@ fn reversible(call: &Call<'_>) -> bool {
     call.in_computer && matches!(call.tool, "write" | "edit")
 }
 
-/// Words in an MCP tool's name that say it only looks, and words that say it
-/// changes something. A name with neither stays with the owner (D-062).
-const LOOKS: &[&str] = &["get", "list", "search", "read", "find", "fetch", "view"];
-const CHANGES: &[&str] = &[
-    "add", "approve", "assign", "cancel", "close", "create", "delete", "dispatch", "edit", "fork",
-    "merge", "pay", "post", "publish", "push", "remove", "replace", "request", "run", "send",
-    "set", "update", "write",
+/// MCP tools the Orchestrator may accept for a teammate (D-062), by their full
+/// name, `<connection>_<tool>`. Each is listed because it only reads; what a
+/// name looks like proves nothing (`github_mark_all_notifications_read`
+/// changes state). A tool that isn't listed stays with the owner.
+// ponytail: GitHub's server only, under the connection name `github`; a list
+// per connection in Settings when the owner trusts another server's reads.
+const MCP_READS: &[&str] = &[
+    "github_get_commit",
+    "github_get_file_contents",
+    "github_get_latest_release",
+    "github_get_me",
+    "github_get_release_by_tag",
+    "github_get_tag",
+    "github_issue_read",
+    "github_list_branches",
+    "github_list_commits",
+    "github_list_issues",
+    "github_list_pull_requests",
+    "github_list_releases",
+    "github_list_tags",
+    "github_pull_request_read",
+    "github_search_code",
+    "github_search_issues",
+    "github_search_pull_requests",
+    "github_search_repositories",
 ];
 
 /// May the Orchestrator accept this card for a teammate (D-062)? Only a call
-/// that's reversible by construction or only looks; never one an interrupted
+/// that's reversible by construction or a listed read; never one an interrupted
 /// attempt may already have run. Everything else stays the owner's (rule 5).
 pub fn safe_to_accept(tool: &str, in_computer: bool, uncertain: bool) -> bool {
     if uncertain {
         return false;
     }
     if let Some(name) = tool.strip_prefix("mcp:") {
-        let lower = name.to_lowercase();
-        let words: Vec<&str> = lower.split(|c: char| !c.is_ascii_alphanumeric()).collect();
-        return words.iter().any(|w| LOOKS.contains(w))
-            && !words.iter().any(|w| CHANGES.contains(w));
+        return MCP_READS.contains(&name);
     }
     in_computer && matches!(tool, "write" | "edit")
 }
@@ -475,7 +490,7 @@ mod tests {
     }
 
     #[test]
-    fn the_orchestrator_may_accept_only_what_looks_or_is_reversible() {
+    fn the_orchestrator_may_accept_only_a_listed_read_or_what_is_reversible() {
         for tool in [
             "mcp:github_search_code",
             "mcp:github_get_file_contents",
@@ -488,6 +503,13 @@ mod tests {
             "mcp:github_create_or_update_file",
             "mcp:github_issue_write",
             "mcp:github_get_and_delete",
+            // Reads like a read, changes state (#113).
+            "mcp:github_mark_all_notifications_read",
+            // The list is exact: another connection, case or suffix isn't on it.
+            "mcp:other_search_code",
+            "mcp:GitHub_search_code",
+            "mcp:github_search_code_and_delete",
+            "mcp:search_code",
             "mcp:pa_mail_send",
             "mcp:createIssue",
             "mcp:github_something",

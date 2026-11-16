@@ -60,15 +60,15 @@ The Ideas Room moves to its own engine session (`orchestrator-ideas`), so the ch
 
 ## D-062: The Orchestrator may accept a teammate's safe card, and nothing else (2026-11-06)
 
-**Decided:** The server marks a card safe when it opens: a tool that only looks, by its name, or a file change inside the bot's computer. The Orchestrator can accept those once with `accept_card`. Everything else, including any name it can't classify, stays Kelvin's.
+**Decided:** The server marks a card safe when it opens: a tool on the server's list of reads, or a file change inside the bot's computer. The Orchestrator can accept those once with `accept_card`. Everything else, including any tool that isn't listed, stays Kelvin's.
 
-**Why:** Kelvin chose this. Teammates were stalling on harmless reads. Rule 5 keeps irreversible actions for a human tap, and the Orchestrator reads text from repos and web pages, so a planted instruction must not be able to approve one; the check is on the server, out of its reach. It's recorded as the Orchestrator's decision, never the owner's, and doesn't train System 1. **Alternatives:** bash in computers too (a command can reach the network); every card (needs rule 5 rewritten). **Revisit if:** an MCP server names a changing tool like a read: names are all this goes on, and a connection is the owner's choice to trust.
+**Why:** Kelvin chose this. Teammates were stalling on harmless reads. Rule 5 keeps irreversible actions for a human tap, and the Orchestrator reads text from repos and web pages, so a planted instruction must not be able to approve one; the check is on the server, out of its reach. It's recorded as the Orchestrator's decision, never the owner's, and doesn't train System 1. **Alternatives:** bash in computers too (a command can reach the network); every card (needs rule 5 rewritten); telling a read by the words in its name, as this first did (`github_mark_all_notifications_read` passed as a read and changes state, so since 2026-11-16 it's an exact list, `gate::MCP_READS`). **Revisit if:** the owner trusts another server's reads: the list is in code and covers GitHub's server under the connection name `github`, so it would move to a list per connection in Settings. A listed name is trusted on the connection called `github`, which is the owner's choice to set up.
 
 ---
 
 ## D-061: The server checks on hand-offs, instead of bots polling (2026-11-06)
 
-**Decided:** `team::check` runs on the reconcile tick. It tells the asker and the Orchestrator once per card when a teammate has been blocked for two minutes, and starts hand-offs left waiting for a busy bot. Bots can also look with a read-only `team_status` tool.
+**Decided:** `team::check` runs on the reconcile tick. It tells the asker and the Orchestrator, each once per card, when a teammate has been blocked for two minutes, and starts hand-offs left waiting for a busy bot. Bots can also look with a read-only `team_status` tool.
 
 **Why:** On 5 and 6 November the Orchestrator told Kelvin it didn't know why Coder hadn't returned, while Coder was waiting on an approval card; later two bots waited on cards while it sat idle. An answer only came back when a run ended, and a blocked run doesn't end. A bot polling would spend a model run each time to learn nothing; the server already knows, so a model runs only when there's news.
 

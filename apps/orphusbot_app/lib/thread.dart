@@ -1,5 +1,6 @@
 // One bot's conversation, folded from events exactly as the server's own
 // reducer does it (crates/proto/src/view.rs), so every client agrees.
+import 'dart:math';
 
 sealed class Item {}
 
@@ -95,8 +96,20 @@ class ThreadView {
   RunState run = RunState.idle;
   String? where;
 
+  // The newest unfinished step.
+  Step? _now;
+
   /// The label of the newest unfinished step.
-  String? doing;
+  String? get doing => _now?.label;
+
+  /// Its kind as the bot faces' `doing` input (design/bot-avatar): 0 other,
+  /// 1 read, 2 write, 3 command, 4 browse, 5 search, 6 talk, 7 google,
+  /// 8 media, 9 phone.
+  int get doingKind => max(0, _kinds.indexOf(_now?.kind ?? 'other'));
+  static const _kinds = [
+    'other', 'read', 'write', 'command', 'browse', //
+    'search', 'talk', 'google', 'media', 'phone',
+  ];
   // The last run finished well and nothing has happened since.
   bool done = false;
   // The last run failed and nothing has happened since.
@@ -144,7 +157,7 @@ class ThreadView {
         failed = false;
         where = e['waiting'] as String?;
         streaming = null;
-        doing = null;
+        _now = null;
       case 'run_started':
         run = RunState.running;
         done = false;
@@ -156,9 +169,10 @@ class ThreadView {
       case 'run_ended':
         run = RunState.idle;
         where = null;
-        doing = null;
+        _now = null;
         // A run that ends with nothing more to say still ends its steps.
-        if (items.lastOrNull case final Steps s) _close(s, at);
+        // Only steps still open: an earlier run's are already timed.
+        if (items.lastOrNull case final Steps s when s.open) _close(s, at);
         done = e['outcome'] == 'completed';
         failed = e['outcome'] == 'failed';
         if (streaming != null && streaming!.isNotEmpty) {
@@ -212,7 +226,7 @@ class ThreadView {
           e['label'] as String,
           e['kind'] as String? ?? 'other',
         );
-        doing = step.label;
+        _now = step;
         if (items.lastOrNull case final Steps s when s.open) {
           s.steps.add(step);
           if (at > s.to) s.to = at;
@@ -230,12 +244,11 @@ class ThreadView {
           if (at > s.to) s.to = at;
           break;
         }
-        doing = items.reversed
+        _now = items.reversed
             .whereType<Steps>()
             .expand((s) => s.steps.reversed)
             .where((s) => s.run == e['run'] && s.done == null)
-            .firstOrNull
-            ?.label;
+            .firstOrNull;
     }
     // Whatever comes after a fold-up closes it to new steps.
     if (items.length > before && before > 0) {

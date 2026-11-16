@@ -180,8 +180,31 @@ void main() {
       final steps = v.items.single as Steps;
       expect(steps.steps.single.done, isNull);
       expect(steps.line, 'Worked for 1s · 1 step');
-      v.apply(start(2, 'a', 'Reading a file', 9000));
+      // A later run that ends without adding anything doesn't stretch it.
+      v.apply({
+        'type': 'run_ended',
+        'run': 2,
+        'outcome': 'completed',
+        'at': 62000,
+      });
+      expect((v.items.single as Steps).line, 'Worked for 1s · 1 step');
+      v.apply(start(3, 'a', 'Reading a file', 70000));
       expect(v.items, hasLength(2));
+    });
+
+    test('the kind of the current step drives the face', () {
+      final v = ThreadView()
+        ..apply({...start(1, 'a', 'Reading a file', 1000), 'kind': 'read'});
+      expect(v.doingKind, 1);
+      v.apply({...start(1, 'b', 'Odd', 1500), 'kind': 'something-new'});
+      expect(v.doingKind, 0);
+      v.apply({
+        'type': 'run_ended',
+        'run': 1,
+        'outcome': 'completed',
+        'at': 2000,
+      });
+      expect(v.doingKind, 0);
     });
 
     test('long work is told in hours', () {

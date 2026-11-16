@@ -147,7 +147,10 @@ impl ThreadView {
                 self.run_where = RunWhere::default();
                 self.doing = None;
                 // A run that ends with nothing more to say still ends its steps.
-                if let Some(Item::Steps { open, to, .. }) = self.items.last_mut() {
+                // Only steps still open: an earlier run's are already timed.
+                if let Some(Item::Steps { open, to, .. }) = self.items.last_mut()
+                    && *open
+                {
                     *open = false;
                     *to = at.max(*to);
                 }
@@ -515,8 +518,19 @@ mod tests {
                 "Worked for 1s · 1 step".into()
             )]
         );
+        // A later run that ends without adding anything doesn't stretch it.
+        view.apply_at(
+            ThreadEvent::RunEnded {
+                run: 2,
+                outcome: RunOutcome::Cancelled,
+                error: None,
+            },
+            62_000,
+        );
+        assert_eq!(folds(&view)[0].2, "Worked for 1s · 1 step");
+        view.items.pop(); // the "Stopped." notice
         // The next run's steps don't join it.
-        view.apply_at(start(2, "a", "Reading a file"), 9000);
+        view.apply_at(start(3, "a", "Reading a file"), 70_000);
         assert_eq!(view.items.len(), 2);
     }
 

@@ -42,11 +42,16 @@ class BotAvatar extends StatefulWidget {
     super.key,
     required this.slug,
     required this.mood,
+    this.doing = 0,
     this.size = 40,
     this.body = false,
   });
   final String slug;
   final int mood;
+
+  /// What kind of work it's doing while working ([ThreadView.doingKind]):
+  /// the prop the bot holds.
+  final int doing;
   final double size;
 
   /// The whole robot (`Robot`, [size] wide and 1.3 times as tall) instead of the head.
@@ -59,6 +64,7 @@ class BotAvatar extends StatefulWidget {
 class _BotAvatarState extends State<BotAvatar> {
   rive.RiveWidgetController? controller;
   rive.NumberInput? state;
+  rive.NumberInput? doing;
   rive.TriggerInput? poke;
   Timer? fidget;
 
@@ -78,7 +84,10 @@ class _BotAvatarState extends State<BotAvatar> {
         state = controller!.stateMachine.number('state');
         // ignore: deprecated_member_use
         poke = controller!.stateMachine.trigger('poke');
+        // ignore: deprecated_member_use
+        doing = controller!.stateMachine.number('doing');
         state?.value = widget.mood.toDouble();
+        doing?.value = widget.doing.toDouble();
       });
     });
     if (widget.body) _fidgetLater();
@@ -97,6 +106,7 @@ class _BotAvatarState extends State<BotAvatar> {
   void didUpdateWidget(BotAvatar old) {
     super.didUpdateWidget(old);
     state?.value = widget.mood.toDouble();
+    doing?.value = widget.doing.toDouble();
   }
 
   @override
@@ -104,6 +114,7 @@ class _BotAvatarState extends State<BotAvatar> {
     fidget?.cancel();
     poke?.dispose();
     state?.dispose();
+    doing?.dispose();
     controller?.dispose();
     super.dispose();
   }

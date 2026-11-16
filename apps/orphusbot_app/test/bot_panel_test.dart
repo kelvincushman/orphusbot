@@ -71,6 +71,22 @@ void main() {
       'http://server',
       'session=x',
       MockClient((r) async {
+        if (r.method == 'GET' && r.url.path == '/api/bots') {
+          // The bot as the server has it now: its model changed elsewhere
+          // after the panel opened.
+          return http.Response(
+            jsonEncode([
+              {
+                'slug': 'coder',
+                'name': 'Coder',
+                'instructions': 'Be careful',
+                'scope': 'private',
+                'model': 'new-model',
+              },
+            ]),
+            200,
+          );
+        }
         if (r.method == 'GET') {
           expect(r.url.path, '/api/bots/coder/notes');
           return http.Response(
@@ -155,13 +171,23 @@ void main() {
     expect((sent['PUT /api/bots/coder/notes'] as Map)['version'], 4);
     expect(find.text('The bot changed its notes'), findsOneWidget);
     expect(find.text('- Mine'), findsOneWidget);
+    // Reload would lose the draft, so it asks first; "Keep editing" keeps it.
+    await t.tap(find.byKey(const ValueKey('reload-notes')));
+    await settle(t);
+    expect(find.text('Reload and lose your changes?'), findsOneWidget);
+    await t.tap(find.text('Keep editing'));
+    await settle(t);
+    expect(find.text('- Mine'), findsOneWidget);
     // Reload brings the server's copy back.
-    await t.tap(find.text('Reload'));
+    await t.tap(find.byKey(const ValueKey('reload-notes')));
+    await settle(t);
+    await t.tap(find.widgetWithText(FilledButton, 'Reload'));
     await settle(t);
     expect(find.text('- Short replies'), findsOneWidget);
     expect(find.text('The bot changed its notes'), findsNothing);
 
-    // The soul is the bot's instructions, saved with the rest of the bot.
+    // The soul is the bot's instructions, saved onto the bot as it is now,
+    // so a setting changed elsewhere meanwhile is kept.
     await t.enterText(find.byKey(const ValueKey('soul')), 'Be bold');
     await settle(t);
     await t.tap(find.byKey(const ValueKey('save-soul')));
@@ -171,6 +197,7 @@ void main() {
       'name': 'Coder',
       'instructions': 'Be bold',
       'scope': 'private',
+      'model': 'new-model',
     });
 
     // An unsaved edit asks before the panel closes.
@@ -232,6 +259,13 @@ void main() {
     hold = Completer<void>();
     await t.tap(find.byKey(const ValueKey('save-notes')));
     await t.pump();
+    // Reload waits for the save, so an older answer can't land on top of it.
+    expect(
+      t
+          .widget<TextButton>(find.byKey(const ValueKey('reload-notes')))
+          .onPressed,
+      isNull,
+    );
     await t.enterText(box, 'B');
     hold.complete();
     hold = null;

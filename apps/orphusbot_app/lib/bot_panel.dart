@@ -83,6 +83,9 @@ class _BotPanelState extends State<BotPanel> {
   int version = 0;
   String canDo = '';
   bool loading = true;
+  // A save of the notes is on its way: Reload and Save wait for it, so an
+  // older answer can't land on top of what was just saved.
+  bool saving = false;
   bool soulSaved = false;
   String? notesProblem;
   String? soulProblem;
@@ -134,6 +137,7 @@ class _BotPanelState extends State<BotPanel> {
     // What is sent, not what is in the box when the answer comes: an edit
     // typed while the save is on its way stays unsaved, and says so.
     final sent = notes.text;
+    setState(() => saving = true);
     try {
       // With the version this panel loaded: the server refuses the save if the
       // bot changed its notes meanwhile, rather than losing what it wrote.
@@ -146,15 +150,51 @@ class _BotPanelState extends State<BotPanel> {
         savedNotes = sent;
         version = (got['version'] as num).toInt();
         notesProblem = null;
+        saving = false;
       });
     } catch (e) {
-      if (mounted) setState(() => notesProblem = explain(e));
+      if (mounted) {
+        setState(() {
+          notesProblem = explain(e);
+          saving = false;
+        });
+      }
     }
   }
 
+  /// Reload replaces what's in the box, so an unsaved edit asks first.
+  Future<void> _reload() async {
+    if (_notesDirty) {
+      final drop = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Reload and lose your changes?'),
+          content: const Text("Your changes to the notes haven't been saved."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Keep editing'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Reload'),
+            ),
+          ],
+        ),
+      );
+      if (drop != true || !mounted) return;
+    }
+    await _load();
+  }
+
   Future<void> _saveSoul() async {
-    final edited = {...bot, 'instructions': soul.text};
     try {
+      // The bot as it is now, not as it was when this opened: the update
+      // writes every setting, and one changed elsewhere meanwhile must stay.
+      final now = (await widget.api.get('/api/bots') as List<dynamic>)
+          .cast<Map<String, dynamic>>()
+          .firstWhere((b) => b['slug'] == bot['slug'], orElse: () => bot);
+      final edited = {...now, 'instructions': soul.text};
       await widget.api.post('/api/bots/update', edited);
       if (!mounted) return;
       setState(() {
@@ -271,11 +311,15 @@ class _BotPanelState extends State<BotPanel> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(onPressed: _load, child: const Text('Reload')),
+                  TextButton(
+                    key: const ValueKey('reload-notes'),
+                    onPressed: saving ? null : _reload,
+                    child: const Text('Reload'),
+                  ),
                   const SizedBox(width: 8),
                   FilledButton(
                     key: const ValueKey('save-notes'),
-                    onPressed: _notesDirty ? _saveNotes : null,
+                    onPressed: _notesDirty && !saving ? _saveNotes : null,
                     child: const Text('Save notes'),
                   ),
                 ],

@@ -549,7 +549,7 @@ pub fn abilities(
     }
     match b.phone.as_str() {
         "operate" => {
-            parts.push("phone: works the phone and drafts posts (Kelvin approves each)".into())
+            parts.push("phone: works the phone and drafts posts (Kelvin approves each, unless he has allowed that exact action always)".into())
         }
         "draft" => parts.push("phone: drafts posts (Kelvin approves each)".into()),
         _ => {}

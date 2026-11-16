@@ -7,6 +7,11 @@ Xvnc :1 -geometry 1280x800 -depth 24 -localhost yes -rfbport 5900 \
      -SecurityTypes None -AlwaysShared -desktop "OrphusBot" >/tmp/xvnc.log 2>&1 &
 for _ in 1 2 3 4 5 6 7 8 9 10; do [ -e /tmp/.X11-unix/X1 ] && break; sleep 0.3; done
 openbox >/tmp/openbox.log 2>&1 &
+# The bot's home page for Chromium (set by policy) and its colour on the empty
+# desktop. render-home prints a colour it has checked; Chromium itself is not
+# started, since many bots never browse.
+colour=$(render-home || true)
+xsetroot -solid "${colour:-#2F6BFF}" || true
 # As an E2B template the screen is reached through E2B's port proxy, which only
 # carries HTTP and WebSockets: bridge it on 6080. Never set for local computers.
 if [ "$ORPHUSBOT_SCREEN_WEBSOCKET" = 1 ]; then

@@ -63,9 +63,19 @@ void main() {
             api: api,
             changed: ValueNotifier(0),
             bots: () => bots,
+            name: (slug) => slug == 'chief--7'
+                ? 'Chief of Staff'
+                : '${slug[0].toUpperCase()}${slug.substring(1)}',
             threads: {'coder': coder},
             open: () => [
               {'id': 142, 'bot': 'coder', 'asked_by': asker, 'blocked': false},
+              // Its asker, a closed mission's chief, has no spot.
+              {
+                'id': 150,
+                'bot': 'coder',
+                'asked_by': 'chief--7',
+                'blocked': true,
+              },
             ],
             handoffs: handoffs.stream,
             onOpen: opened.add,
@@ -120,6 +130,14 @@ void main() {
     await t.pump();
     await t.pump();
     expect(find.text('OB-142 · Write a benchmark'), findsOneWidget);
+    // A hand-off with no line, because its asker has no spot, is listed too.
+    expect(find.textContaining('OB-150'), findsOneWidget);
+    expect(
+      find.text(
+        'Chief of Staff is waiting on Coder · OB-150 · blocked on a card',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('on full, the asker goes across to its teammate and back', (
@@ -137,6 +155,20 @@ void main() {
         .widgetList<BotAvatar>(find.byType(BotAvatar))
         .firstWhere((r) => r.slug == 'coder');
     expect(coder.flip, isTrue);
+    await t.pump(const Duration(milliseconds: 1300));
+    await t.pump(const Duration(milliseconds: 800));
+    expect(left(t, 'blogger'), home);
+
+    // Asked again before the first trip is over, it stays for the second:
+    // the first trip's return doesn't take it home early.
+    handoffs.add(asked);
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 1500));
+    handoffs.add(asked);
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 500));
+    await t.pump(const Duration(milliseconds: 700));
+    expect(left(t, 'blogger'), isNot(home));
     await t.pump(const Duration(milliseconds: 1300));
     await t.pump(const Duration(milliseconds: 800));
     expect(left(t, 'blogger'), home);

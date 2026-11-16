@@ -22,6 +22,7 @@ class TeamStage extends StatefulWidget {
     required this.api,
     required this.changed,
     required this.bots,
+    required this.name,
     required this.threads,
     required this.open,
     required this.handoffs,
@@ -33,6 +34,9 @@ class TeamStage extends StatefulWidget {
   /// the chat screen's own, fed by its one event stream.
   final Listenable changed;
   final List<Map<String, dynamic>> Function() bots;
+
+  /// A bot's name from its slug, also for bots that aren't on the stage.
+  final String Function(String slug) name;
   final Map<String, ThreadView> threads;
 
   /// Unfinished hand-offs (`/api/team/open`): `id`, `bot`, `asked_by`, `blocked`.
@@ -58,6 +62,9 @@ class _TeamStageState extends State<TeamStage> {
   final faces = <String, GlobalKey<BotAvatarState>>{};
   // A bot that has gone across to another: visitor's slug → host's slug.
   final away = <String, String>{};
+  // How many times each bot has set off, so a trip's return can tell
+  // whether the bot has set off again since.
+  final trips = <String, int>{};
   final timers = <Timer>[];
   StreamSubscription<Map<String, dynamic>>? sub;
 
@@ -98,11 +105,12 @@ class _TeamStageState extends State<TeamStage> {
     }
 
     if (m == Motion.calm) return pass();
+    final trip = trips[giver] = (trips[giver] ?? 0) + 1;
     setState(() => away[giver] = taker);
     _after(walk, pass);
     _after(walk + const Duration(milliseconds: 1200), () {
-      // Unless it has since set off to someone else.
-      if (away[giver] == taker) setState(() => away.remove(giver));
+      // Unless it has since set off again: that trip brings it home.
+      if (trips[giver] == trip) setState(() => away.remove(giver));
     });
   }
 
@@ -124,9 +132,7 @@ class _TeamStageState extends State<TeamStage> {
     final scheme = Theme.of(context).colorScheme;
     final bots = widget.bots();
     final full = motionOf(context) == Motion.full;
-    String name(String slug) =>
-        bots.where((b) => b['slug'] == slug).firstOrNull?['name'] as String? ??
-        slug;
+    final name = widget.name;
     return Scaffold(
       appBar: AppBar(title: const Text('Team')),
       body: bots.isEmpty
@@ -242,7 +248,6 @@ class _TeamStageState extends State<TeamStage> {
                                   bend(i, o),
                                   0.5,
                                 )!,
-                                name,
                                 scheme,
                               ),
                           ],
@@ -251,7 +256,9 @@ class _TeamStageState extends State<TeamStage> {
                       // The same hand-offs in words: who waits on whom. A
                       // ticket hidden under another on the stage is still
                       // here to open.
-                      for (final o in open) _waiting(o, name, scheme),
+                      // Every one, also those of a bot with no spot (a
+                      // closed mission's chief), which have no line.
+                      for (final o in widget.open()) _waiting(o, name, scheme),
                       const SizedBox(height: 16),
                     ],
                   ),
@@ -354,12 +361,7 @@ class _TeamStageState extends State<TeamStage> {
     );
   }
 
-  Widget _ticket(
-    Map<String, dynamic> o,
-    Offset at,
-    String Function(String) name,
-    ColorScheme scheme,
-  ) {
+  Widget _ticket(Map<String, dynamic> o, Offset at, ColorScheme scheme) {
     final id = o['id'] as int;
     final blocked = o['blocked'] == true;
     return Positioned(

@@ -570,6 +570,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 api: widget.api,
                 changed: changed,
                 bots: () => bots,
+                name: _name,
                 threads: threads,
                 open: () => open,
                 handoffs: handoffs.stream,

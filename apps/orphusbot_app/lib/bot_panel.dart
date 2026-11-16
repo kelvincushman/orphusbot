@@ -105,6 +105,9 @@ class _BotPanelState extends State<BotPanel> {
   }
 
   Future<void> _load() async {
+    // The editor is hidden while this is asked, so nothing typed meanwhile
+    // can be replaced by the answer.
+    if (!loading) setState(() => loading = true);
     try {
       final got = await widget.api.get(_path) as Map<String, dynamic>;
       if (!mounted) return;
@@ -128,16 +131,19 @@ class _BotPanelState extends State<BotPanel> {
   }
 
   Future<void> _saveNotes() async {
+    // What is sent, not what is in the box when the answer comes: an edit
+    // typed while the save is on its way stays unsaved, and says so.
+    final sent = notes.text;
     try {
       // With the version this panel loaded: the server refuses the save if the
       // bot changed its notes meanwhile, rather than losing what it wrote.
       final got = await widget.api.putJson(_path, {
-        'notes': notes.text,
+        'notes': sent,
         'version': version,
       }) as Map<String, dynamic>;
       if (!mounted) return;
       setState(() {
-        savedNotes = notes.text;
+        savedNotes = sent;
         version = (got['version'] as num).toInt();
         notesProblem = null;
       });

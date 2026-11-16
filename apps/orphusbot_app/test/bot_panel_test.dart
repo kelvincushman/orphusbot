@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -181,5 +182,78 @@ void main() {
     await t.tap(find.text('Leave'));
     await settle(t);
     expect(result, isTrue, reason: 'the instructions were saved earlier');
+  });
+
+  testWidgets('nothing typed is lost to a slow save or a slow reload', (
+    t,
+  ) async {
+    // Each answer waits until the test lets it go.
+    Completer<void>? hold;
+    final puts = <Object?>[];
+    final api = Api(
+      'http://server',
+      'session=x',
+      MockClient((r) async {
+        await hold?.future;
+        if (r.method == 'PUT') {
+          puts.add(jsonDecode(r.body));
+          return http.Response(jsonEncode({'version': 1 + puts.length}), 200);
+        }
+        return http.Response(
+          jsonEncode({
+            'notes': '- From the server',
+            'version': 1,
+            'loaded_chars': 2000,
+            'can_do': 'model Orphus default',
+          }),
+          200,
+        );
+      }),
+    );
+    t.view.physicalSize = const Size(700, 1600);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(
+      MaterialApp(
+        home: BotPanel(
+          api: api,
+          bot: const {'slug': 'coder', 'name': 'Coder', 'instructions': ''},
+        ),
+      ),
+    );
+    await settle(t);
+    final box = find.byKey(const ValueKey('notes'));
+    FilledButton save() =>
+        t.widget<FilledButton>(find.byKey(const ValueKey('save-notes')));
+
+    // A is on its way to the server when B is typed: B is still unsaved after.
+    await t.enterText(box, 'A');
+    await settle(t);
+    hold = Completer<void>();
+    await t.tap(find.byKey(const ValueKey('save-notes')));
+    await t.pump();
+    await t.enterText(box, 'B');
+    hold.complete();
+    hold = null;
+    await settle(t);
+    expect(puts, [
+      {'notes': 'A', 'version': 1},
+    ]);
+    expect(find.text('B'), findsOneWidget);
+    expect(save().onPressed, isNotNull, reason: 'B has not been saved');
+    await t.tap(find.byKey(const ValueKey('save-notes')));
+    await settle(t);
+    expect(puts.last, {'notes': 'B', 'version': 2});
+    expect(save().onPressed, isNull);
+
+    // While a reload is on its way there is no box to type into.
+    hold = Completer<void>();
+    await t.tap(find.text('Reload'));
+    await t.pump();
+    expect(box, findsNothing);
+    hold.complete();
+    hold = null;
+    await settle(t);
+    expect(find.text('- From the server'), findsOneWidget);
   });
 }

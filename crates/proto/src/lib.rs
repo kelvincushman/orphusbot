@@ -83,6 +83,10 @@ pub struct BotSpec {
     /// learned about the owner (DESIGN §11.9).
     #[serde(default)]
     pub recall: bool,
+    /// Gets the `x_search` tool, which the server answers through xAI
+    /// (DESIGN §11.10).
+    #[serde(default)]
+    pub x_search: bool,
 }
 
 /// An Orphus fleet blueprint the owner set up (DESIGN §11.2), written into the

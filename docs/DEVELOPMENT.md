@@ -159,8 +159,10 @@ All settings are environment variables.
 | `ORPHUSBOT_APP_DIR` | `~/.local/share/orphusbot/app` | Published app builds (`latest.json`, `orphusbot.apk`), served publicly at `/app` (DESIGN §12.3) |
 | `ORPHUSBOT_PUSH_HOSTS` | none (any https host) | Comma-separated host names a phone's UnifiedPush endpoint must be on, such as `push.example.com`; set it so pushes never go through a public ntfy server |
 | `ORPHUSBOT_ROOM_MODEL` | `claude-bridge/claude-sonnet-5-5` | The model Ideas Room turns run on, with thinking off |
-| `ORPHUSBOT_XAI_KEY` (in `keys.env`) | none | xAI API key for the Ideas Room's fast voice (Grok realtime); the server mints five-minute client secrets from it |
+| `ORPHUSBOT_XAI_KEY` (in `keys.env`) | none | xAI API key for the Ideas Room's fast voice (Grok realtime), where the server mints five-minute client secrets from it, and for bots' X search (DESIGN §11.10) |
 | `ORPHUSBOT_XAI_VOICE` | `eve` | Grok's voice in the Ideas Room |
+| `ORPHUSBOT_XAI_MODEL` | `grok-4.7` | The xAI model that answers a bot's X search |
+| `ORPHUSBOT_X_SEARCH_PER_DAY` | `50` | How many X searches bots may make a day (UTC), across all bots; `0` turns X search off |
 | `ORPHUSBOT_VAULT_DIR` | none (no vault) | The shared vault: the bots' team folder on this machine, served over WebDAV at `/vault/` |
 | `ORPHUSBOT_VAULT_PASSWORD` (in `keys.env`) | none | The vault's WebDAV password (any user name) |
 | `ORPHUSBOT_LAYA_URL` | none | The System 1 model's `/v1/systemone` server (kev or laya-serve), such as `http://127.0.0.1:8009`. Without it System 1 abstains: the inbox keeps its messages and every non-read tool call asks |

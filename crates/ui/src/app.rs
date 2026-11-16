@@ -281,6 +281,9 @@ struct Bot {
     /// Passed through so saving keeps it.
     #[serde(default)]
     media: bool,
+    /// Passed through so saving keeps it.
+    #[serde(default)]
+    x_search: bool,
 }
 
 /// Everything the signed-in screens share: the bots, which one is open, every

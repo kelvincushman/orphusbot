@@ -11,6 +11,18 @@ Format:
 
 ---
 
+## D-072: X research goes through the server (2026-11-16)
+
+**Decided:** bots research X with an `x_search` tool that the server answers by asking xAI's Responses API with its `x_search` tool. It is a per-bot setting, off by default, read-class at the gate (no card), with a daily cap counted in the database (`ORPHUSBOT_X_SEARCH_PER_DAY`, default 50 across all bots). A bot filters by handles to include or to leave out, not both, because xAI refuses both in one request.
+
+**Why:** the xAI key stays on the server, where the Ideas Room already uses it, so no engine or computer ever holds it, and one counter bounds how many searches xAI can charge for in a day. A read that asked for a tap each time would not get used.
+
+**Alternatives:** the key on the node, as with media (one more place for it, and no single cap); reading X through the phone (slow, and that phone is for posting); counting the cap in memory (a restart would reset it); on for every bot (every bot's queries would go to xAI without the owner choosing).
+
+**Revisit if:** the cap is hit often, xAI's prices or terms change, or bots put private material in queries despite the tool's instructions.
+
+---
+
 ## D-069: Face files are built with Rive CLI 1.6, offline (2026-11-16)
 
 **Decided:** the bot faces' `.riv` files are built with Rive CLI 1.6, the last version with `--once`, started with an empty home folder and no network (the avatar README has the wrapper). `build.sh` warns above 40 KB a file, up from 25, since the props and hand-offs take each file to 31 to 37 KB.

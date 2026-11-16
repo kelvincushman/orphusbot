@@ -1,6 +1,158 @@
 <Rive version="1" kind="fragment">
 <Artboard defaultStateMachineId="0:7" styleId="0:5" width="200" height="200" name="Avatar" id="0:2">
 <LayoutComponentStyle name="Artboard Style" id="0:5"/>
+<Node x="172" y="172" scaleX="1.2" scaleY="1.2" name="Props" id="0:300">
+<Node x="0" y="0" opacity="0" name="Read" id="0:311">
+<Node x="0" y="0" name="Page" id="0:321">
+<Shape x="0" y="0" name="Leaf">
+<Rectangle x="6.5" y="0" width="12" height="17" cornerRadiusTL="2" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FFDCE4EE" name="Color"/></Fill>
+</Shape>
+</Node>
+<Shape x="0" y="0" name="Pages">
+<Rectangle x="-7" y="0" width="13" height="18" cornerRadiusTL="2" name="L"/><Rectangle x="7" y="0" width="13" height="18" cornerRadiusTL="2" name="R"/>
+<Fill name="Fill"><SolidColor colorValue="FFFFFFFF" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Cover">
+<Rectangle x="0" y="1" width="32" height="22" cornerRadiusTL="3" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF4C6EF5" name="Color"/></Fill>
+</Shape>
+</Node>
+<Node x="0" y="0" opacity="0" name="Write" id="0:312">
+<Node x="4" y="-3" rotation="0.7" name="Pencil" id="0:322">
+<Shape x="0" y="0" name="Lead">
+<Ellipse x="0" y="13" width="3" height="3" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF2A2E38" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Wood">
+<PointsPath x="0" y="0" isClosed="true" name="Path"><StraightVertex x="-3" y="7"/><StraightVertex x="3" y="7"/><StraightVertex x="0" y="14"/></PointsPath>
+<Fill name="Fill"><SolidColor colorValue="FFF2D3A0" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Eraser">
+<Rectangle x="0" y="-13" width="6" height="4" cornerRadiusTL="1" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FFFF8FA8" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Barrel">
+<Rectangle x="0" y="-2" width="6" height="18" cornerRadiusTL="0" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FFFFC83D" name="Color"/></Fill>
+</Shape>
+</Node>
+<Shape x="0" y="0" name="Scribble">
+<PointsPath x="0" y="0" isClosed="false" name="Path"><StraightVertex x="-13" y="10"/><StraightVertex x="-9" y="7" radius="2"/><StraightVertex x="-5" y="10" radius="2"/><StraightVertex x="-1" y="7"/></PointsPath>
+<Stroke thickness="2" cap="round" join="round" name="Stroke"><SolidColor colorValue="FFFFFFFF" name="Color"/></Stroke>
+</Shape>
+</Node>
+<Node x="0" y="0" opacity="0" name="Command" id="0:313">
+<Shape x="0" y="0" name="Cursor" id="0:323">
+<Rectangle x="3" y="5" width="7" height="3" cornerRadiusTL="1" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF7CFFB2" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Prompt">
+<PointsPath x="0" y="0" isClosed="false" name="Path"><StraightVertex x="-9" y="-4"/><StraightVertex x="-4" y="0"/><StraightVertex x="-9" y="4"/></PointsPath>
+<Stroke thickness="2.5" cap="round" join="round" name="Stroke"><SolidColor colorValue="FF7CFFB2" name="Color"/></Stroke>
+</Shape>
+<Shape x="0" y="0" name="Screen">
+<Rectangle x="0" y="0" width="30" height="22" cornerRadiusTL="4" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF0B0F14" name="Color"/></Fill><Stroke thickness="2" cap="round" join="round" name="Stroke"><SolidColor colorValue="FF9AA7B8" name="Color"/></Stroke>
+</Shape>
+</Node>
+<Node x="0" y="0" opacity="0" name="Browse" id="0:314">
+<Shape x="0" y="0" name="Meridian" id="0:324">
+<Ellipse x="0" y="0" width="12" height="26" name="Path"/>
+<Stroke thickness="2" cap="round" join="round" name="Stroke"><SolidColor colorValue="FFFFFFFF" name="Color"/></Stroke>
+</Shape>
+<Shape x="0" y="0" name="Lines">
+<PointsPath x="0" y="0" isClosed="false" name="Equator"><StraightVertex x="-13" y="0"/><StraightVertex x="13" y="0"/></PointsPath><PointsPath x="0" y="0" isClosed="false" name="North"><StraightVertex x="-11" y="-7"/><StraightVertex x="11" y="-7"/></PointsPath><PointsPath x="0" y="0" isClosed="false" name="South"><StraightVertex x="-11" y="7"/><StraightVertex x="11" y="7"/></PointsPath>
+<Stroke thickness="2" cap="round" join="round" name="Stroke"><SolidColor colorValue="FFFFFFFF" name="Color"/></Stroke>
+</Shape>
+<Shape x="0" y="0" name="Ball">
+<Ellipse x="0" y="0" width="26" height="26" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF2F9BFF" name="Color"/></Fill><Stroke thickness="2" cap="round" join="round" name="Stroke"><SolidColor colorValue="FFFFFFFF" name="Color"/></Stroke>
+</Shape>
+</Node>
+<Node x="0" y="0" opacity="0" name="Search" id="0:315">
+<Node x="0" y="0" name="Glass" id="0:325">
+<Shape x="0" y="0" name="Handle">
+<PointsPath x="0" y="0" isClosed="false" name="Path"><StraightVertex x="4" y="4"/><StraightVertex x="12" y="12"/></PointsPath>
+<Stroke thickness="4.5" cap="round" join="round" name="Stroke"><SolidColor colorValue="FFFFC83D" name="Color"/></Stroke>
+</Shape>
+<Shape x="0" y="0" name="Lens">
+<Ellipse x="-3" y="-3" width="17" height="17" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="6699D9FF" name="Color"/></Fill><Stroke thickness="3" cap="round" join="round" name="Stroke"><SolidColor colorValue="FFFFFFFF" name="Color"/></Stroke>
+</Shape>
+</Node>
+</Node>
+<Node x="0" y="0" opacity="0" name="Talk" id="0:316">
+<Shape x="0" y="0" name="Dot 0" id="0:326">
+<Ellipse x="-7" y="-2" width="4.5" height="4.5" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF2A2E38" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Dot 1" id="0:336">
+<Ellipse x="0" y="-2" width="4.5" height="4.5" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF2A2E38" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Dot 2" id="0:346">
+<Ellipse x="7" y="-2" width="4.5" height="4.5" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF2A2E38" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Bubble">
+<Rectangle x="0" y="-2" width="29" height="19" cornerRadiusTL="7" name="Body"/><PointsPath x="0" y="0" isClosed="true" name="Tail"><StraightVertex x="-9" y="5"/><StraightVertex x="-11" y="14"/><StraightVertex x="-1" y="6"/></PointsPath>
+<Fill name="Fill"><SolidColor colorValue="FFFFFFFF" name="Color"/></Fill>
+</Shape>
+</Node>
+<Node x="0" y="0" opacity="0" name="Google" id="0:317">
+<Node x="0" y="0" name="Letter" id="0:327">
+<Shape x="0" y="0" name="Flap">
+<PointsPath x="0" y="0" isClosed="false" name="Path"><StraightVertex x="-13" y="-8"/><StraightVertex x="0" y="2"/><StraightVertex x="13" y="-8"/></PointsPath>
+<Stroke thickness="2.5" cap="round" join="round" name="Stroke"><SolidColor colorValue="FFE2574C" name="Color"/></Stroke>
+</Shape>
+<Shape x="0" y="0" name="Paper">
+<Rectangle x="0" y="0" width="28" height="19" cornerRadiusTL="3" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FFFFFFFF" name="Color"/></Fill>
+</Shape>
+</Node>
+</Node>
+<Node x="0" y="0" opacity="0" name="Media" id="0:318">
+<Node x="5" y="-3" rotation="0.6" name="Brush" id="0:328">
+<Shape x="0" y="0" name="Bristles">
+<PointsPath x="0" y="0" isClosed="true" name="Path"><StraightVertex x="-3.5" y="8"/><StraightVertex x="3.5" y="8" radius="2"/><StraightVertex x="0" y="16"/></PointsPath>
+<Fill name="Fill"><SolidColor colorValue="FFFF5FA2" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Ferrule">
+<Rectangle x="0" y="6" width="7" height="5" cornerRadiusTL="1" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FFC9D1DC" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Handle">
+<Rectangle x="0" y="-5" width="5" height="18" cornerRadiusTL="2.5" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FFB5793F" name="Color"/></Fill>
+</Shape>
+</Node>
+<Shape x="0" y="0" name="Paint">
+<PointsPath x="0" y="0" isClosed="false" name="Path"><StraightVertex x="-13" y="9"/><StraightVertex x="-8" y="12" radius="3"/><StraightVertex x="-2" y="9"/></PointsPath>
+<Stroke thickness="3.5" cap="round" join="round" name="Stroke"><SolidColor colorValue="FFFF5FA2" name="Color"/></Stroke>
+</Shape>
+</Node>
+<Node x="0" y="0" opacity="0" name="Phone" id="0:319">
+<Node x="0" y="0" name="Handset" id="0:329">
+<Shape x="0" y="0" opacity="0.35" name="Screen" id="0:339">
+<Rectangle x="0" y="-2" width="12" height="19" cornerRadiusTL="2" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF8FD3FF" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Button">
+<Ellipse x="0" y="11" width="3" height="3" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FFC9D1DC" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Case">
+<Rectangle x="0" y="0" width="17" height="29" cornerRadiusTL="4" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF2A2E38" name="Color"/></Fill><Stroke thickness="2" cap="round" join="round" name="Stroke"><SolidColor colorValue="FFC9D1DC" name="Color"/></Stroke>
+</Shape>
+</Node>
+</Node>
+<Shape x="0" y="0" opacity="0" name="Badge" id="0:301">
+<Ellipse x="0" y="0" width="42" height="42" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF141A24" name="Color"/></Fill><Stroke thickness="2" cap="round" join="round" name="Stroke"><SolidColor colorValue="FF5C6B80" name="Color"/></Stroke>
+</Shape>
+</Node>
 <Node x="100" y="174.0" name="Poke" id="0:21">
 <Node x="0" y="-54.0" name="Bot" id="0:20">
 <Node x="0" y="-60.0" opacity="0" name="Smoke" id="0:56">
@@ -90,6 +242,9 @@
 <StateMachine name="Bot" id="0:7">
 <StateMachineNumber value="0" name="state" id="0:9"/>
 <StateMachineTrigger name="poke" id="0:10"/>
+<StateMachineNumber value="0" name="doing" id="0:13"/>
+<StateMachineTrigger name="give" id="0:15"/>
+<StateMachineTrigger name="receive" id="0:16"/>
 <StateMachineListenerSingle targetId="0:22" listenerTypeValue="down" name="Tap to poke"><ListenerTriggerChange inputId="0:10"/></StateMachineListenerSingle>
 <StateMachineLayer name="State" id="0:8">
 <AnyState x="480" y="-120">
@@ -109,10 +264,42 @@
 <AnimationState x="400" y="320" animationId="0:65" id="0:75"><StateTransition stateToId="0:76" duration="0" enableExitTime="true" exitTimeIsPercetange="true" exitTime="100"/></AnimationState>
 <AnimationState x="640" y="320" animationId="0:66" id="0:76"/>
 </StateMachineLayer>
+<StateMachineLayer name="Doing" id="0:14">
+<AnyState x="480" y="-120">
+<StateTransition stateToId="0:401" duration="200"><TransitionNumberCondition inputId="0:9" opValue="equal" value="2"/><TransitionNumberCondition inputId="0:13" opValue="equal" value="1"/></StateTransition>
+<StateTransition stateToId="0:402" duration="200"><TransitionNumberCondition inputId="0:9" opValue="equal" value="2"/><TransitionNumberCondition inputId="0:13" opValue="equal" value="2"/></StateTransition>
+<StateTransition stateToId="0:403" duration="200"><TransitionNumberCondition inputId="0:9" opValue="equal" value="2"/><TransitionNumberCondition inputId="0:13" opValue="equal" value="3"/></StateTransition>
+<StateTransition stateToId="0:404" duration="200"><TransitionNumberCondition inputId="0:9" opValue="equal" value="2"/><TransitionNumberCondition inputId="0:13" opValue="equal" value="4"/></StateTransition>
+<StateTransition stateToId="0:405" duration="200"><TransitionNumberCondition inputId="0:9" opValue="equal" value="2"/><TransitionNumberCondition inputId="0:13" opValue="equal" value="5"/></StateTransition>
+<StateTransition stateToId="0:406" duration="200"><TransitionNumberCondition inputId="0:9" opValue="equal" value="2"/><TransitionNumberCondition inputId="0:13" opValue="equal" value="6"/></StateTransition>
+<StateTransition stateToId="0:407" duration="200"><TransitionNumberCondition inputId="0:9" opValue="equal" value="2"/><TransitionNumberCondition inputId="0:13" opValue="equal" value="7"/></StateTransition>
+<StateTransition stateToId="0:408" duration="200"><TransitionNumberCondition inputId="0:9" opValue="equal" value="2"/><TransitionNumberCondition inputId="0:13" opValue="equal" value="8"/></StateTransition>
+<StateTransition stateToId="0:409" duration="200"><TransitionNumberCondition inputId="0:9" opValue="equal" value="2"/><TransitionNumberCondition inputId="0:13" opValue="equal" value="9"/></StateTransition>
+<StateTransition stateToId="0:400" duration="200"><TransitionNumberCondition inputId="0:9" opValue="notEqual" value="2"/></StateTransition>
+<StateTransition stateToId="0:400" duration="200"><TransitionNumberCondition inputId="0:13" opValue="lessThan" value="1"/></StateTransition>
+<StateTransition stateToId="0:400" duration="200"><TransitionNumberCondition inputId="0:13" opValue="greaterThan" value="9"/></StateTransition>
+</AnyState>
+<ExitState x="800" y="-120"/>
+<EntryState x="0" y="120"><StateTransition stateToId="0:400"/></EntryState>
+<AnimationState x="160" y="120" animationId="0:420" id="0:400"/>
+<AnimationState x="320" y="120" animationId="0:421" id="0:401"/>
+<AnimationState x="480" y="120" animationId="0:422" id="0:402"/>
+<AnimationState x="640" y="120" animationId="0:423" id="0:403"/>
+<AnimationState x="800" y="120" animationId="0:424" id="0:404"/>
+<AnimationState x="960" y="120" animationId="0:425" id="0:405"/>
+<AnimationState x="1120" y="120" animationId="0:426" id="0:406"/>
+<AnimationState x="1280" y="120" animationId="0:427" id="0:407"/>
+<AnimationState x="1440" y="120" animationId="0:428" id="0:408"/>
+<AnimationState x="1600" y="120" animationId="0:429" id="0:409"/>
+</StateMachineLayer>
 <StateMachineLayer name="Poke" id="0:11">
-<AnyState x="160" y="-120"><StateTransition stateToId="0:78" duration="0"><TransitionTriggerCondition inputId="0:10"/></StateTransition></AnyState>
+<AnyState x="160" y="-120"><StateTransition stateToId="0:78" duration="0"><TransitionTriggerCondition inputId="0:10"/></StateTransition>
+<StateTransition stateToId="0:442" duration="0"><TransitionTriggerCondition inputId="0:15"/></StateTransition>
+<StateTransition stateToId="0:443" duration="0"><TransitionTriggerCondition inputId="0:16"/></StateTransition></AnyState>
 <ExitState x="480" y="-120"/>
 <EntryState x="0" y="120"><StateTransition stateToId="0:77"/></EntryState>
+<AnimationState x="400" y="280" animationId="0:440" id="0:442"><StateTransition stateToId="0:77" duration="0" enableExitTime="true" exitTimeIsPercetange="true" exitTime="100"/></AnimationState>
+<AnimationState x="640" y="280" animationId="0:441" id="0:443"><StateTransition stateToId="0:77" duration="0" enableExitTime="true" exitTimeIsPercetange="true" exitTime="100"/></AnimationState>
 <AnimationState x="160" y="120" animationId="0:67" id="0:77"/>
 <AnimationState x="400" y="120" animationId="0:68" id="0:78"><StateTransition stateToId="0:77" duration="0" enableExitTime="true" exitTimeIsPercetange="true" exitTime="100"/></AnimationState>
 </StateMachineLayer>
@@ -1190,6 +1377,9 @@
 </LinearAnimation>
 <LinearAnimation loopValue="oneShot" duration="1" name="Poke Rest" id="0:67">
 <KeyedObject objectId="0:21">
+<KeyedProperty property="x">
+<KeyFrameDouble value="100" frame="0" interpolationType="hold"/>
+</KeyedProperty>
 <KeyedProperty property="y">
 <KeyFrameDouble value="174.0" frame="0" interpolationType="hold"/>
 </KeyedProperty>
@@ -1211,6 +1401,9 @@
 </LinearAnimation>
 <LinearAnimation loopValue="oneShot" duration="44" name="Poke" id="0:68">
 <KeyedObject objectId="0:21">
+<KeyedProperty property="x">
+<KeyFrameDouble value="100" frame="0" interpolationType="hold"/>
+</KeyedProperty>
 <KeyedProperty property="y">
 <KeyFrameDouble value="174.0" frame="0" interpolationType="cubic" interpolatorId="0:99"/>
 <KeyFrameDouble value="164.0" frame="11" interpolationType="cubic" interpolatorId="0:99"/>
@@ -1244,6 +1437,697 @@
 </KeyedProperty>
 </KeyedObject>
 </LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="56" name="Give" id="0:440">
+<KeyedObject objectId="0:21">
+<KeyedProperty property="x">
+<KeyFrameDouble value="100" frame="0" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="103" frame="14" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="103" frame="34" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="100" frame="52" interpolationType="cubic" interpolatorId="0:99"/>
+</KeyedProperty>
+<KeyedProperty property="y">
+<KeyFrameDouble value="174.0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+<KeyedProperty property="scaleX">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+<KeyedProperty property="scaleY">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0" frame="0" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0.12" frame="14" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0.12" frame="34" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0" frame="52" interpolationType="cubic" interpolatorId="0:99"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:55">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="56" name="Receive" id="0:441">
+<KeyedObject objectId="0:21">
+<KeyedProperty property="x">
+<KeyFrameDouble value="100" frame="0" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="102" frame="12" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="102" frame="24" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="99" frame="36" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="100" frame="50" interpolationType="cubic" interpolatorId="0:99"/>
+</KeyedProperty>
+<KeyedProperty property="y">
+<KeyFrameDouble value="174.0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+<KeyedProperty property="scaleX">
+<KeyFrameDouble value="1" frame="0" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="1" frame="22" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="1.07" frame="28" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0.96" frame="36" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="1" frame="46" interpolationType="cubic" interpolatorId="0:99"/>
+</KeyedProperty>
+<KeyedProperty property="scaleY">
+<KeyFrameDouble value="1" frame="0" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="1" frame="22" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0.92" frame="28" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="1.05" frame="36" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="1" frame="46" interpolationType="cubic" interpolatorId="0:99"/>
+</KeyedProperty>
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0" frame="0" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0.08" frame="12" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0.08" frame="24" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="-0.04" frame="36" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0" frame="50" interpolationType="cubic" interpolatorId="0:99"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:55">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="1" name="No Prop" id="0:420">
+<KeyedObject objectId="0:301">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:311">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:312">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:313">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:314">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:315">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:316">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:317">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:318">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:319">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="60" name="Doing read" id="0:421">
+<KeyedObject objectId="0:301">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:311">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:312">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:313">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:314">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:315">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:316">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:317">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:318">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:319">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:321">
+<KeyedProperty property="scaleX">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+<KeyFrameDouble value="1" frame="10" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="-1" frame="40" interpolationType="cubic" interpolatorId="0:99"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="60" name="Doing write" id="0:422">
+<KeyedObject objectId="0:301">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:311">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:312">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:313">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:314">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:315">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:316">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:317">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:318">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:319">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:322">
+<KeyedProperty property="x">
+<KeyFrameDouble value="4" frame="0" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="8" frame="12" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="4" frame="24" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="8" frame="36" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="4" frame="48" interpolationType="cubic" interpolatorId="0:99"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="loop" duration="60" name="Doing command" id="0:423">
+<KeyedObject objectId="0:301">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:311">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:312">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:313">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:314">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:315">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:316">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:317">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:318">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:319">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:323">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+<KeyFrameDouble value="0" frame="36" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="60" name="Doing browse" id="0:424">
+<KeyedObject objectId="0:301">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:311">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:312">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:313">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:314">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:315">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:316">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:317">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:318">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:319">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:324">
+<KeyedProperty property="scaleX">
+<KeyFrameDouble value="1" frame="0" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0.15" frame="20" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="1" frame="40" interpolationType="cubic" interpolatorId="0:99"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="60" name="Doing search" id="0:425">
+<KeyedObject objectId="0:301">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:311">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:312">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:313">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:314">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:315">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:316">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:317">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:318">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:319">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:325">
+<KeyedProperty property="x">
+<KeyFrameDouble value="0" frame="0" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="4" frame="16" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="-3" frame="32" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0" frame="48" interpolationType="cubic" interpolatorId="0:99"/>
+</KeyedProperty>
+<KeyedProperty property="y">
+<KeyFrameDouble value="0" frame="0" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="-2" frame="16" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="2" frame="32" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0" frame="48" interpolationType="cubic" interpolatorId="0:99"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="60" name="Doing talk" id="0:426">
+<KeyedObject objectId="0:301">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:311">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:312">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:313">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:314">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:315">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:316">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:317">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:318">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:319">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:326">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0.2" frame="0" interpolationType="hold"/>
+<KeyFrameDouble value="1" frame="10" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:336">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0.2" frame="0" interpolationType="hold"/>
+<KeyFrameDouble value="1" frame="22" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:346">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0.2" frame="0" interpolationType="hold"/>
+<KeyFrameDouble value="1" frame="34" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="60" name="Doing google" id="0:427">
+<KeyedObject objectId="0:301">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:311">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:312">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:313">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:314">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:315">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:316">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:317">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:318">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:319">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:327">
+<KeyedProperty property="y">
+<KeyFrameDouble value="0" frame="0" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="-4" frame="10" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0" frame="20" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="-1.5" frame="28" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0" frame="36" interpolationType="cubic" interpolatorId="0:99"/>
+</KeyedProperty>
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0" frame="0" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="-0.1" frame="10" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0.06" frame="20" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0" frame="36" interpolationType="cubic" interpolatorId="0:99"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="60" name="Doing media" id="0:428">
+<KeyedObject objectId="0:301">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:311">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:312">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:313">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:314">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:315">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:316">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:317">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:318">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:319">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:328">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0.6" frame="0" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0.9" frame="14" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0.45" frame="28" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0.6" frame="42" interpolationType="cubic" interpolatorId="0:99"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="60" name="Doing phone" id="0:429">
+<KeyedObject objectId="0:301">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:311">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:312">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:313">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:314">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:315">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:316">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:317">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:318">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:319">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:339">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0.35" frame="0" interpolationType="hold"/>
+<KeyFrameDouble value="0.35" frame="12" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="1" frame="24" interpolationType="cubic" interpolatorId="0:99"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="0:329">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0" frame="0" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0.1" frame="4" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="-0.1" frame="8" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0.08" frame="12" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="-0.08" frame="16" interpolationType="cubic" interpolatorId="0:99"/>
+<KeyFrameDouble value="0" frame="20" interpolationType="cubic" interpolatorId="0:99"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
 </Artboard>
 <Artboard defaultStateMachineId="3:7" styleId="3:5" x="260" width="200" height="260" name="Robot" id="3:2">
 <LayoutComponentStyle name="Artboard Style" id="3:5"/>
@@ -1251,6 +2135,158 @@
 <Node x="0" y="-63.0" name="Roll" id="2:6">
 <Node x="0" y="63.0" name="Blast" id="2:7">
 <Node x="0" y="0" name="Rig" id="2:2">
+<Node x="0" y="-60" scaleX="1" scaleY="1" name="Props" id="2:300">
+<Node x="0" y="0" opacity="0" name="Read" id="2:311">
+<Node x="0" y="0" name="Page" id="2:321">
+<Shape x="0" y="0" name="Leaf">
+<Rectangle x="6.5" y="0" width="12" height="17" cornerRadiusTL="2" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FFDCE4EE" name="Color"/></Fill>
+</Shape>
+</Node>
+<Shape x="0" y="0" name="Pages">
+<Rectangle x="-7" y="0" width="13" height="18" cornerRadiusTL="2" name="L"/><Rectangle x="7" y="0" width="13" height="18" cornerRadiusTL="2" name="R"/>
+<Fill name="Fill"><SolidColor colorValue="FFFFFFFF" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Cover">
+<Rectangle x="0" y="1" width="32" height="22" cornerRadiusTL="3" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF4C6EF5" name="Color"/></Fill>
+</Shape>
+</Node>
+<Node x="0" y="0" opacity="0" name="Write" id="2:312">
+<Node x="4" y="-3" rotation="0.7" name="Pencil" id="2:322">
+<Shape x="0" y="0" name="Lead">
+<Ellipse x="0" y="13" width="3" height="3" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF2A2E38" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Wood">
+<PointsPath x="0" y="0" isClosed="true" name="Path"><StraightVertex x="-3" y="7"/><StraightVertex x="3" y="7"/><StraightVertex x="0" y="14"/></PointsPath>
+<Fill name="Fill"><SolidColor colorValue="FFF2D3A0" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Eraser">
+<Rectangle x="0" y="-13" width="6" height="4" cornerRadiusTL="1" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FFFF8FA8" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Barrel">
+<Rectangle x="0" y="-2" width="6" height="18" cornerRadiusTL="0" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FFFFC83D" name="Color"/></Fill>
+</Shape>
+</Node>
+<Shape x="0" y="0" name="Scribble">
+<PointsPath x="0" y="0" isClosed="false" name="Path"><StraightVertex x="-13" y="10"/><StraightVertex x="-9" y="7" radius="2"/><StraightVertex x="-5" y="10" radius="2"/><StraightVertex x="-1" y="7"/></PointsPath>
+<Stroke thickness="2" cap="round" join="round" name="Stroke"><SolidColor colorValue="FFFFFFFF" name="Color"/></Stroke>
+</Shape>
+</Node>
+<Node x="0" y="0" opacity="0" name="Command" id="2:313">
+<Shape x="0" y="0" name="Cursor" id="2:323">
+<Rectangle x="3" y="5" width="7" height="3" cornerRadiusTL="1" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF7CFFB2" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Prompt">
+<PointsPath x="0" y="0" isClosed="false" name="Path"><StraightVertex x="-9" y="-4"/><StraightVertex x="-4" y="0"/><StraightVertex x="-9" y="4"/></PointsPath>
+<Stroke thickness="2.5" cap="round" join="round" name="Stroke"><SolidColor colorValue="FF7CFFB2" name="Color"/></Stroke>
+</Shape>
+<Shape x="0" y="0" name="Screen">
+<Rectangle x="0" y="0" width="30" height="22" cornerRadiusTL="4" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF0B0F14" name="Color"/></Fill><Stroke thickness="2" cap="round" join="round" name="Stroke"><SolidColor colorValue="FF9AA7B8" name="Color"/></Stroke>
+</Shape>
+</Node>
+<Node x="0" y="0" opacity="0" name="Browse" id="2:314">
+<Shape x="0" y="0" name="Meridian" id="2:324">
+<Ellipse x="0" y="0" width="12" height="26" name="Path"/>
+<Stroke thickness="2" cap="round" join="round" name="Stroke"><SolidColor colorValue="FFFFFFFF" name="Color"/></Stroke>
+</Shape>
+<Shape x="0" y="0" name="Lines">
+<PointsPath x="0" y="0" isClosed="false" name="Equator"><StraightVertex x="-13" y="0"/><StraightVertex x="13" y="0"/></PointsPath><PointsPath x="0" y="0" isClosed="false" name="North"><StraightVertex x="-11" y="-7"/><StraightVertex x="11" y="-7"/></PointsPath><PointsPath x="0" y="0" isClosed="false" name="South"><StraightVertex x="-11" y="7"/><StraightVertex x="11" y="7"/></PointsPath>
+<Stroke thickness="2" cap="round" join="round" name="Stroke"><SolidColor colorValue="FFFFFFFF" name="Color"/></Stroke>
+</Shape>
+<Shape x="0" y="0" name="Ball">
+<Ellipse x="0" y="0" width="26" height="26" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF2F9BFF" name="Color"/></Fill><Stroke thickness="2" cap="round" join="round" name="Stroke"><SolidColor colorValue="FFFFFFFF" name="Color"/></Stroke>
+</Shape>
+</Node>
+<Node x="0" y="0" opacity="0" name="Search" id="2:315">
+<Node x="0" y="0" name="Glass" id="2:325">
+<Shape x="0" y="0" name="Handle">
+<PointsPath x="0" y="0" isClosed="false" name="Path"><StraightVertex x="4" y="4"/><StraightVertex x="12" y="12"/></PointsPath>
+<Stroke thickness="4.5" cap="round" join="round" name="Stroke"><SolidColor colorValue="FFFFC83D" name="Color"/></Stroke>
+</Shape>
+<Shape x="0" y="0" name="Lens">
+<Ellipse x="-3" y="-3" width="17" height="17" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="6699D9FF" name="Color"/></Fill><Stroke thickness="3" cap="round" join="round" name="Stroke"><SolidColor colorValue="FFFFFFFF" name="Color"/></Stroke>
+</Shape>
+</Node>
+</Node>
+<Node x="0" y="0" opacity="0" name="Talk" id="2:316">
+<Shape x="0" y="0" name="Dot 0" id="2:326">
+<Ellipse x="-7" y="-2" width="4.5" height="4.5" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF2A2E38" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Dot 1" id="2:336">
+<Ellipse x="0" y="-2" width="4.5" height="4.5" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF2A2E38" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Dot 2" id="2:346">
+<Ellipse x="7" y="-2" width="4.5" height="4.5" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF2A2E38" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Bubble">
+<Rectangle x="0" y="-2" width="29" height="19" cornerRadiusTL="7" name="Body"/><PointsPath x="0" y="0" isClosed="true" name="Tail"><StraightVertex x="-9" y="5"/><StraightVertex x="-11" y="14"/><StraightVertex x="-1" y="6"/></PointsPath>
+<Fill name="Fill"><SolidColor colorValue="FFFFFFFF" name="Color"/></Fill>
+</Shape>
+</Node>
+<Node x="0" y="0" opacity="0" name="Google" id="2:317">
+<Node x="0" y="0" name="Letter" id="2:327">
+<Shape x="0" y="0" name="Flap">
+<PointsPath x="0" y="0" isClosed="false" name="Path"><StraightVertex x="-13" y="-8"/><StraightVertex x="0" y="2"/><StraightVertex x="13" y="-8"/></PointsPath>
+<Stroke thickness="2.5" cap="round" join="round" name="Stroke"><SolidColor colorValue="FFE2574C" name="Color"/></Stroke>
+</Shape>
+<Shape x="0" y="0" name="Paper">
+<Rectangle x="0" y="0" width="28" height="19" cornerRadiusTL="3" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FFFFFFFF" name="Color"/></Fill>
+</Shape>
+</Node>
+</Node>
+<Node x="0" y="0" opacity="0" name="Media" id="2:318">
+<Node x="5" y="-3" rotation="0.6" name="Brush" id="2:328">
+<Shape x="0" y="0" name="Bristles">
+<PointsPath x="0" y="0" isClosed="true" name="Path"><StraightVertex x="-3.5" y="8"/><StraightVertex x="3.5" y="8" radius="2"/><StraightVertex x="0" y="16"/></PointsPath>
+<Fill name="Fill"><SolidColor colorValue="FFFF5FA2" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Ferrule">
+<Rectangle x="0" y="6" width="7" height="5" cornerRadiusTL="1" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FFC9D1DC" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Handle">
+<Rectangle x="0" y="-5" width="5" height="18" cornerRadiusTL="2.5" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FFB5793F" name="Color"/></Fill>
+</Shape>
+</Node>
+<Shape x="0" y="0" name="Paint">
+<PointsPath x="0" y="0" isClosed="false" name="Path"><StraightVertex x="-13" y="9"/><StraightVertex x="-8" y="12" radius="3"/><StraightVertex x="-2" y="9"/></PointsPath>
+<Stroke thickness="3.5" cap="round" join="round" name="Stroke"><SolidColor colorValue="FFFF5FA2" name="Color"/></Stroke>
+</Shape>
+</Node>
+<Node x="0" y="0" opacity="0" name="Phone" id="2:319">
+<Node x="0" y="0" name="Handset" id="2:329">
+<Shape x="0" y="0" opacity="0.35" name="Screen" id="2:339">
+<Rectangle x="0" y="-2" width="12" height="19" cornerRadiusTL="2" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF8FD3FF" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Button">
+<Ellipse x="0" y="11" width="3" height="3" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FFC9D1DC" name="Color"/></Fill>
+</Shape>
+<Shape x="0" y="0" name="Case">
+<Rectangle x="0" y="0" width="17" height="29" cornerRadiusTL="4" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF2A2E38" name="Color"/></Fill><Stroke thickness="2" cap="round" join="round" name="Stroke"><SolidColor colorValue="FFC9D1DC" name="Color"/></Stroke>
+</Shape>
+</Node>
+</Node>
+<Shape x="0" y="0" opacity="0" name="Badge" id="2:301">
+<Ellipse x="0" y="0" width="42" height="42" name="Path"/>
+<Fill name="Fill"><SolidColor colorValue="FF141A24" name="Color"/></Fill><Stroke thickness="2" cap="round" join="round" name="Stroke"><SolidColor colorValue="FF5C6B80" name="Color"/></Stroke>
+</Shape>
+</Node>
 <Node x="0" y="-63.0" opacity="0" scaleX="0.2" scaleY="0.2" name="Boom" id="2:40">
 <Shape x="0" y="0" name="Flash">
 <Ellipse x="0" y="0" width="46" height="46" name="Path"/>
@@ -1466,6 +2502,9 @@
 <StateMachine name="Bot" id="3:7">
 <StateMachineNumber value="0" name="state" id="3:9"/>
 <StateMachineTrigger name="poke" id="3:10"/>
+<StateMachineNumber value="0" name="doing" id="3:13"/>
+<StateMachineTrigger name="give" id="3:15"/>
+<StateMachineTrigger name="receive" id="3:16"/>
 <StateMachineListenerSingle targetId="3:22" listenerTypeValue="down" name="Tap to poke"><ListenerTriggerChange inputId="3:10"/></StateMachineListenerSingle>
 <StateMachineLayer name="State" id="3:8">
 <AnyState x="480" y="-120">
@@ -1485,10 +2524,42 @@
 <AnimationState x="400" y="320" animationId="3:65" id="3:75"><StateTransition stateToId="3:76" duration="0" enableExitTime="true" exitTimeIsPercetange="true" exitTime="100"/></AnimationState>
 <AnimationState x="640" y="320" animationId="3:66" id="3:76"/>
 </StateMachineLayer>
+<StateMachineLayer name="Doing" id="3:14">
+<AnyState x="480" y="-120">
+<StateTransition stateToId="3:401" duration="200"><TransitionNumberCondition inputId="3:9" opValue="equal" value="2"/><TransitionNumberCondition inputId="3:13" opValue="equal" value="1"/></StateTransition>
+<StateTransition stateToId="3:402" duration="200"><TransitionNumberCondition inputId="3:9" opValue="equal" value="2"/><TransitionNumberCondition inputId="3:13" opValue="equal" value="2"/></StateTransition>
+<StateTransition stateToId="3:403" duration="200"><TransitionNumberCondition inputId="3:9" opValue="equal" value="2"/><TransitionNumberCondition inputId="3:13" opValue="equal" value="3"/></StateTransition>
+<StateTransition stateToId="3:404" duration="200"><TransitionNumberCondition inputId="3:9" opValue="equal" value="2"/><TransitionNumberCondition inputId="3:13" opValue="equal" value="4"/></StateTransition>
+<StateTransition stateToId="3:405" duration="200"><TransitionNumberCondition inputId="3:9" opValue="equal" value="2"/><TransitionNumberCondition inputId="3:13" opValue="equal" value="5"/></StateTransition>
+<StateTransition stateToId="3:406" duration="200"><TransitionNumberCondition inputId="3:9" opValue="equal" value="2"/><TransitionNumberCondition inputId="3:13" opValue="equal" value="6"/></StateTransition>
+<StateTransition stateToId="3:407" duration="200"><TransitionNumberCondition inputId="3:9" opValue="equal" value="2"/><TransitionNumberCondition inputId="3:13" opValue="equal" value="7"/></StateTransition>
+<StateTransition stateToId="3:408" duration="200"><TransitionNumberCondition inputId="3:9" opValue="equal" value="2"/><TransitionNumberCondition inputId="3:13" opValue="equal" value="8"/></StateTransition>
+<StateTransition stateToId="3:409" duration="200"><TransitionNumberCondition inputId="3:9" opValue="equal" value="2"/><TransitionNumberCondition inputId="3:13" opValue="equal" value="9"/></StateTransition>
+<StateTransition stateToId="3:400" duration="200"><TransitionNumberCondition inputId="3:9" opValue="notEqual" value="2"/></StateTransition>
+<StateTransition stateToId="3:400" duration="200"><TransitionNumberCondition inputId="3:13" opValue="lessThan" value="1"/></StateTransition>
+<StateTransition stateToId="3:400" duration="200"><TransitionNumberCondition inputId="3:13" opValue="greaterThan" value="9"/></StateTransition>
+</AnyState>
+<ExitState x="800" y="-120"/>
+<EntryState x="0" y="120"><StateTransition stateToId="3:400"/></EntryState>
+<AnimationState x="160" y="120" animationId="3:420" id="3:400"/>
+<AnimationState x="320" y="120" animationId="3:421" id="3:401"/>
+<AnimationState x="480" y="120" animationId="3:422" id="3:402"/>
+<AnimationState x="640" y="120" animationId="3:423" id="3:403"/>
+<AnimationState x="800" y="120" animationId="3:424" id="3:404"/>
+<AnimationState x="960" y="120" animationId="3:425" id="3:405"/>
+<AnimationState x="1120" y="120" animationId="3:426" id="3:406"/>
+<AnimationState x="1280" y="120" animationId="3:427" id="3:407"/>
+<AnimationState x="1440" y="120" animationId="3:428" id="3:408"/>
+<AnimationState x="1600" y="120" animationId="3:429" id="3:409"/>
+</StateMachineLayer>
 <StateMachineLayer name="Poke" id="3:11">
-<AnyState x="160" y="-120"><StateTransition stateToId="3:78" duration="0"><TransitionTriggerCondition inputId="3:10"/></StateTransition></AnyState>
+<AnyState x="160" y="-120"><StateTransition stateToId="3:78" duration="0"><TransitionTriggerCondition inputId="3:10"/></StateTransition>
+<StateTransition stateToId="3:442" duration="0"><TransitionTriggerCondition inputId="3:15"/></StateTransition>
+<StateTransition stateToId="3:443" duration="0"><TransitionTriggerCondition inputId="3:16"/></StateTransition></AnyState>
 <ExitState x="480" y="-120"/>
 <EntryState x="0" y="120"><StateTransition stateToId="3:77"/></EntryState>
+<AnimationState x="400" y="280" animationId="3:440" id="3:442"><StateTransition stateToId="3:77" duration="0" enableExitTime="true" exitTimeIsPercetange="true" exitTime="100"/></AnimationState>
+<AnimationState x="640" y="280" animationId="3:441" id="3:443"><StateTransition stateToId="3:77" duration="0" enableExitTime="true" exitTimeIsPercetange="true" exitTime="100"/></AnimationState>
 <AnimationState x="160" y="120" animationId="3:67" id="3:77"/>
 <AnimationState x="400" y="120" animationId="3:68" id="3:78"><StateTransition stateToId="3:77" duration="0" enableExitTime="true" exitTimeIsPercetange="true" exitTime="100"/></AnimationState>
 </StateMachineLayer>
@@ -2902,6 +3973,104 @@
 </KeyedProperty>
 </KeyedObject>
 </LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="60" name="Give" id="3:440">
+<KeyedObject objectId="2:5">
+<KeyedProperty property="x">
+<KeyFrameDouble value="100" frame="0" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="106" frame="16" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="106" frame="36" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="100" frame="54" interpolationType="cubic" interpolatorId="3:99"/>
+</KeyedProperty>
+<KeyedProperty property="y">
+<KeyFrameDouble value="246" frame="0" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="246" frame="16" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="246" frame="36" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="246" frame="54" interpolationType="cubic" interpolatorId="3:99"/>
+</KeyedProperty>
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0" frame="0" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0.12" frame="16" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0.12" frame="36" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0" frame="54" interpolationType="cubic" interpolatorId="3:99"/>
+</KeyedProperty>
+<KeyedProperty property="scaleX">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+<KeyedProperty property="scaleY">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:6">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="1:55">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:13">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="-0.3" frame="0" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="-1.5" frame="16" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="-1.5" frame="36" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="-0.3" frame="54" interpolationType="cubic" interpolatorId="3:99"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="60" name="Receive" id="3:441">
+<KeyedObject objectId="2:5">
+<KeyedProperty property="x">
+<KeyFrameDouble value="100.0" frame="0" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="103.6" frame="16" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="103.6" frame="36" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="100.0" frame="54" interpolationType="cubic" interpolatorId="3:99"/>
+</KeyedProperty>
+<KeyedProperty property="y">
+<KeyFrameDouble value="246.0" frame="0" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="246.0" frame="16" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="246.0" frame="36" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="246.0" frame="54" interpolationType="cubic" interpolatorId="3:99"/>
+</KeyedProperty>
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0.0" frame="0" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0.072" frame="16" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0.072" frame="36" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0.0" frame="54" interpolationType="cubic" interpolatorId="3:99"/>
+</KeyedProperty>
+<KeyedProperty property="scaleX">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+<KeyedProperty property="scaleY">
+<KeyFrameDouble value="1" frame="0" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="1" frame="30" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0.93" frame="36" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="1.04" frame="44" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="1" frame="52" interpolationType="cubic" interpolatorId="3:99"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:6">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="1:55">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:13">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="-0.3" frame="0" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="-1.4" frame="14" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="-1.4" frame="28" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0.5" frame="38" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0.5" frame="46" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="-0.3" frame="56" interpolationType="cubic" interpolatorId="3:99"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
 <LinearAnimation loopValue="oneShot" duration="1" name="Blast Rest" id="3:85">
 <KeyedObject objectId="2:7">
 <KeyedProperty property="x">
@@ -3440,6 +4609,717 @@
 </KeyedProperty>
 <KeyedProperty property="rotation">
 <KeyFrameDouble value="0.12" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="1" name="No Prop" id="3:420">
+<KeyedObject objectId="2:301">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:311">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:312">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:313">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:314">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:315">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:316">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:317">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:318">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:319">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="60" name="Doing read" id="3:421">
+<KeyedObject objectId="2:301">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:311">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:312">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:313">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:314">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:315">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:316">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:317">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:318">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:319">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:321">
+<KeyedProperty property="scaleX">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+<KeyFrameDouble value="1" frame="10" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="-1" frame="40" interpolationType="cubic" interpolatorId="3:99"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:12">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="-0.5" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:13">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0.5" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="60" name="Doing write" id="3:422">
+<KeyedObject objectId="2:301">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:311">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:312">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:313">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:314">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:315">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:316">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:317">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:318">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:319">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:322">
+<KeyedProperty property="x">
+<KeyFrameDouble value="4" frame="0" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="8" frame="12" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="4" frame="24" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="8" frame="36" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="4" frame="48" interpolationType="cubic" interpolatorId="3:99"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:12">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="-0.5" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:13">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0.5" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="loop" duration="60" name="Doing command" id="3:423">
+<KeyedObject objectId="2:301">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:311">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:312">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:313">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:314">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:315">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:316">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:317">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:318">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:319">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:323">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+<KeyFrameDouble value="0" frame="36" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:12">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="-0.5" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:13">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0.5" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="60" name="Doing browse" id="3:424">
+<KeyedObject objectId="2:301">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:311">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:312">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:313">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:314">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:315">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:316">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:317">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:318">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:319">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:324">
+<KeyedProperty property="scaleX">
+<KeyFrameDouble value="1" frame="0" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0.15" frame="20" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="1" frame="40" interpolationType="cubic" interpolatorId="3:99"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:12">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="-0.5" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:13">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0.5" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="60" name="Doing search" id="3:425">
+<KeyedObject objectId="2:301">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:311">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:312">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:313">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:314">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:315">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:316">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:317">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:318">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:319">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:325">
+<KeyedProperty property="x">
+<KeyFrameDouble value="0" frame="0" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="4" frame="16" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="-3" frame="32" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0" frame="48" interpolationType="cubic" interpolatorId="3:99"/>
+</KeyedProperty>
+<KeyedProperty property="y">
+<KeyFrameDouble value="0" frame="0" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="-2" frame="16" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="2" frame="32" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0" frame="48" interpolationType="cubic" interpolatorId="3:99"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:12">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="-0.5" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:13">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0.5" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="60" name="Doing talk" id="3:426">
+<KeyedObject objectId="2:301">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:311">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:312">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:313">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:314">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:315">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:316">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:317">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:318">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:319">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:326">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0.2" frame="0" interpolationType="hold"/>
+<KeyFrameDouble value="1" frame="10" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:336">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0.2" frame="0" interpolationType="hold"/>
+<KeyFrameDouble value="1" frame="22" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:346">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0.2" frame="0" interpolationType="hold"/>
+<KeyFrameDouble value="1" frame="34" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:12">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="-0.5" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:13">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0.5" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="60" name="Doing google" id="3:427">
+<KeyedObject objectId="2:301">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:311">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:312">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:313">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:314">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:315">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:316">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:317">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:318">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:319">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:327">
+<KeyedProperty property="y">
+<KeyFrameDouble value="0" frame="0" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="-4" frame="10" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0" frame="20" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="-1.5" frame="28" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0" frame="36" interpolationType="cubic" interpolatorId="3:99"/>
+</KeyedProperty>
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0" frame="0" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="-0.1" frame="10" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0.06" frame="20" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0" frame="36" interpolationType="cubic" interpolatorId="3:99"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:12">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="-0.5" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:13">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0.5" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="60" name="Doing media" id="3:428">
+<KeyedObject objectId="2:301">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:311">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:312">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:313">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:314">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:315">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:316">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:317">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:318">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:319">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:328">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0.6" frame="0" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0.9" frame="14" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0.45" frame="28" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0.6" frame="42" interpolationType="cubic" interpolatorId="3:99"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:12">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="-0.5" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:13">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0.5" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+</LinearAnimation>
+<LinearAnimation loopValue="oneShot" duration="60" name="Doing phone" id="3:429">
+<KeyedObject objectId="2:301">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:311">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:312">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:313">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:314">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:315">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:316">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:317">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:318">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:319">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="1" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:339">
+<KeyedProperty property="opacity">
+<KeyFrameDouble value="0.35" frame="0" interpolationType="hold"/>
+<KeyFrameDouble value="0.35" frame="12" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="1" frame="24" interpolationType="cubic" interpolatorId="3:99"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:329">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0" frame="0" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0.1" frame="4" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="-0.1" frame="8" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0.08" frame="12" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="-0.08" frame="16" interpolationType="cubic" interpolatorId="3:99"/>
+<KeyFrameDouble value="0" frame="20" interpolationType="cubic" interpolatorId="3:99"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:12">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="-0.5" frame="0" interpolationType="hold"/>
+</KeyedProperty>
+</KeyedObject>
+<KeyedObject objectId="2:13">
+<KeyedProperty property="rotation">
+<KeyFrameDouble value="0.5" frame="0" interpolationType="hold"/>
 </KeyedProperty>
 </KeyedObject>
 </LinearAnimation>

@@ -79,6 +79,10 @@ pub struct BotSpec {
     /// May generate images and video with the node's media tool (kie.ai).
     #[serde(default)]
     pub media: bool,
+    /// Gets the `recall` tool, which the server answers from what it has
+    /// learned about the owner (DESIGN §11.9).
+    #[serde(default)]
+    pub recall: bool,
 }
 
 /// An Orphus fleet blueprint the owner set up (DESIGN §11.2), written into the

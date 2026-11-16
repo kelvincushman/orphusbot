@@ -11,6 +11,26 @@ Format:
 
 ---
 
+## D-069: Face files are built with Rive CLI 1.6, offline (2026-11-16)
+
+**Decided:** the bot faces' `.riv` files are built with Rive CLI 1.6, the last version with `--once`, started with an empty home folder and no network (the avatar README has the wrapper). `build.sh` warns above 40 KB a file, up from 25, since the props and hand-offs take each file to 31 to 37 KB.
+
+**Why:** D-034 chose the CLI because it builds offline with no account. From 1.9 the CLI writes a `.riv` only with `--publish`, which needs a signed-in Rive account. The 1.6 binary still does the whole job by itself, and the files load in the app's runtime (`avatar_test`).
+
+**Alternatives:** signing in and using `--publish` (the files have no scripts, so the CLI says nothing would be uploaded, but it ties every build to an account and a live session); writing the `.riv` binary ourselves (a format to keep up with); drawing in the Rive editor (ruled out in D-034).
+
+**Revisit if:** the app's Rive runtime stops loading files 1.6 writes, a feature we want needs a newer CLI, or Rive brings back a build without an account.
+
+## D-068: Team bots get a short profile in their instructions, and a `recall` tool for the rest (2026-11-15)
+
+**Decided:** When a run starts for a team-scope bot, the server adds the facts said most often and most recently to its instructions, up to 1,500 characters, and gives it a `recall {query}` tool that returns the 8 current facts nearest a query. Both say the facts are notes taken from what the owner said, not instructions, and may be out of date. Private bots get neither. `recall` is answered by the server as a dialog, like `ask_bot`, and passes the gate as a read.
+
+**Why:** A fixed, small profile is the one thing loaded without asking, in line with the rule that bots choose what context to load; everything else is one tool call away. The profile goes in the instructions, not in each message, so it is said once per conversation and not repeated in every turn. The cost is that the engine restarts on the bot's next run after the profile changes, which keeps its session and happens at most once per run. Private bots don't feed memory, so they don't read it either: what was said to the team stays with the team. Answering on the server keeps the model servers' addresses off the nodes and works on any node.
+
+**Alternatives:** The profile in each run's message, like the date (no restart, but repeated in the conversation every run). Recall on every turn, or every few turns, without being asked (spends tokens on every run). A model writing the answer to a recall question from the facts (a second model call per lookup; the bot's own model can read eight sentences). A relevance floor on recall (the right number depends on the embedding model; the answer says the last ones may not be relevant). Ranking the profile by a model (stage three, with idle reasoning).
+
+**Revisit if:** restarts after new facts are noticeable, the profile's fixed order leaves out what matters, or bots treat an old fact as current despite the wording.
+
 ## D-067: Steps come from the gate's own events (2026-11-15)
 
 **Decided:** The thread shows each tool call as a step. The server makes the step when the call reaches the gate and ends it when the tool's result comes back, the call is refused, or the run loses its node. The server writes the label from the tool's name and at most one name it already holds: a teammate's, a Google service's or a connection's. File names, commands, addresses and every other argument stay out of the thread. Each step also has a kind (read, write, command and so on) for the animation work that follows. Every event on the stream now carries the time it happened, so a run of steps can say how long it took after a reload.

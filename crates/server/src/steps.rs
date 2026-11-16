@@ -70,6 +70,7 @@ pub fn label(tool: &str, input: &Value, names: &Names) -> (String, StepKind) {
         }
         "media" => fixed("Making an image", StepKind::Media),
         "phone" => fixed("Using the phone", StepKind::Phone),
+        "recall" => fixed("Looking through its memory", StepKind::Search),
         // Orphus's web tools, which only run for a bot without a computer.
         "web_search" | "code_search" => fixed("Searching the web", StepKind::Search),
         "fetch_content" | "get_search_content" => fixed("Reading a web page", StepKind::Browse),
@@ -232,6 +233,12 @@ mod tests {
                 StepKind::Phone,
             ),
             (
+                "recall",
+                json!({ "query": "where he lives" }),
+                "Looking through its memory",
+                StepKind::Search,
+            ),
+            (
                 "mcp:github_search_code",
                 json!({}),
                 "Using github",
@@ -299,7 +306,7 @@ mod tests {
         // The secret as every argument a tool takes, and as names that match nothing.
         let inputs = [
             json!({ "command": format!("curl https://example.com/{SECRET}"), "path": SECRET }),
-            json!({ "bot": SECRET, "task": SECRET }),
+            json!({ "bot": SECRET, "task": SECRET, "query": SECRET }),
             json!({ "bot": format!("coder {SECRET}"), "task": SECRET }),
             json!({ "args": [SECRET, SECRET] }),
             json!({ "args": ["gmail", SECRET, "--params", SECRET] }),
@@ -316,6 +323,7 @@ mod tests {
             "google",
             "media",
             "phone",
+            "recall",
             "mcp",
             "web_search",
             "fetch_content",
@@ -339,6 +347,7 @@ mod tests {
             "Looking in Google",
             "Making an image",
             "Using the phone",
+            "Looking through its memory",
             "Using github",
             "Using a connection",
             "Searching the web",

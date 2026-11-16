@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into bot (slug, name, scope) values ($1, $1, $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "521e7af8cb45e949d6bca37421277cad4b38425e13c8b78fd58db30163013823"
+}

@@ -5,16 +5,31 @@ Styles: see STYLES, or `python3 gen.py --list` (that list is styles.txt).
 2 working, 3 needs you, 4 done, 5 failed); use 0 for real files and others
 only to screenshot a state. `python3 gen.py 0` still means the default style, state 0.
 
-Two artboards, each with a state machine `Bot` holding a Number input `state`
-and a Trigger input `poke` (also fired by tapping the bot):
+`python3 gen.py <style> 2 <doing>` starts with a `doing` value too, and a fourth
+argument `poke`, `give` or `receive` starts with that reaction playing; both are
+for screenshots only (bodies.sh).
+
+Two artboards, each with a state machine `Bot` holding a Number input `state`,
+a Trigger input `poke` (also fired by tapping the bot), a Number input `doing`
+and Trigger inputs `give` and `receive`:
   Avatar  200x200, the head only (the default artboard; docs/DESIGN.md, M7.4)
   Robot   200x260, the head on a full body with the style's locomotion (BODIES)
 In state 3 every style turns RED with an AMBER light. State 5 self-destructs:
 the Avatar shakes, puffs smoke and goes dizzy; the Robot shakes, goes boom,
 flies apart, falls back together crooked and stays dizzy until the state changes.
+
+`doing` says what kind of work state 2 is, and shows one small prop for it (DOING
+below gives the numbers; 0 shows none and keeps the swinging arms). The props are
+drawn once, in build_props, and are the same in every style. `give` and `receive`
+play for about a second over any state, towards a partner on the bot's right
+(flip the widget for a partner on its left): `give` leans or moves in and holds
+an arm out, `receive` reaches, takes and settles back.
 """
 import math
 import sys
+
+# The `doing` input: the value is the index. Fixed; the app and the server's step kinds use these numbers.
+DOING = ("other", "read", "write", "command", "browse", "search", "talk", "google", "media", "phone")
 
 RED, RED_L, AMBER, WHITE = "FFFF5A4F", "FFFF9A8F", "FFFFB547", "FFFFFFFF"
 DEAD = "FF4A4A4E"   # a burnt-out light after state 5
@@ -195,6 +210,8 @@ if args and args[0].lstrip("-").isdigit():   # legacy form: gen.py <state>
     args = ["default"] + args
 style_name = args[0] if args else "default"
 state_default = args[1] if len(args) > 1 else "0"
+doing_default = args[2] if len(args) > 2 else "0"
+fire = args[3] if len(args) > 3 else ""     # "poke", "give" or "receive": start with it playing
 if style_name not in STYLES:
     sys.exit(f"unknown style {style_name!r}; one of: {', '.join(STYLES)}")
 S = STYLES[style_name]
@@ -558,13 +575,92 @@ def shake(rest, amp, until, step=2):
 def flicker(a, b, until, step, then):
     return [(f, a if (f // step) % 2 == 0 else b, "hold") for f in range(0, until, step)] + [(until, then, "hold")]
 
+def build_props(c, x, y, scale):
+    """The `doing` props on a dark badge, as one node at (x, y): ids under client c are
+    :300 the node, :301 the badge, :311-:319 the props, :321 and up their moving parts.
+    Returns the node and, per prop, (timeline length, loop, keys): each prop moves a
+    little once and stops; only the terminal's cursor keeps blinking."""
+    P = lambda n: f"{c}:{300 + n}"
+    INK, PAPER, GREEN, PINK = "FF2A2E38", "FFFFFFFF", "FF7CFFB2", "FFFF5FA2"
+    art = {
+        "read": [node("Page", [shape("Leaf", rect(12, 17, 2, 6.5, 0), fill("FFDCE4EE"))], id_=P(21)),
+                 shape("Pages", rect(13, 18, 2, -7, 0, "L") + rect(13, 18, 2, 7, 0, "R"), fill(PAPER)),
+                 shape("Cover", rect(32, 22, 3, 0, 1), fill("FF4C6EF5"))],
+        "write": [node("Pencil", [shape("Lead", ell(3, 3, 0, 13), fill(INK)),
+                                  shape("Wood", path([(-3, 7), (3, 7), (0, 14)], True), fill("FFF2D3A0")),
+                                  shape("Eraser", rect(6, 4, 1, 0, -13), fill("FFFF8FA8")),
+                                  shape("Barrel", rect(6, 18, 0, 0, -2), fill("FFFFC83D"))], 4, -3, 'rotation="0.7" ', P(22)),
+                  shape("Scribble", path([(-13, 10), (-9, 7), (-5, 10), (-1, 7)], radius=2), stroke(PAPER, 2))],
+        "command": [shape("Cursor", rect(7, 3, 1, 3, 5), fill(GREEN), id_=P(23)),
+                    shape("Prompt", path([(-9, -4), (-4, 0), (-9, 4)]), stroke(GREEN, 2.5)),
+                    shape("Screen", rect(30, 22, 4), fill("FF0B0F14") + stroke("FF9AA7B8", 2))],
+        "browse": [shape("Meridian", ell(12, 26), stroke(PAPER, 2), id_=P(24)),
+                   shape("Lines", path([(-13, 0), (13, 0)], name="Equator") + path([(-11, -7), (11, -7)], name="North") +
+                         path([(-11, 7), (11, 7)], name="South"), stroke(PAPER, 2)),
+                   shape("Ball", ell(26, 26), fill("FF2F9BFF") + stroke(PAPER, 2))],
+        "search": [node("Glass", [shape("Handle", path([(4, 4), (12, 12)]), stroke("FFFFC83D", 4.5)),
+                                  shape("Lens", ell(17, 17, -3, -3), fill("6699D9FF") + stroke(PAPER, 3))], id_=P(25))],
+        "talk": [shape(f"Dot {j}", ell(4.5, 4.5, -7 + 7 * j, -2), fill(INK), id_=P(26 + 10 * j)) for j in range(3)] +
+                [shape("Bubble", rect(29, 19, 7, 0, -2, "Body") + path([(-9, 5), (-11, 14), (-1, 6)], True, name="Tail"), fill(PAPER))],
+        "google": [node("Letter", [shape("Flap", path([(-13, -8), (0, 2), (13, -8)]), stroke("FFE2574C", 2.5)),
+                                   shape("Paper", rect(28, 19, 3), fill(PAPER))], id_=P(27))],
+        "media": [node("Brush", [shape("Bristles", path([(-3.5, 8), (3.5, 8), (0, 16)], True, radius=2), fill(PINK)),
+                                 shape("Ferrule", rect(7, 5, 1, 0, 6), fill("FFC9D1DC")),
+                                 shape("Handle", rect(5, 18, 2.5, 0, -5), fill("FFB5793F"))], 5, -3, 'rotation="0.6" ', P(28)),
+                  shape("Paint", path([(-13, 9), (-8, 12), (-2, 9)], radius=3), stroke(PINK, 3.5))],
+        "phone": [node("Handset", [shape("Screen", rect(12, 19, 2, 0, -2), fill("FF8FD3FF"), extra='opacity="0.35" ', id_=P(39)),
+                                   shape("Button", ell(3, 3, 0, 11), fill("FFC9D1DC")),
+                                   shape("Case", rect(17, 29, 4), fill(INK) + stroke("FFC9D1DC", 2))], id_=P(29))],
+    }
+    move = {
+        "read": (60, "oneShot", {(P(21), "scaleX"): [(0, 1, "hold"), (10, 1), (40, -1)]}),
+        "write": (60, "oneShot", {(P(22), "x"): [(0, 4), (12, 8), (24, 4), (36, 8), (48, 4)]}),
+        "command": (60, "loop", {(P(23), "opacity"): [(0, 1, "hold"), (36, 0, "hold")]}),
+        "browse": (60, "oneShot", {(P(24), "scaleX"): [(0, 1), (20, 0.15), (40, 1)]}),
+        "search": (60, "oneShot", {(P(25), "x"): [(0, 0), (16, 4), (32, -3), (48, 0)], (P(25), "y"): [(0, 0), (16, -2), (32, 2), (48, 0)]}),
+        "talk": (60, "oneShot", {(P(26 + 10 * j), "opacity"): [(0, 0.2, "hold"), (10 + 12 * j, 1, "hold")] for j in range(3)}),
+        "google": (60, "oneShot", {(P(27), "y"): [(0, 0), (10, -4), (20, 0), (28, -1.5), (36, 0)],
+                                   (P(27), "rotation"): [(0, 0), (10, -0.1), (20, 0.06), (36, 0)]}),
+        "media": (60, "oneShot", {(P(28), "rotation"): [(0, 0.6), (14, 0.9), (28, 0.45), (42, 0.6)]}),
+        "phone": (60, "oneShot", {(P(39), "opacity"): [(0, 0.35, "hold"), (12, 0.35), (24, 1)],
+                                  (P(29), "rotation"): [(0, 0), (4, 0.1), (8, -0.1), (12, 0.08), (16, -0.08), (20, 0)]}),
+    }
+    kids = [node(kind.capitalize(), art[kind], extra='opacity="0" ', id_=P(10 + k)) for k, kind in enumerate(DOING) if k]
+    kids.append(shape("Badge", ell(42, 42), fill("FF141A24") + stroke("FF5C6B80", 2), extra='opacity="0" ', id_=P(1)))
+    return node("Props", kids, x, y, f'scaleX="{scale}" scaleY="{scale}" ', P(0)), [move[kind] for kind in DOING[1:]]
+
+def doing_anims(c, moves, hold):
+    """The Doing layer's timelines, ids :420 (no prop) and :421-:429 under client c. Each keys
+    every prop's opacity, so changing `doing` swaps props; `hold` is keyed only while a prop
+    shows (the Robot's arms), so with no prop the State layer still owns it."""
+    P, I = (lambda n: f"{'2' if c == '3' else c}:{300 + n}"), (lambda n: f"{c}:{n}")
+    shown = [(P(1), "opacity")] + [(P(10 + k), "opacity") for k in range(1, 10)]
+    out = [anim(I(420), "No Prop", 1, "oneShot", {}, shown, dict.fromkeys(shown, 0), {})]
+    for k, (dur, loop, keys) in enumerate(moves, 1):
+        spec = {(P(1), "opacity"): [(0, 1, "hold")], (P(10 + k), "opacity"): [(0, 1, "hold")], **keys, **hold}
+        tracks = shown + list(keys) + list(hold)
+        out.append(anim(I(420 + k), f"Doing {DOING[k]}", dur, loop, spec, tracks, dict.fromkeys(tracks, 0), {}))
+    return out
+
 def machine(c, state, hit, extra_layers=""):
-    """State machine `Bot` (ids under client c): Number `state` 0-5 and Trigger `poke`.
+    """State machine `Bot` (ids under client c): Number `state` 0-5 and Trigger `poke`,
+    then Number `doing` 0-9 and Triggers `give` and `receive` (added after, so the first
+    two keep their places).
     Layer State: Any State goes to 0-4 when `state` equals it; 5 is reached from each of
     0-4 (not from Any State, so its dizzy loop cannot restart the explosion), plays the
     failure once and then loops dizzy. Layer Poke: `poke` (or a tap) plays the reaction
-    once over whatever the State layer is doing, then rests."""
+    once over whatever the State layer is doing, then rests; `give` and `receive` do the same
+    with their own timelines. Layer Doing (after State, so it can still the arms): shows prop
+    `doing` while `state` is 2, and nothing otherwise."""
     I = lambda n: f"{c}:{n}"
+    num = lambda inp, op, v: f'<TransitionNumberCondition inputId="{I(inp)}" opValue="{op}" value="{v}"/>'
+    show = "\n".join(f'<StateTransition stateToId="{I(400 + k)}" duration="200">{num(9, "equal", 2)}{num(13, "equal", k)}</StateTransition>'
+                     for k in range(1, 10))
+    hide = "\n".join(f'<StateTransition stateToId="{I(400)}" duration="200">{cnd}</StateTransition>'
+                     for cnd in (num(9, "notEqual", 2), num(13, "lessThan", 1), num(13, "greaterThan", 9)))
+    props = "\n".join(f'<AnimationState x="{160 + 160 * k}" y="120" animationId="{I(420 + k)}" id="{I(400 + k)}"/>' for k in range(10))
+    back = f'<StateTransition stateToId="{I(77)}" duration="0" enableExitTime="true" exitTimeIsPercetange="true" exitTime="100"/>'
+    start = I({"": 77, "poke": 78, "give": 442, "receive": 443}[fire])
     to = "\n".join(f'<StateTransition stateToId="{I(70 + i)}" duration="200"><TransitionNumberCondition inputId="{I(9)}" opValue="equal" value="{i}"/></StateTransition>'
                    for i in range(5))
     fail = f'<StateTransition stateToId="{I(75)}" duration="100"><TransitionNumberCondition inputId="{I(9)}" opValue="equal" value="5"/></StateTransition>'
@@ -572,6 +668,9 @@ def machine(c, state, hit, extra_layers=""):
     return f'''<StateMachine name="Bot" id="{I(7)}">
 <StateMachineNumber value="{state}" name="state" id="{I(9)}"/>
 <StateMachineTrigger name="poke" id="{I(10)}"/>
+<StateMachineNumber value="{doing_default}" name="doing" id="{I(13)}"/>
+<StateMachineTrigger name="give" id="{I(15)}"/>
+<StateMachineTrigger name="receive" id="{I(16)}"/>
 <StateMachineListenerSingle targetId="{hit}" listenerTypeValue="down" name="Tap to poke"><ListenerTriggerChange inputId="{I(10)}"/></StateMachineListenerSingle>
 <StateMachineLayer name="State" id="{I(8)}">
 <AnyState x="480" y="-120">
@@ -583,10 +682,23 @@ def machine(c, state, hit, extra_layers=""):
 <AnimationState x="400" y="320" animationId="{I(65)}" id="{I(75)}"><StateTransition stateToId="{I(76)}" duration="0" enableExitTime="true" exitTimeIsPercetange="true" exitTime="100"/></AnimationState>
 <AnimationState x="640" y="320" animationId="{I(66)}" id="{I(76)}"/>
 </StateMachineLayer>
+<StateMachineLayer name="Doing" id="{I(14)}">
+<AnyState x="480" y="-120">
+{show}
+{hide}
+</AnyState>
+<ExitState x="800" y="-120"/>
+<EntryState x="0" y="120"><StateTransition stateToId="{I(400)}"/></EntryState>
+{props}
+</StateMachineLayer>
 <StateMachineLayer name="Poke" id="{I(11)}">
-<AnyState x="160" y="-120"><StateTransition stateToId="{I(78)}" duration="0"><TransitionTriggerCondition inputId="{I(10)}"/></StateTransition></AnyState>
+<AnyState x="160" y="-120"><StateTransition stateToId="{I(78)}" duration="0"><TransitionTriggerCondition inputId="{I(10)}"/></StateTransition>
+<StateTransition stateToId="{I(442)}" duration="0"><TransitionTriggerCondition inputId="{I(15)}"/></StateTransition>
+<StateTransition stateToId="{I(443)}" duration="0"><TransitionTriggerCondition inputId="{I(16)}"/></StateTransition></AnyState>
 <ExitState x="480" y="-120"/>
-<EntryState x="0" y="120"><StateTransition stateToId="{I(77)}"/></EntryState>
+<EntryState x="0" y="120"><StateTransition stateToId="{start}"/></EntryState>
+<AnimationState x="400" y="280" animationId="{I(440)}" id="{I(442)}">{back}</AnimationState>
+<AnimationState x="640" y="280" animationId="{I(441)}" id="{I(443)}">{back}</AnimationState>
 <AnimationState x="160" y="120" animationId="{I(67)}" id="{I(77)}"/>
 <AnimationState x="400" y="120" animationId="{I(68)}" id="{I(78)}"><StateTransition stateToId="{I(77)}" duration="0" enableExitTime="true" exitTimeIsPercetange="true" exitTime="100"/></AnimationState>
 </StateMachineLayer>
@@ -619,8 +731,8 @@ REST_A = {("0:20", "y"): B0, ("0:20", "scaleX"): 1, ("0:20", "scaleY"): 1, ("0:2
           ("light", "colorValue"): S["light"], ("glow", "colorValue"): S["glow"],
           ("0:20", "x"): 0, ("0:52", "opacity"): 0, ("0:53", "rotation"): 0, ("0:54", "rotation"): 0, ("0:57", "opacity"): 0,
           ("0:56", "opacity"): 0, ("0:56", "scaleX"): 1, ("0:56", "scaleY"): 1, ("0:56", "y"): SMOKE_Y}
-POKE_A = [("0:21", "y"), ("0:21", "scaleX"), ("0:21", "scaleY"), ("0:21", "rotation"), ("0:55", "opacity")]
-POKE_REST_A = {("0:21", "y"): BY + hh / 2, ("0:21", "scaleX"): 1, ("0:21", "scaleY"): 1, ("0:21", "rotation"): 0, ("0:55", "opacity"): 0}
+POKE_A = [("0:21", "x"), ("0:21", "y"), ("0:21", "scaleX"), ("0:21", "scaleY"), ("0:21", "rotation"), ("0:55", "opacity")]
+POKE_REST_A = {("0:21", "x"): 100, ("0:21", "y"): BY + hh / 2, ("0:21", "scaleX"): 1, ("0:21", "scaleY"): 1, ("0:21", "rotation"): 0, ("0:55", "opacity"): 0}
 
 ease_for("0:99")
 
@@ -730,10 +842,26 @@ anims_a = [
         ("0:21", "y"): [(0, PY0), (11, PY0 - 10), (22, PY0)],
         ("0:55", "opacity"): [(0, 0, "hold"), (3, 1, "hold"), (38, 0, "hold")],
     }, POKE_A, POKE_REST_A, roles_a),
+    # give: lean towards the partner, hold, come back
+    anim("0:440", "Give", 56, "oneShot", {
+        ("0:21", "rotation"): [(0, 0), (14, 0.12), (34, 0.12), (52, 0)],
+        ("0:21", "x"): [(0, 100), (14, 103), (34, 103), (52, 100)],
+    }, POKE_A, POKE_REST_A, roles_a),
+    # receive: lean in, take it with a small squash, settle back
+    anim("0:441", "Receive", 56, "oneShot", {
+        ("0:21", "rotation"): [(0, 0), (12, 0.08), (24, 0.08), (36, -0.04), (50, 0)],
+        ("0:21", "x"): [(0, 100), (12, 102), (24, 102), (36, 99), (50, 100)],
+        ("0:21", "scaleY"): [(0, 1), (22, 1), (28, 0.92), (36, 1.05), (46, 1)],
+        ("0:21", "scaleX"): [(0, 1), (22, 1), (28, 1.07), (36, 0.96), (46, 1)],
+    }, POKE_A, POKE_REST_A, roles_a),
 ]
+# the prop sits in the bottom right corner, clear of the face plate
+props_a, prop_moves_a = build_props("0", 172, 172, 1.2)
+anims_a += doing_anims("0", prop_moves_a, {})
 
 avatar_xml = f'''<Artboard defaultStateMachineId="0:7" styleId="0:5" width="200" height="200" name="Avatar" id="0:2">
 <LayoutComponentStyle name="Artboard Style" id="0:5"/>
+{props_a}
 <Node x="100" y="{PY0}" name="Poke" id="0:21">
 <Node x="0" y="{B0}" name="Bot" id="0:20">
 {smoke_a}
@@ -912,7 +1040,9 @@ sweat = node("Sweat", [shape("Drop", path([(0, -7), (5, 2), (0, 7), (-5, 2)], Tr
              -hw * HS / 2 + 2, SWEAT_Y, 'opacity="0" ', "2:44")
 head_mount = node("Head Fly", [node("Head", [f'<Node name="Face" id="1:20">\n' + "\n".join(head_r) + "\n</Node>"],
                                     extra=f'scaleX="{HS}" scaleY="{HS}" ', id_="2:10")], 0, HY, id_="2:9")
-rig_kids = [boom, smoke, stars, think, sweat, head_mount] + arms + [body] + loco_xml
+# the prop is held in front of the chest, below the head
+props_r, prop_moves_r = build_props("2", 0, max(CY, TOP + 32), 1)
+rig_kids = [props_r, boom, smoke, stars, think, sweat, head_mount] + arms + [body] + loco_xml
 
 # --- motion ---
 RIG = "2:2"
@@ -1150,6 +1280,31 @@ else:                                                         # snake: giggle wo
             ("2:5", "scaleY"): [(0, 1), (6, 1.12), (14, 0.94), (22, 1.08), (30, 0.97), (40, 1)]}
 poke[("1:55", "opacity")] = [(0, 0, "hold"), (3, 1, "hold"), (46, 0, "hold")]
 
+# give and receive, about 1 s, towards a partner on the right: go in, hold, come back
+def reach(dx=0, dy=0, lean=0, pivot="2:5"):
+    return {("2:5", "x"): [(0, PG), (16, PG + dx), (36, PG + dx), (54, PG)],
+            ("2:5", "y"): [(0, GROUND), (16, GROUND + dy), (36, GROUND + dy), (54, GROUND)],
+            (pivot, "rotation"): [(0, 0), (16, lean), (36, lean), (54, 0)]}
+if HOVER:                                                     # dips
+    give = reach(8, 10, 0.14, "2:6")
+elif WHEELED:                                                 # rolls forward and back
+    give = reach(16, 0, 0.05)
+elif LOCO == "pogo":                                          # hops over and back
+    give = reach(12)
+    give[("2:5", "y")] = [(0, GROUND), (8, GROUND - 10), (16, GROUND), (36, GROUND), (45, GROUND - 10), (54, GROUND)]
+elif LOCO == "snake":                                         # leans over (it sits near the right edge already)
+    give = reach(0, 0, 0.1)
+else:                                                         # legs: leans in
+    give = reach(6, 0, 0.12)
+# receive: the same way in but not as far, then a small squash as it takes the note
+receive = {k: [(f, r + (v - r) * 0.6) for f, v in ks] for k, ks in give.items() for r in [POKE_REST_R[k]]}
+receive[("2:5", "scaleY")] = [(0, 1), (30, 1), (36, 0.93), (44, 1.04), (52, 1)]
+HAND_R = [(AR, "rotation")] if arms else []
+if arms:
+    give[(AR, "rotation")] = [(0, -0.3), (16, -1.5), (36, -1.5), (54, -0.3)]
+    receive[(AR, "rotation")] = [(0, -0.3), (14, -1.4), (28, -1.4), (38, 0.5), (46, 0.5), (56, -0.3)]
+props_hold = {(AL, "rotation"): [(0, -0.5, "hold")], (AR, "rotation"): [(0, 0.5, "hold")]} if arms else {}
+
 ease_for("3:99")
 anims_r = [r_anim("3:60", "Idle", 120, "loop", idle), r_anim("3:61", "Thinking", 120, "loop", think_spec),
            r_anim("3:62", "Working", 30, "loop", work), r_anim("3:63", "Waiting", 30, "loop", need),
@@ -1157,8 +1312,10 @@ anims_r = [r_anim("3:60", "Idle", 120, "loop", idle), r_anim("3:61", "Thinking",
            r_anim("3:66", "Dizzy", 120, "loop", dizzy),
            anim("3:67", "Poke Rest", 1, "oneShot", {}, POKE_R, POKE_REST_R, roles_r),
            anim("3:68", "Poke", 60, "oneShot", poke, POKE_R, POKE_REST_R, roles_r),
+           anim("3:440", "Give", 60, "oneShot", give, POKE_R + HAND_R, POKE_REST_R | dict.fromkeys(HAND_R, -0.3), roles_r),
+           anim("3:441", "Receive", 60, "oneShot", receive, POKE_R + HAND_R, POKE_REST_R | dict.fromkeys(HAND_R, -0.3), roles_r),
            b_anim("3:85", "Blast Rest", 1, "oneShot", {}), b_anim("3:86", "Blast", FAIL_LEN, "oneShot", blast),
-           b_anim("3:87", "Blast Dizzy", 120, "loop", blast_dizzy)]
+           b_anim("3:87", "Blast Dizzy", 120, "loop", blast_dizzy)] + doing_anims("3", prop_moves_r, props_hold)
 
 def cond(op):
     return f'<TransitionNumberCondition inputId="3:9" opValue="{op}" value="5"/>'

@@ -134,6 +134,7 @@ mod tests {
         let msg = |t: &str| ThreadEvent::Message {
             role: Role::User,
             text: t.into(),
+            voice: false,
         };
         let inbox = bot_thread(&db, "inbox").await.unwrap().unwrap();
         let mut ids = Vec::new();

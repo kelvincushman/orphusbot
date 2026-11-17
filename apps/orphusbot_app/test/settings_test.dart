@@ -123,6 +123,12 @@ void main() {
       find.widgetWithText(TextField, 'Instructions'),
       'Write tests first',
     );
+    // The voice on a call: the server's default until one is picked.
+    await t.ensureVisible(find.text("The server's default"));
+    await t.tap(find.text("The server's default"));
+    await settle(t);
+    await t.tap(find.text('Rex').last);
+    await settle(t);
     // X search is off until switched on.
     await t.ensureVisible(find.text('X search'));
     await t.tap(find.text('X search'));
@@ -136,6 +142,7 @@ void main() {
     await settle(t);
     final saved = posted['/api/bots/update'] as Map<String, dynamic>;
     expect(saved['x_search'], isTrue);
+    expect(saved['voice'], 'rex');
     expect(saved['mail_accounts'], ['personal', 'work']);
     expect(saved['instructions'], 'Write tests first');
     expect(saved['model'], 'openai-codex/gpt-5.5');

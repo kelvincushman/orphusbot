@@ -10,6 +10,8 @@ pub enum Item {
     Message {
         role: Role,
         text: String,
+        /// Asked on a voice call (DESIGN §12.8).
+        voice: bool,
     },
     /// An approval or question. `outcome` is set once it's answered or expired.
     Card {
@@ -17,10 +19,7 @@ pub enum Item {
         outcome: Option<String>,
     },
     /// A line from OrphusBot itself, such as "Stopped." `error` marks failures.
-    Notice {
-        text: String,
-        error: bool,
-    },
+    Notice { text: String, error: bool },
     /// A file the owner sent.
     Attached {
         id: i64,
@@ -156,12 +155,12 @@ impl ThreadView {
     pub fn apply_at(&mut self, event: ThreadEvent, at: i64) {
         let before = self.items.len();
         match event {
-            ThreadEvent::Message { role, text } => {
+            ThreadEvent::Message { role, text, voice } => {
                 if role == Role::Assistant {
                     // The final text replaces what streamed in.
                     self.streaming = None;
                 }
-                self.items.push(Item::Message { role, text });
+                self.items.push(Item::Message { role, text, voice });
             }
             ThreadEvent::Delta { text, .. } => {
                 self.streaming.get_or_insert_default().push_str(&text);
@@ -198,6 +197,7 @@ impl ThreadView {
                     self.items.push(Item::Message {
                         role: Role::Assistant,
                         text,
+                        voice: false,
                     });
                 }
                 let notice = match outcome {
@@ -359,6 +359,7 @@ impl ThreadView {
                 self.items.push(Item::Message {
                     role: Role::User,
                     text,
+                    voice: false,
                 });
             }
             ThreadEvent::Quiet { run } => {
@@ -473,6 +474,7 @@ mod tests {
         Item::Message {
             role,
             text: text.into(),
+            voice: false,
         }
     }
 
@@ -558,6 +560,7 @@ mod tests {
             ThreadEvent::Message {
                 role: Role::Assistant,
                 text: "Found it.".into(),
+                voice: false,
             },
             start(1, "b", "Writing a file"),
         ]);
@@ -784,6 +787,7 @@ mod tests {
             ThreadEvent::Message {
                 role: Role::User,
                 text: "hi".into(),
+                voice: false,
             },
             ThreadEvent::RunQueued {
                 run: 1,
@@ -811,6 +815,7 @@ mod tests {
         view.apply(ThreadEvent::Message {
             role: Role::Assistant,
             text: "Hello!".into(),
+            voice: false,
         });
         view.apply(ThreadEvent::RunEnded {
             run: 1,
@@ -824,6 +829,24 @@ mod tests {
         );
         assert_eq!(view.status(&laptop), "laptop online");
         assert_eq!(view.last_message(), Some("Hello!"));
+    }
+
+    #[test]
+    fn a_message_asked_on_a_call_keeps_its_label() {
+        let view = fold(vec![ThreadEvent::Message {
+            role: Role::User,
+            text: "what's left on the roof quote?".into(),
+            voice: true,
+        }]);
+        assert!(matches!(&view.items[0], Item::Message { voice: true, .. }));
+        // Older events have no flag, and a typed message never carries one.
+        let old: ThreadEvent =
+            serde_json::from_str(r#"{"type":"message","role":"user","text":"hi"}"#).unwrap();
+        assert_eq!(fold(vec![old.clone()]).items, vec![msg(Role::User, "hi")]);
+        assert_eq!(
+            serde_json::to_string(&old).unwrap(),
+            r#"{"type":"message","role":"user","text":"hi"}"#
+        );
     }
 
     #[test]
@@ -927,6 +950,7 @@ mod tests {
             ThreadEvent::Message {
                 role: Role::User,
                 text: "hello".into(),
+                voice: false,
             },
             fired(7),
             step(7, "a"),
@@ -952,6 +976,7 @@ mod tests {
             ThreadEvent::Message {
                 role: Role::Assistant,
                 text: "Two new emails.".into(),
+                voice: false,
             },
             ended(8),
             // A quiet for another run takes nothing.

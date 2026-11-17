@@ -269,6 +269,7 @@ pub(crate) async fn start(app: &App, id: i64) -> Result<(), ApiError> {
     let message = ThreadEvent::Message {
         role: Role::User,
         text: text.clone(),
+        voice: false,
     };
     record(app, &thread, message).await;
     let device = sqlx::query_scalar!("select device_id from ticket where id = $1", id)

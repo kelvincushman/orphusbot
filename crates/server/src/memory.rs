@@ -1177,6 +1177,7 @@ mod tests {
             let event = ThreadEvent::Message {
                 role: Role::Assistant,
                 text: text.into(),
+                voice: false,
             };
             let id = crate::db::append(&db, 1, &event).await.unwrap();
             sqlx::query!(

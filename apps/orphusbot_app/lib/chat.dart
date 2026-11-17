@@ -91,8 +91,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // Tokens per bot today and this week (`/api/usage`), shown in the header.
   Map<String, dynamic> usage = {};
-  // A live voice conversation is open in the Orchestrator's chat (D-063).
-  bool voice = false;
+  // The bot on a call (D-074): the orb's panel stays over the chat, whichever
+  // chat is open, until the call ends.
+  String? call;
 
   Future<void> _loadUsage() async {
     try {
@@ -795,6 +796,14 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
               ),
+              // A call with this bot (D-074); one call at a time.
+              if (call == null)
+                _round(
+                  Icons.call_outlined,
+                  'Call $name',
+                  () => setState(() => call = chosen),
+                  scheme,
+                ),
               _round(
                 Icons.tune,
                 'Model: ${_modelLabel()}',
@@ -858,11 +867,13 @@ class _ChatScreenState extends State<ChatScreen> {
                   ],
                 ),
         ),
-        if (voice && chosen == 'orchestrator')
+        if (call case final on?)
           IdeasRoom(
+            key: ValueKey('call-$on'),
             api: widget.api,
-            bot: chosen,
-            onClose: () => setState(() => voice = false),
+            bot: on,
+            name: _name(on),
+            onClose: () => setState(() => call = null),
           ),
         _composer(name, scheme, v),
       ],
@@ -919,7 +930,12 @@ class _ChatScreenState extends State<ChatScreen> {
   );
 
   Widget _item(t.Item item, ColorScheme scheme, String name) => switch (item) {
-    t.Message(:final mine, :final text) => _bubble(text, mine, scheme),
+    t.Message(:final mine, :final text, :final voice) => _bubble(
+      text,
+      mine,
+      scheme,
+      voice: voice,
+    ),
     t.Notice(:final text, :final error) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Center(
@@ -1026,21 +1042,48 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// The owner's words in a grey bubble on the right; a bot's reply as plain
   /// text across the page with its actions underneath, as in Grok.
-  Widget _bubble(String text, bool mine, ColorScheme scheme) {
+  /// [voice]: it was asked on a call (D-074), so it carries a small label.
+  Widget _bubble(
+    String text,
+    bool mine,
+    ColorScheme scheme, {
+    bool voice = false,
+  }) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     if (mine) {
-      return Align(
-        alignment: Alignment.centerRight,
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 560),
-          margin: const EdgeInsets.fromLTRB(48, 8, 0, 8),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(22),
-          ),
-          child: SelectableText(text),
+      final bubble = Container(
+        constraints: const BoxConstraints(maxWidth: 560),
+        margin: EdgeInsets.fromLTRB(48, voice ? 2 : 8, 0, 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(22),
         ),
+        child: SelectableText(text),
+      );
+      if (!voice) {
+        return Align(alignment: Alignment.centerRight, child: bubble);
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 8, right: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.call, size: 12, color: scheme.outline),
+                const SizedBox(width: 4),
+                Text(
+                  'Asked on a call',
+                  style: Theme.of(context).textTheme.labelSmall
+                      ?.copyWith(color: scheme.outline),
+                ),
+              ],
+            ),
+          ),
+          bubble,
+        ],
       );
     }
     Widget action(IconData icon, String tip, VoidCallback onPressed) =>
@@ -1409,12 +1452,6 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
                 ),
-                if (chosen == 'orchestrator' && !voice)
-                  IconButton(
-                    tooltip: 'Talk',
-                    onPressed: () => setState(() => voice = true),
-                    icon: const Icon(Icons.mic_none),
-                  ),
                 if (working && !hasText)
                   FilledButton.icon(
                     onPressed: () => _act(() => widget.api.stop(chosen)),

@@ -483,6 +483,7 @@ async fn finish(app: &App, id: i64, chair: &str) -> sqlx::Result<()> {
         let message = ThreadEvent::Message {
             role: orphusbot_proto::Role::User,
             text: text.clone(),
+            voice: false,
         };
         record(app, &thread, message).await;
         if let Err(e) = Box::pin(crate::submit(

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media, x_search, mail_accounts, session_gen\n         from bot where slug = $1",
+  "query": "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media, x_search, mail_accounts, voice, session_gen\n         from bot where slug = $1",
   "describe": {
     "columns": [
       {
@@ -192,6 +192,17 @@
       },
       {
         "ordinal": 17,
+        "name": "voice",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "voice"
+          }
+        }
+      },
+      {
+        "ordinal": 18,
         "name": "session_gen",
         "type_info": "Int4",
         "origin": {
@@ -225,8 +236,9 @@
       false,
       false,
       false,
+      true,
       false
     ]
   },
-  "hash": "bdafef98a30601ed745b3c304a6b250af1619e61e9cc4dbc05c6b83e22b23083"
+  "hash": "14406e9d4af6ef6043a133f53d7712c084520ada9777203f514a6fbeb4370693"
 }

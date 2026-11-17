@@ -179,6 +179,7 @@ void main() {
       expect(out, startsWith('Started.'));
       expect(sent.single, containsPair('voice', true));
       expect(sent.single, containsPair('work', true));
+      line.handle({'type': 'run_queued', 'run': 1, 'waiting': null});
       // A question would wait behind the job, so the voice is told at once.
       expect(
         await line.ask(api, 'coder', 'ask', {'request': 'how long?'}),
@@ -195,6 +196,32 @@ void main() {
       });
       line.handle({'type': 'run_ended', 'run': 1, 'outcome': 'completed'});
       expect(news.last, '(Coder has finished: All green.)');
+    });
+
+    test('a job sent as the last one ends still reports back', () async {
+      final held = Completer<http.Response>();
+      var calls = 0;
+      api = Api(
+        'http://server',
+        'session=x',
+        MockClient(
+          (r) async => ++calls == 2 ? held.future : http.Response('', 202),
+        ),
+      );
+      line.handle({'type': 'nodes', 'nodes': []});
+      await line.ask(api, 'coder', 'do', {'task': 'fix the tests'});
+      final second = line.ask(api, 'coder', 'do', {'task': 'then the docs'});
+      await pumpEventQueue();
+      line.handle({'type': 'message', 'role': 'assistant', 'text': 'Tests.'});
+      line.handle({'type': 'run_ended', 'run': 1, 'outcome': 'completed'});
+      expect(news, ['(Coder has finished: Tests.)']);
+      // The second job arrived after that run ended: a new run of its own.
+      held.complete(http.Response('', 202));
+      await second;
+      line.handle({'type': 'run_queued', 'run': 2, 'waiting': null});
+      line.handle({'type': 'message', 'role': 'assistant', 'text': 'Docs.'});
+      line.handle({'type': 'run_ended', 'run': 2, 'outcome': 'completed'});
+      expect(news.last, '(Coder has finished: Docs.)');
     });
 
     test('ask answers with the reply, or says it needs a tap', () async {

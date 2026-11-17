@@ -565,6 +565,9 @@ class OrchestratorLine {
   Completer<String>? _waiting;
   // A job from the call is running; its result goes to [onNews].
   bool _doing = false;
+  // Jobs from the call still being sent: one may start a new run after the
+  // last one ended, so the end of that run doesn't end [_doing].
+  int _sending = 0;
   int _from = 0;
 
   /// The stream replays the whole history first, then the current state,
@@ -610,10 +613,11 @@ class OrchestratorLine {
         final w = _waiting;
         if (w != null) {
           _waiting = null;
-          _doing = false;
+          _doing = _sending > 0;
           w.complete(reply ?? "$name didn't answer.");
         } else if (_doing) {
-          _doing = false;
+          _doing = _sending > 0;
+          _from = thread.items.length;
           onNews?.call(
             e['outcome'] == 'completed'
                 ? '($name has finished: ${reply ?? 'it said nothing more'})'
@@ -648,11 +652,14 @@ class OrchestratorLine {
       if (!_doing) _from = thread.items.length;
       final already = _doing;
       _doing = true;
+      _sending++;
       try {
         await api.send(bot, task, voice: true, work: true);
       } catch (_) {
         _doing = already;
         rethrow;
+      } finally {
+        _sending--;
       }
       return "Started. $name will say when it's finished.";
     }
@@ -664,6 +671,10 @@ class OrchestratorLine {
       _ => args['request'] as String? ?? '',
     };
     if (request.trim().isEmpty) return 'Nothing was asked.';
+    // A job that was sent as its run ended joined that run: nothing is left.
+    if (_doing && _sending == 0 && thread.run == t.RunState.idle) {
+      _doing = false;
+    }
     // The bot runs one thing at a time: a question would wait for the job,
     // or be steered into a run on the bot's own model.
     if (_doing) {

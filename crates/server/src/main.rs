@@ -1400,13 +1400,15 @@ async fn events(
     Ok(Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(20))))
 }
 
-/// The live-only state a newly connected client needs: node status and the active run.
+/// The live-only state a newly connected client needs: the active runs, then
+/// node status. `nodes` comes last, so a client knows it has caught up once it
+/// arrives (a call's line waits for it, DESIGN §12.8).
 async fn current_state(app: &App) -> sqlx::Result<Vec<(Option<String>, ThreadEvent)>> {
     let (nodes, waiting) = {
         let rt = lock(&app.rt);
         (nodes_event(&rt), rt.waiting.clone())
     };
-    let mut out = vec![(None, nodes)];
+    let mut out = Vec::new();
     let runs = sqlx::query!(
         r#"select r.id, r.status::text as "status!", r.attempts, r.node, b.slug from run r
            join thread t on t.id = r.thread_id join bot b on b.id = t.bot_id
@@ -1430,6 +1432,7 @@ async fn current_state(app: &App) -> sqlx::Result<Vec<(Option<String>, ThreadEve
         };
         out.push((Some(r.slug), event));
     }
+    out.push((None, nodes));
     Ok(out)
 }
 

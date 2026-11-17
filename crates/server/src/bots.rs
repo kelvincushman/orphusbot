@@ -44,6 +44,9 @@ knowledge in wiki/. If /shared isn't there, you're a private bot: skip this.";
 
 const THINKING: &[&str] = &["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 
+/// xAI's voices a bot can speak with on a call (also checked by the database).
+pub const VOICES: &[&str] = &["ara", "eve", "leo", "rex", "sal"];
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Bot {
     pub slug: String,
@@ -77,6 +80,10 @@ pub struct Bot {
     /// May research X through the server's `x_search` tool (DESIGN §11.10).
     #[serde(default)]
     pub x_search: bool,
+    /// Which of xAI's voices speaks for it on a call ([`VOICES`]); none is the
+    /// server's default (DESIGN §12.8).
+    #[serde(default)]
+    pub voice: Option<String>,
     /// How many times "New conversation" moved it to a fresh engine session.
     #[serde(default)]
     pub session_gen: i32,
@@ -259,6 +266,9 @@ impl Bot {
             _ if !["none", "draft", "operate"].contains(&self.phone.as_str()) => {
                 Err("Phone is none, draft or operate")
             }
+            _ if self.voice.as_deref().is_some_and(|v| !VOICES.contains(&v)) => {
+                Err("The voice is one of Ara, Eve, Leo, Rex or Sal")
+            }
             _ => Ok(self),
         }
     }
@@ -296,7 +306,7 @@ fn slugify(name: &str) -> String {
 pub async fn all(db: &PgPool) -> sqlx::Result<Vec<Bot>> {
     sqlx::query_as!(
         Bot,
-        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media, x_search, session_gen
+        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media, x_search, voice, session_gen
          from bot order by disabled, slug <> 'orchestrator', slug <> 'inbox', name"
     )
     .fetch_all(db)
@@ -306,7 +316,7 @@ pub async fn all(db: &PgPool) -> sqlx::Result<Vec<Bot>> {
 pub async fn get(db: &PgPool, slug: &str) -> sqlx::Result<Option<Bot>> {
     sqlx::query_as!(
         Bot,
-        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media, x_search, session_gen
+        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media, x_search, voice, session_gen
          from bot where slug = $1",
         slug
     )
@@ -349,6 +359,8 @@ pub struct NewBot {
     media: bool,
     #[serde(default)]
     x_search: bool,
+    #[serde(default)]
+    voice: Option<String>,
 }
 
 fn private() -> String {
@@ -376,6 +388,7 @@ pub async fn create(
         phone: new.phone,
         media: new.media,
         x_search: new.x_search,
+        voice: new.voice,
         session_gen: 0,
     }
     .check()
@@ -403,8 +416,8 @@ pub async fn create(
         .find(|s| !taken.contains(s))
         .unwrap_or_default();
     let id = sqlx::query_scalar!(
-        "insert into bot (slug, name, remit, instructions, model, thinking, exclude_tools, scope, computer, google, face, desktop, phone, media, x_search)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) returning id",
+        "insert into bot (slug, name, remit, instructions, model, thinking, exclude_tools, scope, computer, google, face, desktop, phone, media, x_search, voice)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) returning id",
         slug,
         bot.name,
         bot.remit,
@@ -419,7 +432,8 @@ pub async fn create(
         bot.desktop,
         bot.phone,
         bot.media,
-        bot.x_search
+        bot.x_search,
+        bot.voice
     )
     .fetch_one(&mut *tx)
     .await
@@ -469,7 +483,7 @@ pub async fn update(
                 exclude_tools = $7,
                 team_since = case when scope <> $8 and $8 = 'team' then now() else team_since end,
                 scope = $8, disabled = $9, computer = $10, google = $11, face = $12,
-                desktop = $13, phone = $14, media = $15, x_search = $16
+                desktop = $13, phone = $14, media = $15, x_search = $16, voice = $17
          where slug = $1",
         bot.slug,
         bot.name,
@@ -486,7 +500,8 @@ pub async fn update(
         bot.desktop,
         bot.phone,
         bot.media,
-        bot.x_search
+        bot.x_search,
+        bot.voice
     )
     .execute(&app.db)
     .await
@@ -620,6 +635,7 @@ mod tests {
             phone: "none".into(),
             media: false,
             x_search: false,
+            voice: None,
             session_gen: 0,
         };
         let ok = bot(" Researcher ", Some("high")).check().unwrap();
@@ -679,6 +695,15 @@ mod tests {
         );
         assert_eq!(phone("none").unwrap().spec().phone, None);
         assert!(phone("everything").is_err());
+        let voice = |v: Option<&str>| {
+            Bot {
+                voice: v.map(Into::into),
+                ..bot("R", None)
+            }
+            .check()
+        };
+        assert!(voice(None).is_ok() && voice(Some("rex")).is_ok());
+        assert!(voice(Some("Rex")).is_err() && voice(Some("")).is_err());
     }
 
     #[sqlx::test]

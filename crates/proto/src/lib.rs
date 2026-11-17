@@ -375,6 +375,10 @@ pub enum ThreadEvent {
     Message {
         role: Role,
         text: String,
+        /// Said on a voice call with the bot (DESIGN §12.8): shown with a small
+        /// "Asked on a call" label. Absent (false) in older events.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        voice: bool,
     },
     RunEnded {
         run: i64,

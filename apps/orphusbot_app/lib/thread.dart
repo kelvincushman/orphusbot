@@ -5,9 +5,12 @@ import 'dart:math';
 sealed class Item {}
 
 class Message extends Item {
-  Message(this.mine, this.text);
+  Message(this.mine, this.text, {this.voice = false});
   final bool mine;
   final String text;
+
+  /// Asked on a voice call with the bot (D-074): shown with a small label.
+  final bool voice;
 }
 
 class Notice extends Item {
@@ -184,7 +187,9 @@ class ThreadView {
       case 'message':
         final mine = e['role'] == 'user';
         if (!mine) streaming = null;
-        items.add(Message(mine, e['text'] as String));
+        items.add(
+          Message(mine, e['text'] as String, voice: e['voice'] == true),
+        );
       case 'delta':
         streaming = (streaming ?? '') + (e['text'] as String);
       case 'run_queued':

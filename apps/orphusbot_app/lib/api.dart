@@ -144,12 +144,14 @@ class Api {
     List<int> attachments = const [],
     bool room = false,
     bool voice = false,
+    bool work = false,
   }) => post('/api/messages', {
     'bot': bot,
     'text': text,
     'attachments': attachments,
     if (room) 'room': true,
     if (voice) 'voice': true,
+    if (work) 'work': true,
   });
 
   /// Uploads a file for `bot`; returns its id, to send with the message.

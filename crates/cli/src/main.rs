@@ -416,7 +416,7 @@ fn last_reply(view: &ThreadView) -> String {
 /// The latest message from `role`, shortened.
 fn last_said(view: &ThreadView, role: Role) -> String {
     let text = view.items.iter().rev().find_map(|i| match i {
-        Item::Message { role: r, text } if *r == role => Some(text.as_str()),
+        Item::Message { role: r, text, .. } if *r == role => Some(text.as_str()),
         _ => None,
     });
     let text = plain(text.unwrap_or_default());
@@ -510,10 +510,12 @@ mod tests {
         coder.apply(ThreadEvent::Message {
             role: Role::User,
             text: "hi".into(),
+            voice: false,
         });
         coder.apply(ThreadEvent::Message {
             role: Role::Assistant,
             text: "Hi!".into(),
+            voice: false,
         });
         let views = BTreeMap::from([("coder".to_owned(), coder)]);
         let s = status(&bots, &views, &BTreeMap::from([("coder".to_owned(), 2)]));

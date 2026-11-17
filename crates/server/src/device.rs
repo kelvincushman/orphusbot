@@ -900,6 +900,7 @@ async fn reply_to_run(app: &App, device: &str, run: i64, text: &str) -> bool {
     let message = orphusbot_proto::ThreadEvent::Message {
         role: orphusbot_proto::Role::User,
         text: text.to_owned(),
+        voice: false,
     };
     crate::record(app, &thread, message).await;
     let source = crate::runs::Source {
@@ -1315,6 +1316,7 @@ mod tests {
         let reply = orphusbot_proto::ThreadEvent::Message {
             role: orphusbot_proto::Role::Assistant,
             text: "Which restaurant, and for how many?".into(),
+            voice: false,
         };
         crate::record(&app, &thread, reply).await;
         let run = sqlx::query_scalar!("update run set status = 'completed' returning id")

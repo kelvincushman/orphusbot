@@ -429,6 +429,7 @@ pub async fn fire(
     let message = ThreadEvent::Message {
         role: Role::User,
         text: text.clone(),
+        voice: false,
     };
     record(app, &thread, message).await;
     let source = crate::runs::Source {

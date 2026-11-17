@@ -4,6 +4,7 @@
 // time, tap to end. The orb shows what's happening: cool blues listening,
 // violet swirling while it thinks, green racing while it looks something up,
 // warm pinks while it speaks. Soft looping sounds mark thinking and research.
+// The same orb, as a panel over a bot's chat, is a call with that bot (D-074).
 import 'dart:async';
 import 'dart:math';
 import 'dart:ui';
@@ -39,12 +40,16 @@ class IdeasRoom extends StatefulWidget {
     super.key,
     required this.api,
     this.bot = 'orchestrator',
+    this.name = 'The Orchestrator',
     this.onClose,
   });
   final Api api;
   final String bot;
 
-  /// Set when it's a panel inside the bot's chat, not the room itself (D-063).
+  /// The bot's name, as the voice says it.
+  final String name;
+
+  /// Set when it's a call in the bot's chat, not the room itself (D-074).
   final VoidCallback? onClose;
 
   @override
@@ -58,7 +63,11 @@ class _IdeasRoomState extends State<IdeasRoom>
     duration: const Duration(seconds: 12),
   )..repeat();
   final typed = TextEditingController();
-  late final orchestrator = OrchestratorLine(inChat: inChat);
+  late final orchestrator = OrchestratorLine(
+    inChat: inChat,
+    name: widget.name,
+    onNews: _news,
+  );
   LiveVoice? live;
   Phase phase = Phase.idle;
   double level = 0;
@@ -69,11 +78,12 @@ class _IdeasRoomState extends State<IdeasRoom>
   SoundHandle? cue;
   String? cuePath;
   final loaded = <String, AudioSource>{};
-  // The conversation so far (the session's memory), and the Orchestrator's
-  // live view, waiting for a pause to be passed on.
+  // The conversation so far (the session's memory), and news for Grok (the
+  // Orchestrator's live view, or a finished job on a call), waiting for a
+  // pause to be passed on.
   final transcript = <String>[];
   Timer? chimeIn;
-  String? orchestratorView;
+  String? news;
   int? sessionId;
   bool ending = false;
   // The last try at sending what was said to the chat failed.
@@ -124,11 +134,11 @@ class _IdeasRoomState extends State<IdeasRoom>
   void _setPhase(Phase p) {
     if (!mounted) return;
     setState(() => phase = p);
-    // The Orchestrator's view goes in at a pause, never over Grok.
-    final view = orchestratorView;
-    if (p == Phase.listening && view != null && (live?.isOpen ?? false)) {
-      orchestratorView = null;
-      live!.sendText('(The Orchestrator has been listening and says: $view)');
+    // News goes in at a pause, never over Grok.
+    final said = news;
+    if (p == Phase.listening && said != null && (live?.isOpen ?? false)) {
+      news = null;
+      live!.sendText(said);
     }
     final path = cueFor(p);
     // The voice holds the mic back while a cue plays (on computers).
@@ -144,7 +154,7 @@ class _IdeasRoomState extends State<IdeasRoom>
     });
     final voice = LiveVoice(
       api: widget.api,
-      path: inChat ? '/api/room/voice/chat' : '/api/room/voice',
+      path: inChat ? '/api/bots/${widget.bot}/voice' : '/api/room/voice',
       ask: (name, args) {
         if (name == 'save_idea') {
           widget.api
@@ -202,7 +212,7 @@ class _IdeasRoomState extends State<IdeasRoom>
     ending = true;
     try {
       chimeIn?.cancel();
-      orchestratorView = null;
+      news = null;
       await live?.stop();
       if (mounted) setState(() => live = null);
       _setPhase(Phase.idle);
@@ -235,9 +245,15 @@ class _IdeasRoomState extends State<IdeasRoom>
       },
     );
     if (mounted && (live?.isOpen ?? false)) {
-      orchestratorView = view;
-      if (phase == Phase.listening) _setPhase(Phase.listening);
+      _news('(The Orchestrator has been listening and says: $view)');
     }
+  }
+
+  /// Passes [text] into the conversation at the next pause.
+  void _news(String text) {
+    if (!mounted || !(live?.isOpen ?? false)) return;
+    news = news == null ? text : '$news\n$text';
+    if (phase == Phase.listening) _setPhase(Phase.listening);
   }
 
   /// The last part of the conversation, short enough to send.
@@ -256,8 +272,10 @@ class _IdeasRoomState extends State<IdeasRoom>
         try {
           await widget.api.send(
             widget.bot,
-            'We just talked by voice. Here is what was said. Act on anything '
-            'still open, and reply in a line or two.\n\n${_recent()}',
+            'Here is what was said on our call, for the record. What I asked '
+            "or handed you on it has already reached you, so don't start it "
+            'again; reply in a line or two with anything still open.'
+            '\n\n${_recent()}',
           );
           transcript.clear();
           unsent = false;
@@ -351,6 +369,7 @@ class _IdeasRoomState extends State<IdeasRoom>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text('On a call with ${widget.name}', style: caption),
                 Text(_status, style: quiet),
                 if (heard.isNotEmpty)
                   Text(
@@ -513,34 +532,78 @@ class _IdeasRoomState extends State<IdeasRoom>
   }
 }
 
-/// Grok's line to the Orchestrator: a function call becomes a room message
-/// in the Orchestrator's thread, and its reply is the function's answer.
+/// Grok's line to the bot. In the Ideas Room, `ask_orchestrator` becomes a
+/// room message and its reply is the function's answer. On a call (D-074),
+/// `ask` works the same on the quick model, and `do` starts real work and
+/// answers "started"; when that run ends, [onNews] passes the result into
+/// the call. A card the run waits on is never answered here: the voice is
+/// told it needs Kelvin's tap on the screen (hard rule 5).
 class OrchestratorLine {
-  OrchestratorLine({this.inChat = false});
+  OrchestratorLine({
+    this.inChat = false,
+    this.name = 'The Orchestrator',
+    this.onNews,
+  });
 
-  /// Grok is talking inside the bot's chat, not in the Ideas Room.
+  /// Grok is on a call in the bot's chat, not in the Ideas Room.
   final bool inChat;
+
+  /// The bot's name, as the voice says it.
+  final String name;
+
+  /// Something to pass into the call at the next pause.
+  final void Function(String)? onNews;
   final thread = t.ThreadView();
   StreamSubscription<Map<String, dynamic>>? _events;
   Completer<String>? _waiting;
+  // A job from the call is running; its result goes to [onNews].
+  bool _doing = false;
   int _from = 0;
 
   void start(Api api, String bot) {
     _events = api.events().listen((e) {
-      if (e['bot'] != bot) return;
-      thread.apply(e);
-      final w = _waiting;
-      if (w != null && e['type'] == 'run_ended') {
-        _waiting = null;
+      if (e['bot'] == bot) handle(e);
+    }, onError: (_) {});
+  }
+
+  /// Folds in one of the bot's events, answering what's waiting on it.
+  void handle(Map<String, dynamic> e) {
+    thread.apply(e);
+    switch (e['type']) {
+      case 'dialog_opened' when inChat && (busy || _doing):
+        final kind = ((e['dialog'] as Map?)?['kind'] as Map?)?['kind'];
+        final need = kind == 'approval'
+            ? 'needs your OK on the screen'
+            : 'needs you on the screen';
+        final w = _waiting;
+        if (w != null) {
+          // The answer comes later, once Kelvin has tapped.
+          _waiting = null;
+          _doing = true;
+          w.complete('$name $need. It carries on once Kelvin has tapped.');
+        } else {
+          onNews?.call('($name $need.)');
+        }
+      case 'run_ended':
         final fresh = thread.items
             .skip(_from)
             .whereType<t.Message>()
             .where((m) => !m.mine);
-        w.complete(
-          fresh.isEmpty ? "The Orchestrator didn't answer." : fresh.last.text,
-        );
-      }
-    }, onError: (_) {});
+        final reply = fresh.isEmpty ? null : fresh.last.text;
+        final w = _waiting;
+        if (w != null) {
+          _waiting = null;
+          _doing = false;
+          w.complete(reply ?? "$name didn't answer.");
+        } else if (_doing) {
+          _doing = false;
+          onNews?.call(
+            e['outcome'] == 'completed'
+                ? '($name has finished: ${reply ?? 'it said nothing more'})'
+                : '($name stopped without finishing${reply == null ? '' : ': $reply'})',
+          );
+        }
+    }
   }
 
   void stop() => _events?.cancel();
@@ -551,10 +614,24 @@ class OrchestratorLine {
   Future<String> ask(
     Api api,
     String bot,
-    String name,
+    String tool,
     Map<String, dynamic> args,
   ) async {
-    final request = switch (name) {
+    if (tool == 'do') {
+      final task = args['task'] as String? ?? '';
+      if (task.trim().isEmpty) return 'Nothing was asked.';
+      if (!_doing) _from = thread.items.length;
+      final already = _doing;
+      _doing = true;
+      try {
+        await api.send(bot, task, voice: true, work: true);
+      } catch (_) {
+        _doing = already;
+        rethrow;
+      }
+      return "Started. $name will say when it's finished.";
+    }
+    final request = switch (tool) {
       'save_idea' =>
         'Save this idea brief into the team wiki as wiki/ideas/<a short slug of the title>.md, '
             'add it to the wiki index, then reply only with where you saved it.\n\n'
@@ -562,16 +639,28 @@ class OrchestratorLine {
       _ => args['request'] as String? ?? '',
     };
     if (request.trim().isEmpty) return 'Nothing was asked.';
+    // The bot runs one thing at a time: a question would wait for the job.
+    if (_doing) {
+      return "$name is still on the job you gave it, so it can't answer yet. "
+          "It will say when it's finished.";
+    }
     final done = Completer<String>();
     _waiting = done;
     _from = thread.items.length;
     // The chat's voice stays in the chat's session, the room's in its own (D-063).
-    await api.send(bot, request, room: !inChat, voice: inChat);
+    try {
+      await api.send(bot, request, room: !inChat, voice: inChat);
+    } catch (_) {
+      _waiting = null;
+      rethrow;
+    }
     return done.future.timeout(
       const Duration(seconds: 90),
       onTimeout: () {
         _waiting = null;
-        return 'The Orchestrator is still working on it; the answer will be in its chat.';
+        // On a call, the answer still comes, as news.
+        _doing = inChat;
+        return '$name is still working on it; the answer will be in its chat.';
       },
     );
   }

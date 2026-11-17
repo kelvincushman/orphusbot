@@ -317,6 +317,7 @@ pub(crate) async fn tell(app: &App, bot: &str, text: &str) -> bool {
     let message = ThreadEvent::Message {
         role: Role::User,
         text: text.to_owned(),
+        voice: false,
     };
     if !record(app, &thread, message).await {
         return false;
@@ -1018,6 +1019,7 @@ mod tests {
             &ThreadEvent::Message {
                 role: Role::Assistant,
                 text: "benchmark.rs is in /shared".into(),
+                voice: false,
             },
         )
         .await
@@ -1096,6 +1098,7 @@ mod tests {
             phone: "none".into(),
             media: false,
             x_search: false,
+            voice: None,
             session_gen: 0,
         };
         let roster = [

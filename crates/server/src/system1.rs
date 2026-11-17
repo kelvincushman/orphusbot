@@ -755,6 +755,7 @@ pub(crate) mod tests {
             phone: "none".into(),
             media: false,
             x_search: false,
+            voice: None,
             session_gen: 0,
         }
     }

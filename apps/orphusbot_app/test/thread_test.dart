@@ -2,6 +2,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:orphusbot_app/thread.dart';
 
 void main() {
+  test('a message asked on a call keeps its label, as the server folds it', () {
+    final v = ThreadView();
+    v.apply({
+      'type': 'message',
+      'role': 'user',
+      'text': "what's left on the roof quote?",
+      'voice': true,
+    });
+    v.apply({'type': 'message', 'role': 'user', 'text': 'typed'});
+    final said = v.items.whereType<Message>().toList();
+    expect(said.map((m) => m.voice), [true, false]);
+  });
+
   test('folds a run the way the server does', () {
     final v = ThreadView();
     expect(v.mood, 0);

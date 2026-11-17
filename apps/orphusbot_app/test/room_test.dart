@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -116,5 +117,79 @@ void main() {
     await t.pump();
     expect(sends, 2);
     expect(closed, isTrue);
+  });
+
+  group('a call with a bot', () {
+    late List<Map<String, dynamic>> sent;
+    late Api api;
+    late List<String> news;
+    late OrchestratorLine line;
+    Map<String, dynamic> approval() => {
+      'type': 'dialog_opened',
+      'dialog': {
+        'id': 'd1',
+        'run': 1,
+        'kind': {'kind': 'approval', 'tool': 'send_email', 'input': {}},
+      },
+    };
+    setUp(() {
+      sent = [];
+      news = [];
+      api = Api(
+        'http://server',
+        'session=x',
+        MockClient((r) async {
+          sent.add(jsonDecode(r.body) as Map<String, dynamic>);
+          return http.Response('', 202);
+        }),
+      );
+      line = OrchestratorLine(inChat: true, name: 'Coder', onNews: news.add);
+    });
+
+    test('do starts work and the result comes back at a pause', () async {
+      final out = await line.ask(api, 'coder', 'do', {'task': 'fix the tests'});
+      expect(out, startsWith('Started.'));
+      expect(sent.single, containsPair('voice', true));
+      expect(sent.single, containsPair('work', true));
+      // A question would wait behind the job, so the voice is told at once.
+      expect(
+        await line.ask(api, 'coder', 'ask', {'request': 'how long?'}),
+        contains('still on the job'),
+      );
+      expect(sent, hasLength(1));
+      // A card is left to a tap: the voice only hears that it's waiting.
+      line.handle(approval());
+      expect(news, ['(Coder needs your OK on the screen.)']);
+      line.handle({
+        'type': 'message',
+        'role': 'assistant',
+        'text': 'All green.',
+      });
+      line.handle({'type': 'run_ended', 'run': 1, 'outcome': 'completed'});
+      expect(news.last, '(Coder has finished: All green.)');
+    });
+
+    test('ask answers with the reply, or says it needs a tap', () async {
+      final answer = line.ask(api, 'coder', 'ask', {'request': 'status?'});
+      await pumpEventQueue();
+      expect(sent.single, containsPair('voice', true));
+      expect(sent.single.containsKey('work'), isFalse);
+      line.handle(approval());
+      expect(await answer, startsWith('Coder needs your OK on the screen.'));
+      line.handle({'type': 'message', 'role': 'assistant', 'text': 'Sent.'});
+      line.handle({'type': 'run_ended', 'run': 1, 'outcome': 'completed'});
+      expect(news, ['(Coder has finished: Sent.)']);
+
+      final next = line.ask(api, 'coder', 'ask', {'request': 'and now?'});
+      await pumpEventQueue();
+      line.handle({
+        'type': 'message',
+        'role': 'assistant',
+        'text': 'All done.',
+      });
+      line.handle({'type': 'run_ended', 'run': 2, 'outcome': 'completed'});
+      expect(await next, 'All done.');
+      expect(news, hasLength(1));
+    });
   });
 }

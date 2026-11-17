@@ -11,6 +11,18 @@ Format:
 
 ---
 
+## D-074: Voice calls with any bot, through the Ideas Room's voice (2026-11-17)
+
+**Decided:** Every bot's chat gets a call button that opens Grok's realtime voice as that bot's voice (`POST /api/bots/{slug}/voice`). The voice has two tools: `ask` (a question, answered on the quick model with thinking off, as the Ideas Room does) and `do` (real work, run as a normal message on the bot's own model; the call hears "(<name> has finished: …)" at the next pause). Messages from a call carry `voice: true` and show "Asked on a call". Each bot has its own `voice` setting. The Orchestrator's chat voice (D-063) becomes this same call, so there is one path; the Ideas Room keeps its own instructions, memory and session. Approvals stay taps: when a run opens a card, the voice is told it needs Kelvin's OK on the screen, and nothing said on a call answers a card.
+
+**Why:** Kelvin wants to talk to whichever bot is doing the work, as Bot HQ does, and said yes to it on 2026-11-17 (bot-hq plan §5, Q2). This extends D-052's choice to every bot: about $0.05 a minute, and his speech, the chat's last messages and (for the Orchestrator) the team's state go to xAI during a call. He accepted that for the Ideas Room. Splitting `ask` from `do` keeps answers quick without putting real work on the quick model. Cards stay taps because speech can be misheard, and hard rule 5 allows only a user rule or a human tap.
+
+**Alternatives:** a second copy of the voice code per bot (two things to keep right, which D-063 already avoided); one tool that always runs on the bot's model (seconds become minutes for a simple question); every call turn on the quick model (real work done by the wrong model); spoken approval with a confirmation phrase (still speech; refused by hard rule 5); a call session table with ratings and recaps (the chat is the record; the Ideas Room keeps those).
+
+**Revisit if:** the cost of calls matters, xAI's terms for speech change, Kelvin wants to watch the bot's screen during a call in the app (the Flutter app has no screen viewer yet; the web UI does), or a bot should take a second job while one from the call runs.
+
+---
+
 ## D-073: Bots show their hand-offs in motion, calm by default (2026-11-16)
 
 **Decided:** `ask_bot` and its answer are thread events (`Asked`, `Answered`) in both bots' threads. The app plays each once as a note passing between the two faces and then leaves a plain line that opens the ticket. A **Team** screen in the menu shows every bot's robot, moves the asker across to its teammate, and joins the two with a line while the job is open. A setting on each device offers **Animation: full, calm or off**; full is the default, and the system's reduce-motion setting makes it calm. A private mission's hand-offs are recorded only in its chief's thread. The note and the travel are Flutter widgets; each Rive file still holds one bot.

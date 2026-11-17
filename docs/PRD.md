@@ -50,7 +50,8 @@ The product is modelled on Rakazo (Apache-2.0), studied in [research/rakazo-arch
 
 - Multi-tenant, teams, billing, sign-up. One owner.
 - Messaging surfaces (Slack, Telegram, WhatsApp, iMessage).
-- Voice calls and avatar studio.
+- Avatar studio.
+- ~~Voice calls~~: dropped as a non-goal on 2026-11-17 (D-074). The Ideas Room had already made one voice call to the Orchestrator (D-052); B-BOT-06 makes calls with any bot a requirement.
 - Reimplementing the agent loop, providers or subscription auth (the harness owns them).
 - Local Firecracker microVMs (E2B covers untrusted work).
 - Daytona, Box, Railway or other sandbox providers (the trait allows them later).
@@ -118,6 +119,7 @@ Priority: **P0** = v1 blocker, **P1** = v1 target, **P2** = later.
 | B-BOT-03 | An "inbox" bot exists by default and receives anything System 1 can't route confidently | P0 |
 | B-BOT-04 | Per-bot memory and skills come from Orphus; OrphusBot shows and edits them | P2 |
 | B-BOT-05 | Each bot has its own short notes on how the owner likes it to work: the bot adds to them when corrected, the owner reads and edits them beside its instructions, they are read into every run, and no bot can reach another's | P1 |
+| B-BOT-06 | A voice call with any bot from its chat (xAI's realtime voice, about $0.05 a minute; the owner's speech goes to xAI). The voice answers questions on a quick model and hands work to the bot as a normal run, passing the result back when it ends; messages from a call are labelled; each bot has its own voice. A spoken yes never approves anything: cards stay taps (B-DEC-06) | P2 |
 
 ### 7.3 Tickets and routines
 

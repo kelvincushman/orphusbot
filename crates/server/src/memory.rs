@@ -1605,10 +1605,10 @@ mod tests {
                     .unwrap();
             }
         }
-        // The notes are written in the background.
+        // The notes are written in the background, so in either order.
         let want = [
-            "typed: I like tea".to_owned(),
             "On a call (speech to text): I only drink oat milk".to_owned(),
+            "typed: I like tea".to_owned(),
         ];
         for _ in 0..50 {
             if heard_in_thread(&db, team.id).await.len() >= want.len() {
@@ -1616,7 +1616,9 @@ mod tests {
             }
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
-        assert_eq!(heard_in_thread(&db, team.id).await, want);
+        let mut heard = heard_in_thread(&db, team.id).await;
+        heard.sort();
+        assert_eq!(heard, want);
         assert!(heard_in_thread(&db, private.id).await.is_empty());
     }
 

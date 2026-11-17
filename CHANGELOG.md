@@ -137,6 +137,8 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Fixed
 
+- **The Phone bot no longer asks before opening a tab:** a tap on an app's tab or navigation button by its id (such as LinkedIn's notifications tab) goes ahead without a card. Taps that could post, like, follow, comment or send still ask (D-077).
+- **Mail drafts and sends failed** with "Himalaya gave no sender for this account": Himalaya 1.1 prints a template as `{"content": …}`, not as a string, and the server now reads it that way.
 - Private missions: when a teammate on one is stuck waiting for your answer, the Orchestrator is now told only that a card is waiting, not what the task or the card says (the voice model reads its chat). Making a running mission private now tells its chief straight away. A hand-off that has waited more than three days no longer drops out of the team's status.
 - A private mission's title and result no longer reach the Orchestrator's chat when it closes (the voice model reads that chat), and its hand-offs stay hidden from bots outside it however long ago it closed.
 - Talking to the Orchestrator by voice in its chat: if what was said can't be sent to the chat, the panel now stays open with the error so you can try again or close without sending, a conversation whose connection dropped is saved when you close it, and so is one where only you had spoken. Before, all three were lost silently.

@@ -11,6 +11,30 @@ Format:
 
 ---
 
+## D-078: Ignore the chrono and chrono-tz "unmaintained" advisories for now (2026-11-17)
+
+**Decided:** `deny.toml` ignores RUSTSEC-2026-0543 (`chrono`) and RUSTSEC-2026-0555 (`chrono-tz`), each with its reason, as it already ignores other unmaintained-only notices.
+
+**Why:** both were published on 2026-11-17 as "unmaintained", with no vulnerability and no upgrade, and failed the required advisories check on every PR. Kelvin chose to ignore them rather than block all work.
+
+**Alternatives:** replace `chrono` and `chrono-tz` with `jiff` or `time` (a change across the server's routines, receipts and time zones, blocking every PR until it lands).
+
+**Revisit if:** either crate gets a vulnerability advisory, or a maintained successor becomes the obvious move.
+
+---
+
+## D-077: A tap by id that names a place is getting about (2026-11-17)
+
+**Decided:** a phone `tap` with only a resource id, no visible text or description, passes as navigation when no word starts with a commit stem and **every** word of the id's own name (after `id/`) is a place word (`tab`, `nav`, `home`, `search`, `notifications`, `explore`, `discover`, `feed`, `inbox`, `profile`, `me`, …) or a layout word (`bar`, `bottom`, `button`, `icon`, `item`, …), with at least one place word. Any other id-only tap still asks, so `menu_deactivate_account` asks although it contains `menu`. Amends D-059, which had rejected classifying `tab_*` ids.
+
+**Why:** Kelvin gave the Phone bot "always allow" and was still asked, every day, to approve its routine tap on LinkedIn's `tab_notifications`. Exact-action rules (D-059) didn't help in practice: the cards were left unanswered or expired, and every new tab is a new card. Commit stems are checked first, so `tab_post` or `feed_like_button` still ask, and an opaque id still asks. Posts and replies are unchanged: they are queued as drafts and posted by ContentSwarm only after Kelvin approves each (D-044).
+
+**Alternatives:** let the per-tool "always" cover every phone commit (would also approve Post, Like and Follow taps); a per-app "always" (an app can post as much as it can navigate); keep asking (the routine never runs on its own).
+
+**Revisit if:** an app's navigation id ever performs an action, or a bot needs to tap an opaque id often.
+
+---
+
 ## D-075: Mail through Himalaya on the server; quiet routine runs (2026-11-17)
 
 **Decided:** bots use the owner's existing mailboxes through a server-answered `mail` tool: the server runs the Himalaya CLI (v1.1, already set up on the server machine with the accounts) as a subprocess, with every argument checked and never a shell. Each bot lists the Himalaya accounts it may use (`bot.mail_accounts`, set in the app; empty by default, so nothing is seeded by a migration). Reads, searches and drafts go ahead; every send, move, delete and flag change asks the owner, with no "always" rule for mail at all, and the server runs a change only as the effect ledger approved it. Also: a routine run whose reply is exactly `[nothing new]` is taken back out of the thread (`RoutineFired`, `Quiet` events) and sends no push, so a mail check every ten minutes doesn't flood the Inbox chat.

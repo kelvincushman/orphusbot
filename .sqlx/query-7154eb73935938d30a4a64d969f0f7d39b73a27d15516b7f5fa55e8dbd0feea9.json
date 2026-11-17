@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select problem, fix, since from health_check where name = 'xai'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "problem",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "health_check",
+            "name": "problem"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "fix",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "health_check",
+            "name": "fix"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "since",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "health_check",
+            "name": "since"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "7154eb73935938d30a4a64d969f0f7d39b73a27d15516b7f5fa55e8dbd0feea9"
+}

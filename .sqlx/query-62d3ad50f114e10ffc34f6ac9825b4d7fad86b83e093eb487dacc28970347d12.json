@@ -1,0 +1,98 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select name, label, ok, problem, fix, since, checked_at from health_check order by ok, label",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "health_check",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "label",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "health_check",
+            "name": "label"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "ok",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "health_check",
+            "name": "ok"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "problem",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "health_check",
+            "name": "problem"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "fix",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "health_check",
+            "name": "fix"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "since",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "health_check",
+            "name": "since"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "checked_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "health_check",
+            "name": "checked_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "62d3ad50f114e10ffc34f6ac9825b4d7fad86b83e093eb487dacc28970347d12"
+}

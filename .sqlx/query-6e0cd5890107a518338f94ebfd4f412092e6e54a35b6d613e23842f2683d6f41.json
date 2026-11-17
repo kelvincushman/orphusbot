@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into node (name, public_key) values ('laptop', decode(repeat('00', 32), 'hex'))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "6e0cd5890107a518338f94ebfd4f412092e6e54a35b6d613e23842f2683d6f41"
+}

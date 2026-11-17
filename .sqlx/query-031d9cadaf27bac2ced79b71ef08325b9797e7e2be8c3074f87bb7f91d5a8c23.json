@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "with before as (select ok from health_check where name = $1)\n         insert into health_check (name, label, ok, problem, fix, since)\n         values ($1, $2, $3, $4, $5, case when $3 then null else now() end)\n         on conflict (name) do update set\n             label = excluded.label, ok = excluded.ok, problem = excluded.problem,\n             fix = excluded.fix, checked_at = now(),\n             since = case when excluded.ok then null else coalesce(health_check.since, now()) end\n         returning (select ok from before)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ok",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Bool",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "031d9cadaf27bac2ced79b71ef08325b9797e7e2be8c3074f87bb7f91d5a8c23"
+}

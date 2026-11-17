@@ -20,6 +20,7 @@ mod fleets;
 mod gallery;
 mod gate;
 mod google;
+mod health;
 mod links;
 mod mail;
 mod memory;
@@ -158,6 +159,9 @@ struct Runtime {
     dialogs: HashMap<String, Pending>,
     /// Tool calls shown as started and not yet ended, by run and tool-call id (`steps`).
     steps: std::collections::HashSet<(i64, String)>,
+    /// `google` calls that reach Google, by run and tool-call id, so their
+    /// results can tell the Health screen whether Google's sign-in works.
+    google_calls: std::collections::HashSet<(i64, String)>,
     /// Capture windows sent to a node for extraction and not yet answered.
     extracting: std::collections::HashSet<i64>,
     /// Open screen viewers by stream number, with the node serving each.
@@ -198,6 +202,8 @@ struct App {
     xsearch: xsearch::XSearch,
     /// Mail through the server's Himalaya (DESIGN §11.11).
     mail: mail::Mail,
+    /// Checks of the outside services the bots rely on (DESIGN §16.1).
+    health: health::Health,
     /// The built web UI (crates/ui/dist), served at `/`.
     ui_dir: String,
 }
@@ -267,6 +273,7 @@ async fn main() -> anyhow::Result<()> {
         memory: memory::Memory::from_env(),
         xsearch: xsearch::XSearch::from_env(),
         mail: mail::Mail::from_env(),
+        health: health::Health::from_env(),
         ui_dir,
     });
     calibrate::load(&app).await;
@@ -277,6 +284,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(profiles::tend_forever(app.clone()));
     tokio::spawn(social::watch_forever(app.clone()));
     tokio::spawn(memory::learn_forever(app.clone()));
+    tokio::spawn(health::check_forever(app.clone()));
 
     let router = router(app);
 
@@ -381,6 +389,8 @@ fn router(app: Shared) -> Router {
         .route("/api/screen", get(screens::open))
         .route("/api/links/{code}", get(links::lookup))
         .route("/api/links/approve", post(links::approve))
+        .route("/api/health", get(health::list))
+        .route("/api/health/check", post(health::run))
         .route("/api/nodes", get(nodes::list))
         .route("/api/nodes/code", post(nodes::create_code))
         .route("/api/nodes/remove", post(nodes::remove))
@@ -1025,6 +1035,10 @@ async fn on_dialog(app: &Shared, active: Active, request: Value) {
             helpers_gated: call["helpersGated"].as_bool().unwrap_or(false),
         };
         steps::started(app, &active.thread, attempt.run, call_id, &tool, &input).await;
+        if tool == "google" && google::reaches_google(&google::args(&input)) {
+            let call = (attempt.run, call_id.to_owned());
+            lock(&app.rt).google_calls.insert(call);
+        }
         let verdict = gate::decide(&app.db, &app.system1, &gate_call)
             .await
             .unwrap_or_else(|e| {
@@ -1815,6 +1829,10 @@ async fn on_node_message(app: &Shared, node: &str, msg: FromNode) {
                     warn!("recording tool result: {e}");
                 }
                 steps::ended(app, &a.thread, attempt.run, &tool_call_id, ok).await;
+                let call = (attempt.run, tool_call_id);
+                if lock(&app.rt).google_calls.remove(&call) {
+                    health::google_used(app, ok, &result).await;
+                }
             }
         }
     }
@@ -1828,7 +1846,11 @@ async fn run_ended(
     error: Option<String>,
 ) {
     expire_dialogs(app, run).await;
-    lock(&app.rt).steps.retain(|(r, _)| *r != run);
+    {
+        let mut rt = lock(&app.rt);
+        rt.steps.retain(|(r, _)| *r != run);
+        rt.google_calls.retain(|(r, _)| *r != run);
+    }
     tickets::run_ended(&app.db, run, outcome).await;
     // Boxed: starting the next ticket can lead back here when its run ends.
     Box::pin(device::start_waiting(app, &thread.bot)).await;

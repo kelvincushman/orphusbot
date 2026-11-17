@@ -77,6 +77,13 @@ pub fn kind(args: &[String]) -> Kind {
     }
 }
 
+/// Whether a call reaches Google, and so says whether the sign-in works
+/// (the Health screen): not a refused one, and not `schema`, which gws answers
+/// without signing in.
+pub fn reaches_google(args: &[String]) -> bool {
+    kind(args) != Kind::Refused && args.first().is_some_and(|s| s != "schema")
+}
+
 /// The command line in a `google` tool call.
 pub fn args(input: &Value) -> Vec<String> {
     input["args"]
@@ -105,6 +112,17 @@ mod tests {
 
     fn k(args: &[&str]) -> Kind {
         kind(&args.iter().map(|a| a.to_string()).collect::<Vec<_>>())
+    }
+
+    #[test]
+    fn only_calls_to_google_count_for_health() {
+        let a = |args: &[&str]| args.iter().map(|a| a.to_string()).collect::<Vec<_>>();
+        assert!(reaches_google(&a(&["calendar", "events", "list"])));
+        assert!(reaches_google(&a(&[
+            "tasks", "tasks", "insert", "--json", "{}"
+        ])));
+        assert!(!reaches_google(&a(&["schema", "drive.files.list"])));
+        assert!(!reaches_google(&a(&["auth", "export"])));
     }
 
     #[test]

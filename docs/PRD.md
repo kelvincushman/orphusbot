@@ -239,6 +239,7 @@ Priority: **P0** = v1 blocker, **P1** = v1 target, **P2** = later.
 | B-CLI-05 | Android: offline outbox for unsent messages; push through self-hosted ntfy / UnifiedPush (no Google account) for needs-you / finished / takeover | P1 |
 | B-CLI-06 | Sign-in with passkeys; long-lived device tokens on mobile; reachable only over NetBird | P0 |
 | B-CLI-07 | Command palette and full keyboard path on web and desktop | P1 |
+| B-CLI-08 | A Health screen shows every outside service the bots rely on (Google, nodes, xAI, model servers, ntfy, disk) as working or not, with the problem and its fix in plain words; the owner gets one push when one breaks and one when it is fixed, and bots say plainly when Google needs reconnecting instead of retrying | P1 |
 
 ## 8. Key user journeys
 

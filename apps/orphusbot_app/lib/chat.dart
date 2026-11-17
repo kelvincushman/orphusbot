@@ -18,6 +18,7 @@ import 'bot_panel.dart';
 import 'discuss.dart';
 import 'gallery.dart';
 import 'handoff.dart';
+import 'health.dart';
 import 'memory.dart';
 import 'push.dart';
 import 'room.dart';
@@ -488,6 +489,7 @@ class _ChatScreenState extends State<ChatScreen> {
           body: SafeArea(
             child: Column(
               children: [
+                HealthBanner(api: widget.api),
                 UpdateBanner(api: widget.api),
                 Expanded(
                   child: wide
@@ -604,6 +606,11 @@ class _ChatScreenState extends State<ChatScreen> {
               Icons.psychology_outlined,
               'Memory',
               MemoryScreen(api: widget.api),
+            ),
+            place(
+              Icons.monitor_heart_outlined,
+              'Health',
+              HealthScreen(api: widget.api),
             ),
             place(
               Icons.watch_outlined,

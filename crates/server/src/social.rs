@@ -329,7 +329,7 @@ pub async fn watch_forever(app: Shared) {
             Ok(now) => {
                 if let Some(before) = &seen {
                     for push in news(before, &now) {
-                        app.notifier.send(push);
+                        app.push(push);
                     }
                 }
                 seen = Some(now);

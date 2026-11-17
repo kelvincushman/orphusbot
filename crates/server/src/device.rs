@@ -976,7 +976,7 @@ pub async fn expire_forever(app: Shared) {
             Ok(rows) => {
                 for row in rows {
                     let (body, bot) = expired_push(&app, &row.subject).await;
-                    app.notifier.send(crate::notify::Push {
+                    app.push(crate::notify::Push {
                         title: "Your wearable asked something".into(),
                         body,
                         priority: 4,

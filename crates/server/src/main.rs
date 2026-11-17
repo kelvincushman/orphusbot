@@ -1200,7 +1200,7 @@ async fn push_dialog(app: &App, slug: &str, dialog: &Dialog) {
             "computer",
         ),
     };
-    app.notifier.send(notify::Push {
+    app.push(notify::Push {
         title,
         body,
         priority: 4,
@@ -1988,7 +1988,7 @@ async fn push_run_end(
         ),
         _ => return,
     };
-    app.notifier.send(notify::Push {
+    app.push(notify::Push {
         title,
         body,
         priority,

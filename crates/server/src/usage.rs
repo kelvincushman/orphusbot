@@ -55,7 +55,7 @@ pub async fn record(
     let today = today_tokens(&app.db).await;
     if crossed(today, input + output, budget) {
         crate::device::warn_all(app, "budget_warn", "budget").await;
-        app.notifier.send(crate::notify::Push {
+        app.push(crate::notify::Push {
             title: "Today's model budget is used up".into(),
             body: format!("Bots have used {today} tokens today (budget {budget})."),
             priority: 3,

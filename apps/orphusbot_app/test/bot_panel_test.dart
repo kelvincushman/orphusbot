@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:orphusbot_app/api.dart';
 import 'package:orphusbot_app/bot_panel.dart';
+import 'package:orphusbot_app/push.dart';
 
 Future<void> settle(WidgetTester t) async {
   for (var i = 0; i < 5; i++) {
@@ -200,9 +201,16 @@ void main() {
       'model': 'new-model',
     });
 
-    // An unsaved edit asks before the panel closes.
+    // An unsaved edit asks before the panel closes, also for a notification
+    // click (D-079); "Stay" keeps the panel and what was typed.
     await t.enterText(find.byKey(const ValueKey('soul')), 'Be bolder');
     await settle(t);
+    backToChat(Navigator.of(t.element(find.byKey(const ValueKey('soul')))));
+    await settle(t);
+    expect(find.text('Leave without saving?'), findsOneWidget);
+    await t.tap(find.text('Stay'));
+    await settle(t);
+    expect(find.text('Be bolder'), findsOneWidget);
     await t.pageBack();
     await settle(t);
     expect(find.text('Leave without saving?'), findsOneWidget);

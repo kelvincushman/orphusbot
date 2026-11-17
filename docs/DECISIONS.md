@@ -11,6 +11,18 @@ Format:
 
 ---
 
+## D-080: Learned memory hears card answers and the owner's side of calls (2026-11-17)
+
+**Decided:** learned memory (§11.9) also notes, for team-scope bots only, (1) the owner's answers to bots' question cards, as `Asked: <question> — <owner> answered: <answer>`, and an approval card's **Always** as one line; and (2) the owner's side of a voice call's transcript, sent when the call ends, as one `On a call (speech to text): …` line. A call's `ask` and `do` messages, and the Ideas Room's questions, are no longer noted. Single allow/deny taps, takeovers, dismissals, mail's "Always", and answers to cards that ask for a credential are not noted. The learner's prompt says what these lines are and that speech may be misheard.
+
+**Why:** Kelvin wanted bots to learn from what he answers on cards and says on calls. On a call, `ask` and `do` carry Grok's paraphrase, not his words, and noting them as well as the transcript would learn the same thing twice; the transcript has his own words, and only his lines are kept, so the bot's or Grok's replies never become evidence. A lone allow or deny is about one tool call; "always" states a standing preference. A question card's answer means little without its question, so the two go on one line, and the learner treats the question as context.
+
+**Alternatives:** keep noting `ask`/`do` and skip the transcript (Grok's wording, and lost nuance); note both (double counting); one `memory_heard` row per spoken turn (each pulls the same context and splits a call across batches); a `source` column on `memory_heard` (a migration for what a line prefix already tells the model).
+
+**Revisit if:** calls end without the transcript being sent often enough that their content is lost, the 12,000-character cap on a call's transcript drops too much of long calls, or the learner files misheard speech as facts.
+
+---
+
 ## D-079: Desktop notifications come over the event stream (2026-11-17)
 
 **Decided:** every push the server sends (approvals, questions, takeovers, failed runs, finished work the owner didn't start from a chat, and the rest `notify` already sends) is also published as a live-only `push` event on `/api/events`. The Linux and macOS app shows it as a system notification with `flutter_local_notifications`, which it already had for Android; a click opens that bot's chat, and nothing is shown while the window is focused on that bot's chat. Android ignores the event and keeps UnifiedPush.

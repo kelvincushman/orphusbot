@@ -846,6 +846,7 @@ mod tests {
             tool_call_id: Some("call".into()),
             takeover: false,
             safe,
+            asked: None,
         };
         let put = |id: &str, pending| {
             lock(&app.rt).dialogs.insert(id.to_owned(), pending);

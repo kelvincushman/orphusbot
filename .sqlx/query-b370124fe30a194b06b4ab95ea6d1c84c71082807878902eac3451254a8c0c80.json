@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select text from memory_heard where thread_id = $1 order by id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "text",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "memory_heard",
+            "name": "text"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b370124fe30a194b06b4ab95ea6d1c84c71082807878902eac3451254a8c0c80"
+}

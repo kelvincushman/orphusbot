@@ -105,6 +105,25 @@ fn commits(label: &str) -> bool {
         .any(|w| COMMIT_STEMS.iter().any(|s| w.starts_with(s)))
 }
 
+/// Words that name a place in an app rather than an act: a tab, the
+/// navigation bar, search, the notifications list. Only for a tap by id
+/// alone, and only once `commits` found nothing.
+const PLACE_STEMS: &[&str] = &[
+    "tab", "nav", "home", "search", "notif", "explore", "discover", "feed", "menu", "profile",
+    "back", "close", "activity",
+];
+
+/// Whether a resource id (`com.linkedin.android:id/tab_notifications`) names
+/// a place to go: a word of its own name, after `id/`, starts with a place
+/// stem. An opaque id (`a7`, `xyz`) doesn't.
+fn goes_to(id: &str) -> bool {
+    let name = id.rsplit_once("id/").map_or(id, |(_, name)| name);
+    name.split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(str::to_lowercase)
+        .any(|w| PLACE_STEMS.iter().any(|s| w.starts_with(s)))
+}
+
 pub fn kind(input: &Value) -> Kind {
     let s = |k: &str| input[k].as_str().unwrap_or_default();
     match s("action") {
@@ -115,8 +134,11 @@ pub fn kind(input: &Value) -> Kind {
         "key" => Kind::Commit,
         "tap" => {
             let labels = [s("text"), s("desc"), s("id")];
-            // A tap by id alone has no visible label to judge, so it asks.
-            if (s("text").is_empty() && s("desc").is_empty()) || labels.iter().any(|l| commits(l)) {
+            // A tap by id alone has no visible label to judge, so it asks
+            // unless the id names a place to go, such as LinkedIn's
+            // `tab_notifications` (D-077).
+            let unlabelled = s("text").is_empty() && s("desc").is_empty();
+            if labels.iter().any(|l| commits(l)) || (unlabelled && !goes_to(s("id"))) {
                 Kind::Commit
             } else {
                 Kind::Navigate
@@ -170,6 +192,19 @@ mod tests {
             kind(&json!({"action": "tap", "desc": "Search and Explore"})),
             Kind::Navigate
         );
+        // An id alone that names a place to go (D-077).
+        for place in [
+            "com.linkedin.android:id/tab_notifications",
+            "com.twitter.android:id/home",
+            "com.instagram.android:id/search_tab",
+            "com.zhiliaoapp.musically:id/profile_tab",
+        ] {
+            assert_eq!(
+                kind(&json!({"action": "tap", "id": place})),
+                Kind::Navigate,
+                "{place}"
+            );
+        }
         for commit in [
             json!({"action": "tap", "text": "Post"}),
             json!({"action": "tap", "text": "POST ALL"}),
@@ -181,6 +216,11 @@ mod tests {
             json!({"action": "tap", "text": "Open", "id": "com.twitter.android:id/button_tweet"}),
             // No visible label to judge.
             json!({"action": "tap", "id": "com.linkedin.android:id/xyz"}),
+            // A place word doesn't outweigh a commit word, and the package
+            // name doesn't count.
+            json!({"action": "tap", "id": "com.instagram.android:id/feed_like_button"}),
+            json!({"action": "tap", "id": "com.home.app:id/a7"}),
+            json!({"action": "tap", "id": "com.linkedin.android:id/tab_post"}),
             json!({"action": "tap"}),
         ] {
             assert_eq!(kind(&commit), Kind::Commit, "{commit}");

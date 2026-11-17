@@ -142,6 +142,9 @@ struct Pending {
     takeover: bool,
     /// The Orchestrator may accept this card (`gate::safe_to_accept`).
     safe: bool,
+    /// What the card asks, in words, for learned memory (D-080): the question,
+    /// or what an approval's "always" would allow. `None`: nothing to learn.
+    asked: Option<String>,
 }
 
 /// In-memory view of the link. Postgres stays the source of truth for runs;
@@ -570,11 +573,22 @@ async fn send_message(
             text: text.clone(),
             voice: msg.voice,
         });
-        // Private bots' conversations aren't learned from.
+        // Private bots' conversations aren't learned from. Only the owner's own
+        // words are: a call's `ask` and `do`, and the Ideas Room's questions, are
+        // Grok's wording, so of a call only his side of its transcript (D-080).
         // In the background: the note for memory mustn't hold up the message.
         if let (ThreadEvent::Message { text, .. }, "team") = (&event, bot.scope.as_str()) {
-            let (app, thread, text) = (app.clone(), thread.id, text.clone());
-            tokio::spawn(async move { memory::heard(&app, thread, &text).await });
+            let said = if msg.record {
+                memory::spoken(&app.memory.owner, text)
+            } else if msg.voice || msg.room {
+                None
+            } else {
+                Some(text.clone())
+            };
+            if let Some(said) = said {
+                let (app, thread) = (app.clone(), thread.id);
+                tokio::spawn(async move { memory::heard(&app, thread, &said).await });
+            }
         }
         record(&app, &thread, event).await;
     }
@@ -804,10 +818,20 @@ async fn resolve_dialog(app: &App, answer: Answer) -> Result<StatusCode, ApiErro
         return Err((StatusCode::GONE, "That question is no longer open"));
     };
     let id = answer.id.clone();
+    let mut learn = None;
+    let asked = pending.asked.as_deref();
     let (response, outcome) = match (&pending.tool_call_id, answer.decision.as_deref()) {
         (Some(call), Some(decision @ ("allow" | "always" | "deny"))) => {
             let allow = decision != "deny";
             let always = decision == "always";
+            // Only "always" says something lasting; a single allow or deny is
+            // about the call in hand.
+            if always && let Some(card) = asked {
+                learn = Some(format!(
+                    "On a card, {} chose to always allow {card} without asking.",
+                    app.memory.owner
+                ));
+            }
             system1::label_gate(&app.db, call, allow).await;
             if let Err(e) = gate::owner_decides(&app.db, pending.attempt, call, allow, always).await
             {
@@ -835,10 +859,13 @@ async fn resolve_dialog(app: &App, answer: Answer) -> Result<StatusCode, ApiErro
         }
         (None, _) => match (answer.value, answer.confirmed) {
             (Some(value), _) => {
+                learn = asked.and_then(|q| memory::card_answer(&app.memory.owner, q, &value));
                 let outcome = format!("Answered: {value}");
                 (ui_response(&id, "value", json!(value)), outcome)
             }
             (None, Some(yes)) => {
+                let yes_no = if yes { "yes" } else { "no" };
+                learn = asked.and_then(|q| memory::card_answer(&app.memory.owner, q, yes_no));
                 let outcome = match (pending.takeover, yes) {
                     (true, true) => "Done",
                     (true, false) => "Couldn't help",
@@ -859,6 +886,9 @@ async fn resolve_dialog(app: &App, answer: Answer) -> Result<StatusCode, ApiErro
         steps::ended(app, &pending.thread, pending.attempt.run, call, false).await;
     }
     dialog_closed(app, &pending.thread, id, outcome).await;
+    if let Some(learn) = learn {
+        memory::heard_in(app, &pending.thread, &learn).await;
+    }
     Ok(StatusCode::ACCEPTED)
 }
 
@@ -1101,12 +1131,14 @@ async fn on_dialog(app: &Shared, active: Active, request: Value) {
 
     let safe = matches!(&kind, DialogKind::Approval { tool, uncertain, .. }
         if gate::safe_to_accept(tool, in_computer, *uncertain));
+    let asked = card_asks(&kind);
     let pending = Pending {
         attempt,
         thread: active.thread.clone(),
         takeover: matches!(kind, DialogKind::Takeover { .. }),
         tool_call_id,
         safe,
+        asked,
     };
     lock(&app.rt).dialogs.insert(id.clone(), pending);
     let news = device::RunNews::Dialog {
@@ -1121,6 +1153,39 @@ async fn on_dialog(app: &Shared, active: Active, request: Value) {
     };
     push_dialog(app, &active.thread.bot, &dialog).await;
     record(app, &active.thread, ThreadEvent::DialogOpened { dialog }).await;
+}
+
+/// What a card asks, in words, for learned memory (`Pending::asked`).
+fn card_asks(kind: &DialogKind) -> Option<String> {
+    match kind {
+        // "Always" on mail adds no rule (D-075), so it says nothing lasting.
+        DialogKind::Approval { tool, .. } if tool == "mail" => None,
+        // A phone "always" allows that one action (D-059).
+        DialogKind::Approval { tool, input, .. } if tool == "phone" => {
+            let input: String = input.to_string().chars().take(200).collect();
+            Some(format!("this phone action ({input})"))
+        }
+        DialogKind::Approval { tool, .. } => Some(format!("the {tool} tool")),
+        DialogKind::Question {
+            method,
+            title,
+            message,
+            ..
+        } => {
+            // A confirm's message is the question's detail; an input's is only
+            // a placeholder or a prefill.
+            let detail = message
+                .as_deref()
+                .filter(|m| method == "confirm" && *m != title);
+            let asked = match detail {
+                Some(m) => format!("{title} {m}"),
+                None => title.clone(),
+            };
+            let asked = asked.split_whitespace().collect::<Vec<_>>().join(" ");
+            (!asked.is_empty()).then_some(asked)
+        }
+        DialogKind::Takeover { .. } => None,
+    }
 }
 
 /// The bot's display name, for pushes.

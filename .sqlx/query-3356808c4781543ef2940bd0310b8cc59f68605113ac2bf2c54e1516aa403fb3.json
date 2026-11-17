@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "delete from health_check where not (name = any($1)) and name <> 'google'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3356808c4781543ef2940bd0310b8cc59f68605113ac2bf2c54e1516aa403fb3"
+}

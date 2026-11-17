@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into bot (slug, name, mail_accounts) values\n             ('mail-one', 'Mail one', '{personal,work}'), ('mail-two', 'Mail two', '{work}')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "68b982ad0ea49856432c6cea1e0037350fcc38329ce50312dca3a50514e1ab05"
+}

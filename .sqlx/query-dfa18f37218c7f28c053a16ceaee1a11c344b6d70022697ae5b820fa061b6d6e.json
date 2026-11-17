@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select since from health_check where name = 'xai'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "since",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "health_check",
+            "name": "since"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "dfa18f37218c7f28c053a16ceaee1a11c344b6d70022697ae5b820fa061b6d6e"
+}

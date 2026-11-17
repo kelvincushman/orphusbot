@@ -18,6 +18,7 @@ import 'bot_panel.dart';
 import 'discuss.dart';
 import 'gallery.dart';
 import 'handoff.dart';
+import 'health.dart';
 import 'memory.dart';
 import 'push.dart';
 import 'room.dart';
@@ -463,6 +464,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _wide(BoxConstraints box) => box.maxWidth >= 840;
 
   final scaffold = GlobalKey<ScaffoldState>();
+  final healthBanner = GlobalKey<HealthBannerState>();
 
   void _open(String slug) {
     setState(() => chosen = slug);
@@ -473,11 +475,13 @@ class _ChatScreenState extends State<ChatScreen> {
     focus.requestFocus();
   }
 
-  void _push(Widget screen) {
+  /// Opens a screen; completes when it closes.
+  Future<void> _push(Widget screen) {
     if (scaffold.currentState?.isDrawerOpen ?? false) {
       Navigator.of(context).pop();
     }
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
+    return Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => screen));
   }
 
   // Layout after Grok's app (DESIGN §12.4): one conversation full screen, a
@@ -497,6 +501,7 @@ class _ChatScreenState extends State<ChatScreen> {
           body: SafeArea(
             child: Column(
               children: [
+                HealthBanner(key: healthBanner, api: widget.api),
                 UpdateBanner(api: widget.api),
                 Expanded(
                   child: wide
@@ -545,11 +550,16 @@ class _ChatScreenState extends State<ChatScreen> {
         if (q.isEmpty || '${b['name']} ${b['remit']}'.toLowerCase().contains(q))
           b,
     ];
-    Widget place(IconData icon, String label, Widget screen) => ListTile(
+    Widget place(
+      IconData icon,
+      String label,
+      Widget screen, [
+      VoidCallback? closed,
+    ]) => ListTile(
       leading: Icon(icon),
       title: Text(label, style: text.titleMedium),
       dense: true,
-      onTap: () => _push(screen),
+      onTap: () => _push(screen).then((_) => closed?.call()),
     );
     return Stack(
       children: [
@@ -613,6 +623,13 @@ class _ChatScreenState extends State<ChatScreen> {
               Icons.psychology_outlined,
               'Memory',
               MemoryScreen(api: widget.api),
+            ),
+            place(
+              Icons.monitor_heart_outlined,
+              'Health',
+              HealthScreen(api: widget.api),
+              // A check fixed there clears the banner straight away.
+              () => healthBanner.currentState?.refresh(),
             ),
             place(
               Icons.watch_outlined,

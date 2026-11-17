@@ -220,6 +220,8 @@ pub async fn cancel_active(db: &PgPool, thread: i64) -> sqlx::Result<Option<(i64
 #[derive(Debug, PartialEq, Eq)]
 pub struct Released {
     pub run: i64,
+    /// The lost attempt's fence (`release` leaves it as it was).
+    pub fence: i64,
     pub failed: bool,
 }
 
@@ -233,7 +235,7 @@ pub async fn release(db: &PgPool, node: Option<&str>) -> sqlx::Result<Vec<Releas
               node = null, lease_expires_at = null, updated_at = now()
            where status = 'running'
              and case when $1::text is null then lease_expires_at < now() else node = $1 end
-           returning id, status::text as "status!""#,
+           returning id, fence, status::text as "status!""#,
         node,
         MAX_ATTEMPTS
     )
@@ -243,6 +245,7 @@ pub async fn release(db: &PgPool, node: Option<&str>) -> sqlx::Result<Vec<Releas
         .into_iter()
         .map(|r| Released {
             run: r.id,
+            fence: r.fence,
             failed: r.status == "failed",
         })
         .collect())
@@ -367,6 +370,7 @@ mod tests {
             release(&db, Some("laptop")).await.unwrap(),
             vec![Released {
                 run: first.run,
+                fence: first.fence,
                 failed: false
             }]
         );

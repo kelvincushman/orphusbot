@@ -154,7 +154,7 @@ reconcile (30 s)     → advisory-lock leader: re-enqueue expired leases, arm du
                        remind waiting runs (digest), expire stale waits
 ```
 
-Fences are checked on every node message: a message carrying an old fence is dropped and the node is told to abort that turn. This is what makes "kill the node mid-run and it recovers" safe (PRD M1 exit).
+Fences are checked on every node message: a message carrying an old fence is dropped and the node is told to abort that turn. This is what makes "kill the node mid-run and it recovers" safe (PRD M1 exit). A release reports the fence it released (`runs::Released.fence`), and the server clears only that attempt: its entry in the active runs (if still current), its open dialogs, its open steps (each step remembers its attempt's fence) and its tracked Google calls. A newer attempt, whether dispatched before or while the release is announced, keeps all of its own, and the run is then not announced as queued.
 
 ### 3.4 Effect ledger
 
@@ -931,6 +931,7 @@ Core tables follow research/rakazo-architecture.md §10 (device, passkey, sessio
 | `memory_fact` | id, text, embedding (real[]), times_seen, created_at, last_seen_at, replaced_by |
 | `memory_fact_source` | fact_id, heard_id |
 | `x_search_day` | day (UTC), searches |
+| `health_check` | name, label, ok, problem, fix, since, checked_at (§16.1) |
 
 All status columns are Postgres enums. Every row that a decision shaped carries `decision_id`.
 
@@ -986,6 +987,23 @@ All status columns are Postgres enums. Every row that a decision shaped carries 
   - Android as a signed APK on Releases (F-Droid later).
 - **Backups:** nightly `pg_dump` to the GPU box's backup disk; the receipts JSONL is included.
 - **Upgrades:** migrations run at server start under an advisory lock. Nodes announce their version, and the server refuses incompatible nodes with a clear message.
+
+### 16.1 Health checks (the Health screen)
+
+- **Built (D-076):** bots used to fail silently when an outside service stopped working (an expired Google sign-in made every `google` call fail, and nobody was told). `server::health` keeps the latest result of each check in `health_check` (migration 0052): `name`, `label`, `ok`, a plain-words `problem` and `fix` while failing, `since` (when it started failing, kept while it stays red) and `checked_at`.
+- **When:** every 15 minutes (the first round two minutes after start, so nodes have reconnected), and when the owner taps **Check now** (`POST /api/health/check`). `GET /api/health` lists them, failing first. Both are owner-only, like the rest of `/api`.
+- **What is checked, only when it is set up** (anything not set up is left out, never shown red; rows for checks no longer set up, and for removed nodes, are deleted):
+  - **Nodes:** each enrolled node is connected or not (the server's own link table; no call).
+  - **xAI** (`ORPHUSBOT_XAI_KEY`): `GET https://api.x.ai/v1/models` with the key, which costs nothing; 401 or 403 means the key was refused.
+  - **Model servers the server calls itself:** memory's chat and embedding servers (`ORPHUSBOT_MEMORY_LLM_URL`, `ORPHUSBOT_MEMORY_EMBED_URL`: `GET …/models`, a 2xx answer) and Laya (`ORPHUSBOT_LAYA_URL`: `GET /`, any answer below 500, since it has no read-only path). Read-only GETs; nothing is loaded or changed.
+  - **ntfy** (`ORPHUSBOT_NTFY_URL`): `GET /v1/health` on that server, which publishes nothing.
+  - **Disk:** free space on the filesystem holding the server's `$HOME` (`df -Pk`, killed if it takes over 10 s), red under 5 GB.
+  - **Mail** (when the server has `himalaya`, §11.11): for each account any bot has in `mail_accounts`, `folder list` through `mail::Runner`, which changes nothing; red when it fails, with "Check the Himalaya account <name> on the server". Himalaya's own error stays in the log, since it may name addresses.
+  - A new check is one more entry in `check_now`.
+- **Google is judged from real calls, not checked:** gws runs on a node, so a check would need a new node message. Instead, when gws's sign-in is refused (`invalid_grant`, a 401, `UNAUTHENTICATED`, …) the bridge returns "Google access has expired; Kelvin has been told to reconnect (Health screen). Don't retry Google…" as the tool's error, so the bot stops and says so. The server marks the call, by attempt and tool-call id, when the gate sees it (`google::reaches_google`: not refused, and not `schema`, `--help` or `--dry-run`, which need no sign-in), and on its result turns Google red when the result carries those words, and green when a marked call succeeds. Other failures (a bad command, a refused change) say nothing about the sign-in. So Google turns green only after the next Google call that works; Check now doesn't change it.
+- **Every outside call is behind the `health::Probe` trait** (a fake in tests) with a 10-second timeout, and the round has a backstop timeout per check, so one hung service can't stall the others.
+- **Telling the owner:** one round runs at a time (a scheduled round and Check now don't interleave, so an older observation can't land last), results are written one at a time, and the write returns the previous state, so a push goes out once when a check turns red (or is new and red), "<problem> — see Health", with the fix as its body, and once when it turns green, "<label> is working again". Nothing repeats while it stays red, and a server restart doesn't push again. Pushes go through `App::push`, like every other push (the phone and the open desktop app, D-079); if ntfy itself is down, the app's banner still shows it.
+- **In the app (`health.dart`):** **Health** in the menu lists each check with an icon that has a spoken label and the words "Working" or the problem, the fix (selectable, to copy a command) and how long it has been failing, and a **Check now** button. While anything is red a slim red banner at the top of the main screen says what (or how many), and tapping it opens Health; it is refreshed every two minutes and after Health closes. The web page doesn't show it yet.
 
 ---
 

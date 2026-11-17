@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select name from node order by name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "node",
+            "name": "name"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "832232302ad56d76f2f2a6b314c2c8252356142c821157bbecd9e469de9a8573"
+}

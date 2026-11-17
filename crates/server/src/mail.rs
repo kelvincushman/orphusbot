@@ -436,6 +436,14 @@ impl Mail {
     pub fn ready(&self) -> bool {
         self.runner.is_some()
     }
+
+    /// For the Health screen (DESIGN §16.1): whether Himalaya can reach
+    /// `account`, by listing its folders, which changes nothing.
+    pub async fn reachable(&self, account: &str) -> anyhow::Result<()> {
+        let runner = self.runner.as_ref().context("no himalaya")?;
+        runner.run(argv(account, &Op::Folders), None).await?;
+        Ok(())
+    }
 }
 
 /// The mail accounts of the run's bot.

@@ -596,6 +596,9 @@ export default function (pi: ExtensionAPI) {
 
   if (google) {
     const MAX_OUT = 200 * 1024;
+    /** What gws prints when Google refuses its sign-in (OAuth and API errors). */
+    const GWS_AUTH_ERROR =
+      /invalid_grant|invalid_client|unauthorized_client|token has been expired or revoked|UNAUTHENTICATED|invalid authentication credentials|"code":\s*401\b/i;
     pi.registerTool({
       name: "google",
       label: "Google Workspace",
@@ -627,7 +630,17 @@ export default function (pi: ExtensionAPI) {
           child.on("close", (code) => {
             const text = Buffer.concat(chunks).toString().slice(0, MAX_OUT);
             const cut = size > MAX_OUT ? `\n[output cut at ${MAX_OUT} bytes; ask for less, e.g. with fields or pageSize]` : "";
-            code === 0 ? done(text + cut) : fail(new Error(`gws exited ${code}: ${text}${cut}`));
+            if (code === 0) return done(text + cut);
+            // A refused sign-in (an expired or revoked token) won't fix itself: say so
+            // plainly, so the bot stops retrying. The server reads the first words and
+            // puts Google on the Health screen, which pushes to Kelvin (DESIGN §16.1).
+            if (GWS_AUTH_ERROR.test(text)) {
+              return fail(new Error(
+                "Google access has expired; Kelvin has been told to reconnect (Health screen). " +
+                  "Don't retry Google: tell Kelvin it needs reconnecting and carry on without it.",
+              ));
+            }
+            fail(new Error(`gws exited ${code}: ${text}${cut}`));
           });
         });
         return { content: [{ type: "text", text: out }], details: {} };

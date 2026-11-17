@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select distinct unnest(mail_accounts) as \"account!\" from bot order by 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5ab19ba6c855c65fd7801d97ea1c9bc23cc67ca464b86593d08768ea37262e54"
+}

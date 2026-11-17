@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select problem from health_check where name = 'google'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "problem",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "health_check",
+            "name": "problem"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "5d3a6be3ca6cdcfbc64f8e3e7b561efe8c56390a4586044cfc2ec978a7ebdb50"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update run set status = 'completed' where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "908ad1c82f8a0ac683d5d4d8b28701ca9d6502f0bfc25d57247552bc005ed4f1"
+}

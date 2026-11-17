@@ -1239,9 +1239,12 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _card(t.Card c, ColorScheme scheme, String name) {
     final k = c.kind;
     final skill = k['kind'] == 'approval' && k['tool'] == 'install_skill';
+    // Mail changes are asked every time (D-075), so no "always" either.
+    final mail = k['kind'] == 'approval' && k['tool'] == 'mail';
     final title = switch (k['kind']) {
       'approval' when skill =>
         '$name wants to install the skill "${(k['input'] as Map?)?['name']}"${(k['input'] as Map?)?['replace'] == true ? ', replacing the installed one' : ''}',
+      'approval' when mail => mailTitle(name, k['input'] as Map? ?? {}),
       'approval' => 'Allow $name to use ${k['tool']}?',
       'takeover' => '$name needs you on its screen',
       _ => (k['title'] as String?) ?? 'A question',
@@ -1249,6 +1252,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final detail = switch (k['kind']) {
       // The whole skill as it will be installed, readable rather than as JSON.
       'approval' when skill => (k['input'] as Map?)?['skill'] as String? ?? '',
+      'approval' when mail => mailDetail(k['input'] as Map? ?? {}),
       'approval' => const JsonEncoder.withIndent('  ').convert(k['input']),
       'takeover' => k['reason'] as String? ?? '',
       _ => k['message'] as String? ?? '',
@@ -1287,8 +1291,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     child: const Text('Allow once'),
                   ),
-                  // Skills are asked about every time, so no "always".
-                  if (!skill)
+                  // Skills and mail changes are asked about every time, so no "always".
+                  if (!skill && !mail)
                     OutlinedButton(
                       onPressed: () => _act(
                         () => widget.api.answer(c.id, {'decision': 'always'}),
@@ -1575,3 +1579,40 @@ String compactCount(int n) => n < 1000
     : n < 1000000
     ? '${(n / 1000).toStringAsFixed(n < 10000 ? 1 : 0)}k'
     : '${(n / 1000000).toStringAsFixed(1)}M';
+
+/// The title of a mail approval card: what the bot wants to do, from which account.
+String mailTitle(String name, Map input) {
+  final account = input['account'] ?? '?';
+  final ids = (input['ids'] as List?)?.length ?? 0;
+  final emails = ids == 1 ? '1 email' : '$ids emails';
+  final folder = input['folder'] ?? 'INBOX';
+  return switch (input['action']) {
+    'send' => '$name wants to send an email from $account',
+    'move' =>
+      '$name wants to move $emails from $folder to ${input['to_folder']} ($account)',
+    'delete' => '$name wants to delete $emails in $folder ($account)',
+    'flag' =>
+      '$name wants to mark $emails ${(input['flags'] as List?)?.join(', ')} in $folder ($account)',
+    'unflag' =>
+      '$name wants to unmark $emails ${(input['flags'] as List?)?.join(', ')} in $folder ($account)',
+    _ => 'Allow $name to use mail ($account)?',
+  };
+}
+
+/// The detail of a mail approval card: for a send, the whole email as it will go.
+String mailDetail(Map input) {
+  String list(String key) => ((input[key] as List?) ?? []).join(', ');
+  if (input['action'] != 'send') {
+    return 'Envelope ids: ${list('ids')}';
+  }
+  return [
+    'From account: ${input['account']}',
+    'To: ${list('to')}',
+    if (list('cc').isNotEmpty) 'Cc: ${list('cc')}',
+    if (list('bcc').isNotEmpty) 'Bcc: ${list('bcc')}',
+    'Subject: ${input['subject'] ?? ''}',
+    if (input['reply_to'] != null) 'In reply to message ${input['reply_to']}',
+    '',
+    input['body'] as String? ?? '',
+  ].join('\n');
+}

@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update effect set result = 'running', updated_at = now()\n           where run_id = $1 and fence = $2 and tool_call_id = $3 and tool = 'mail'\n             and state = 'approved' and result is null\n           returning input as \"input: Json<Value>\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "input: Json<Value>",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "effect",
+            "name": "input"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6b7269282f1d2067d61f48ab97f629601d2457e0abfe7cf75e96310b6c0ef1a8"
+}

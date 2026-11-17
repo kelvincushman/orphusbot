@@ -308,4 +308,49 @@ void main() {
     expect((v.items[0] as Asked).play, isFalse);
     expect((v.items[1] as Answered).play, isTrue);
   });
+
+  test('a quiet routine run leaves nothing behind, as the server folds it', () {
+    final v = ThreadView();
+    void fired(int run) => v.apply({
+      'type': 'routine_fired',
+      'run': run,
+      'notice': 'Routine "Mail" (schedule)',
+      'text': 'Check the mail.',
+    });
+    void step(int run, String id) => v.apply({
+      'type': 'step_started',
+      'run': run,
+      'id': id,
+      'label': 'Checking mail',
+      'kind': 'google',
+    });
+    void ended(int run) =>
+        v.apply({'type': 'run_ended', 'run': run, 'outcome': 'completed'});
+    v.apply({'type': 'message', 'role': 'user', 'text': 'hello'});
+    fired(7);
+    step(7, 'a');
+    v.apply({'type': 'step_ended', 'run': 7, 'id': 'a', 'ok': true});
+    v.apply({'type': 'delta', 'run': 7, 'text': '[nothing new]'});
+    v.apply({'type': 'quiet', 'run': 7});
+    ended(7);
+    expect(v.items, hasLength(1));
+    expect((v.items.single as Message).text, 'hello');
+    expect(v.streaming, isNull);
+
+    // One with something to say stays, prompt and all.
+    fired(8);
+    step(8, 'b');
+    v.apply({
+      'type': 'message',
+      'role': 'assistant',
+      'text': 'Two new emails.',
+    });
+    ended(8);
+    v.apply({'type': 'quiet', 'run': 9});
+    expect(v.items, hasLength(5));
+    expect((v.items[1] as Notice).text, startsWith('Routine'));
+    expect((v.items[2] as Message).text, 'Check the mail.');
+    expect((v.items[3] as Steps).steps, hasLength(1));
+    expect((v.items[4] as Message).text, 'Two new emails.');
+  });
 }

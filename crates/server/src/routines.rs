@@ -22,13 +22,13 @@ use axum::http::StatusCode;
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use croner::Cron;
-use orphusbot_proto::{Role, ThreadEvent};
+use orphusbot_proto::ThreadEvent;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{info, warn};
 
 use crate::auth::{digest, random_token};
-use crate::{ApiError, App, Shared, bots, db, internal, record, submit};
+use crate::{ApiError, App, Shared, bots, db, internal, record, submit_announced};
 
 const MAX_PAYLOAD_CHARS: usize = 8_000;
 
@@ -418,25 +418,17 @@ pub async fn fire(
             payload.replace("```", "'''")
         ));
     }
-    record(
-        app,
-        &thread,
-        ThreadEvent::Notice {
-            text: format!("Routine \"{}\" ({trigger})", r.name),
-        },
-    )
-    .await;
-    let message = ThreadEvent::Message {
-        role: Role::User,
-        text: text.clone(),
-        voice: false,
-    };
-    record(app, &thread, message).await;
+    // A routine that finds nothing stays out of the owner's way (DESIGN §12.3).
+    text.push_str(&format!(
+        "\n\n(A routine started this. If there is nothing to tell Kelvin, reply with exactly {} and nothing else.)",
+        orphusbot_proto::QUIET_REPLY
+    ));
     let source = crate::runs::Source {
         routine: Some(id),
         ..Default::default()
     };
-    submit(app, &thread, text, source).await?;
+    let notice = format!("Routine \"{}\" ({trigger})", r.name);
+    submit_announced(app, &thread, text, source, Some(notice)).await?;
     info!(routine = id, trigger, bot = %r.slug, "routine fired");
     Ok(())
 }
@@ -529,5 +521,57 @@ mod tests {
                 .check()
                 .is_err()
         );
+    }
+
+    #[sqlx::test]
+    async fn a_routine_run_with_nothing_to_tell_stays_quiet(db: sqlx::PgPool) {
+        let app = crate::auth::tests::app(db.clone());
+        let routine = sqlx::query_scalar!(
+            "insert into routine (bot_id, name, prompt) values (1, 'Mail', 'Check the mail.') returning id"
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        fire(&app, routine, "by hand", None).await.unwrap();
+        let shown = sqlx::query_scalar!(
+            r#"select body as "body: sqlx::types::Json<serde_json::Value>" from event where thread_id = 1 order by id"#
+        )
+        .fetch_all(&db)
+        .await
+        .unwrap();
+        let fired = &shown.last().unwrap().0;
+        assert_eq!(fired["type"], "routine_fired");
+        assert_eq!(fired["notice"], "Routine \"Mail\" (by hand)");
+        assert!(
+            fired["text"]
+                .as_str()
+                .unwrap()
+                .contains(orphusbot_proto::QUIET_REPLY)
+        );
+        let run = fired["run"].as_i64().unwrap();
+        let quiet =
+            crate::reply_event(&app, run, format!(" {} \n", orphusbot_proto::QUIET_REPLY)).await;
+        assert_eq!(quiet, ThreadEvent::Quiet { run });
+        assert!(matches!(
+            crate::reply_event(&app, run, "Two new emails.".into()).await,
+            ThreadEvent::Message { .. }
+        ));
+
+        // The owner's own run never goes quiet, whatever the reply.
+        sqlx::query!("update run set status = 'completed' where id = $1", run)
+            .execute(&db)
+            .await
+            .unwrap();
+        let crate::runs::Submitted::Queued(own) =
+            crate::runs::submit(&db, 1, "hi", Default::default())
+                .await
+                .unwrap()
+        else {
+            panic!("expected a new run")
+        };
+        assert!(matches!(
+            crate::reply_event(&app, own, orphusbot_proto::QUIET_REPLY.into()).await,
+            ThreadEvent::Message { .. }
+        ));
     }
 }

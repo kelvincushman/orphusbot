@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "insert into bot (slug, name, remit, instructions, model, thinking, exclude_tools, scope, computer, google, face, desktop, phone, media, x_search, voice)\n         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) returning id",
+  "query": "insert into bot (slug, name, remit, instructions, model, thinking, exclude_tools, scope, computer, google, face, desktop, phone, media, x_search, mail_accounts, voice)\n         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) returning id",
   "describe": {
     "columns": [
       {
@@ -32,6 +32,7 @@
         "Text",
         "Bool",
         "Bool",
+        "TextArray",
         "Text"
       ]
     },
@@ -39,5 +40,5 @@
       false
     ]
   },
-  "hash": "8cfc59ab3ec211271e02e68798298a273fb199a79e647089f658ae18d338b719"
+  "hash": "8b182b25b818a28610eb96aafaae32c9101221ec636d55b3d76c5d28b9d80548"
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media, x_search, voice, session_gen\n         from bot order by disabled, slug <> 'orchestrator', slug <> 'inbox', name",
+  "query": "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media, x_search, mail_accounts, voice, session_gen\n         from bot where slug = $1",
   "describe": {
     "columns": [
       {
@@ -181,6 +181,17 @@
       },
       {
         "ordinal": 16,
+        "name": "mail_accounts",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "mail_accounts"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
         "name": "voice",
         "type_info": "Text",
         "origin": {
@@ -191,7 +202,7 @@
         }
       },
       {
-        "ordinal": 17,
+        "ordinal": 18,
         "name": "session_gen",
         "type_info": "Int4",
         "origin": {
@@ -203,7 +214,9 @@
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Text"
+      ]
     },
     "nullable": [
       false,
@@ -222,9 +235,10 @@
       false,
       false,
       false,
+      false,
       true,
       false
     ]
   },
-  "hash": "fd191a4dd54b30f90d4f9cece8d37637ea0ff99746a1436ea8233050701a86ce"
+  "hash": "14406e9d4af6ef6043a133f53d7712c084520ada9777203f514a6fbeb4370693"
 }

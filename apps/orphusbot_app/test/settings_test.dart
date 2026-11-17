@@ -133,12 +133,17 @@ void main() {
     await t.ensureVisible(find.text('X search'));
     await t.tap(find.text('X search'));
     await settle(t);
+    // Mail accounts are typed as names, split at commas.
+    final mail = find.widgetWithText(TextField, 'Mail accounts');
+    await t.ensureVisible(mail);
+    await t.enterText(mail, ' personal,work , ');
     await t.ensureVisible(find.text('Save'));
     await t.tap(find.text('Save'));
     await settle(t);
     final saved = posted['/api/bots/update'] as Map<String, dynamic>;
     expect(saved['x_search'], isTrue);
     expect(saved['voice'], 'rex');
+    expect(saved['mail_accounts'], ['personal', 'work']);
     expect(saved['instructions'], 'Write tests first');
     expect(saved['model'], 'openai-codex/gpt-5.5');
     expect(saved['scope'], 'team');

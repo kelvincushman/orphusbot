@@ -21,6 +21,7 @@ mod gallery;
 mod gate;
 mod google;
 mod links;
+mod mail;
 mod memory;
 mod missions;
 mod nodes;
@@ -195,6 +196,8 @@ struct App {
     memory: memory::Memory,
     /// Research on X through xAI (DESIGN §11.10).
     xsearch: xsearch::XSearch,
+    /// Mail through the server's Himalaya (DESIGN §11.11).
+    mail: mail::Mail,
     /// The built web UI (crates/ui/dist), served at `/`.
     ui_dir: String,
 }
@@ -263,6 +266,7 @@ async fn main() -> anyhow::Result<()> {
         social: social::Social::from_env(),
         memory: memory::Memory::from_env(),
         xsearch: xsearch::XSearch::from_env(),
+        mail: mail::Mail::from_env(),
         ui_dir,
     });
     calibrate::load(&app).await;
@@ -596,11 +600,42 @@ async fn submit(
     text: String,
     source: runs::Source,
 ) -> sqlx::Result<i64> {
+    submit_announced(app, thread, text, source, None).await
+}
+
+/// [`submit`], putting a routine's `notice` and prompt in the thread: tied to
+/// its run when it gets one of its own, so a quiet ending can take them out
+/// again (DESIGN §12.3), and as plain lines when it joins another.
+async fn submit_announced(
+    app: &App,
+    thread: &db::Thread,
+    text: String,
+    source: runs::Source,
+    notice: Option<String>,
+) -> sqlx::Result<i64> {
     let sent = source.attachments.clone();
     let submitted = runs::submit(&app.db, thread.id, &text, source).await?;
     let run = match submitted {
         Submitted::Queued(run) | Submitted::Joined(run) | Submitted::Steer { run, .. } => run,
     };
+    if let Some(notice) = notice {
+        let event = match submitted {
+            Submitted::Queued(run) => ThreadEvent::RoutineFired {
+                run,
+                notice,
+                text: text.clone(),
+            },
+            _ => {
+                record(app, thread, ThreadEvent::Notice { text: notice }).await;
+                ThreadEvent::Message {
+                    role: Role::User,
+                    text: text.clone(),
+                    voice: false,
+                }
+            }
+        };
+        record(app, thread, event).await;
+    }
     match submitted {
         Submitted::Queued(run) => {
             lock(&app.rt).waiting.remove(&run);
@@ -894,6 +929,20 @@ async fn on_dialog(app: &Shared, active: Active, request: Value) {
         tokio::spawn(async move {
             let wanted = || node_for(&app, attempt).is_some();
             let answer = xsearch::ask(&app, &active.thread.bot, &request, wanted).await;
+            respond(&app, attempt, ui_response(&id, "value", json!(answer))).await;
+        });
+        return;
+    }
+    if method == "input" && title == mail::TITLE {
+        let dialog: Value = request["placeholder"]
+            .as_str()
+            .and_then(|p| serde_json::from_str(p).ok())
+            .unwrap_or_default();
+        // On its own task: Himalaya talks to the mail server before it answers.
+        let app = app.clone();
+        tokio::spawn(async move {
+            let wanted = || node_for(&app, attempt).is_some();
+            let answer = mail::answer(&app, &active.thread.bot, attempt, &dialog, wanted).await;
             respond(&app, attempt, ui_response(&id, "value", json!(answer))).await;
         });
         return;
@@ -1274,6 +1323,10 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
     spec.recall = memory::readable_by(&app.memory, bot);
     // X search needs the server's xAI key as well as the bot's setting.
     spec.x_search &= app.xsearch.ready();
+    // Mail needs the server's `himalaya` as well as the bot's accounts.
+    if !app.mail.ready() {
+        spec.mail_accounts.clear();
+    }
     if let Some(known) = memory::profile(app, bot).await {
         spec.instructions.push_str(&known);
     }
@@ -1677,11 +1730,7 @@ async fn on_node_message(app: &Shared, node: &str, msg: FromNode) {
         }
         FromNode::Reply { attempt, text } => {
             if let Some(a) = current(attempt) {
-                let event = ThreadEvent::Message {
-                    role: Role::Assistant,
-                    text,
-                    voice: false,
-                };
+                let event = reply_event(app, attempt.run, text).await;
                 record(app, &a.thread, event).await;
             }
         }
@@ -1771,8 +1820,47 @@ async fn run_ended(
     discussions::advance(app).await;
 }
 
+/// The thread event for a run's final reply: a routine's run with nothing to
+/// tell stays out of sight (DESIGN §12.3); anything else is a message.
+async fn reply_event(app: &App, run: i64, text: String) -> ThreadEvent {
+    let from_routine = || async {
+        sqlx::query_scalar!(
+            r#"select routine_id is not null as "r!" from run where id = $1"#,
+            run
+        )
+        .fetch_optional(&app.db)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or(false)
+    };
+    if text.trim() == orphusbot_proto::QUIET_REPLY && from_routine().await {
+        ThreadEvent::Quiet { run }
+    } else {
+        ThreadEvent::Message {
+            role: Role::Assistant,
+            text,
+            voice: false,
+        }
+    }
+}
+
+/// Whether the run ended quietly: a routine's with nothing to tell.
+async fn ended_quiet(app: &App, thread: &db::Thread, run: i64) -> bool {
+    sqlx::query_scalar!(
+        r#"select exists (select 1 from event where thread_id = $1 and body ->> 'type' = 'quiet'
+                  and body ->> 'run' = $2::bigint::text) as "q!""#,
+        thread.id,
+        run
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap_or(false)
+}
+
 /// Failures always reach the phone; finished work does when the owner didn't
-/// start it from a chat (a routine, a ticket or the wearable).
+/// start it from a chat (a routine, a ticket or the wearable), unless a
+/// routine's run had nothing to tell.
 async fn push_run_end(
     app: &App,
     thread: &db::Thread,
@@ -1798,7 +1886,7 @@ async fn push_run_end(
             4,
             "warning",
         ),
-        RunOutcome::Completed if unattended => (
+        RunOutcome::Completed if unattended && !ended_quiet(app, thread, run).await => (
             format!("{name} finished"),
             "Its result is in its thread.".to_owned(),
             3,

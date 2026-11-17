@@ -87,6 +87,11 @@ pub struct BotSpec {
     /// (DESIGN §11.10).
     #[serde(default)]
     pub x_search: bool,
+    /// The server's Himalaya accounts the `mail` tool may use, by name; the
+    /// server answers the tool and holds the passwords (DESIGN §11.11).
+    /// Empty: no mail tool.
+    #[serde(default)]
+    pub mail_accounts: Vec<String>,
     /// Shown on its computer's home page (DESIGN §4.4): its name as the owner
     /// wrote it, its remit, and its face's colour as `#RRGGBB`.
     #[serde(default)]
@@ -473,7 +478,24 @@ pub enum ThreadEvent {
         ticket: i64,
         ok: bool,
     },
+    /// A routine started run `run` (DESIGN §12.3): shown as the line `notice`
+    /// ("Routine \"Mail\" (schedule)") and the routine's prompt, `text`.
+    RoutineFired {
+        run: i64,
+        notice: String,
+        text: String,
+    },
+    /// Routine run `run` ended with [`QUIET_REPLY`]: nothing to tell, so its
+    /// `RoutineFired` lines and its steps are no longer shown.
+    Quiet {
+        run: i64,
+    },
 }
+
+/// The whole final reply of a routine's run that has nothing to tell the
+/// owner (DESIGN §12.3). The run, its receipts and its effects are kept; the
+/// thread doesn't show it and no push is sent.
+pub const QUIET_REPLY: &str = "[nothing new]";
 
 /// What sort of work a step is, for clients that draw it.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]

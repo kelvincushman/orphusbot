@@ -287,6 +287,9 @@ struct Bot {
     /// Passed through so saving keeps it.
     #[serde(default)]
     voice: Option<String>,
+    /// Passed through so saving keeps it; set in the Flutter app.
+    #[serde(default)]
+    mail_accounts: Vec<String>,
 }
 
 /// Everything the signed-in screens share: the bots, which one is open, every
@@ -821,7 +824,8 @@ fn Card(dialog: Dialog, outcome: Option<String>) -> impl IntoView {
             {open.then(|| view! {
                 <div class="row">
                     {choice("Allow once", json!({ "id": id, "decision": "allow" }), "primary")}
-                    {choice(format!("Always allow {tool}"), json!({ "id": id, "decision": "always" }), "")}
+                    // Mail changes are asked every time (D-075): no "always".
+                    {(tool != "mail").then(|| choice(format!("Always allow {tool}"), json!({ "id": id, "decision": "always" }), ""))}
                     {choice("Deny", json!({ "id": id, "decision": "deny" }), "danger")}
                 </div>
             })}

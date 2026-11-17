@@ -756,6 +756,7 @@ pub(crate) mod tests {
             media: false,
             x_search: false,
             voice: None,
+            mail_accounts: Vec::new(),
             session_gen: 0,
         }
     }

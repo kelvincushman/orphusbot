@@ -136,6 +136,10 @@ class ThreadView {
   // The newest unfinished step.
   Step? _now;
 
+  // The routine run whose notice and prompt start at this item, until a
+  // `quiet` takes them out again (DESIGN §12.3).
+  ({int run, int at})? _routine;
+
   /// The label of the newest unfinished step.
   String? get doing => _now?.label;
 
@@ -231,6 +235,30 @@ class ThreadView {
         }
       case 'notice':
         items.add(Notice(e['text'] as String));
+      case 'routine_fired':
+        _routine = (run: e['run'] as int, at: items.length);
+        items.add(Notice(e['notice'] as String));
+        items.add(Message(true, e['text'] as String));
+      case 'quiet':
+        // A routine's run with nothing to tell: its reply never arrives as
+        // a message, and its prompt and steps go.
+        final run = e['run'] as int;
+        streaming = null;
+        final r = _routine;
+        _routine = null;
+        if (r != null &&
+            r.run == run &&
+            items.length > r.at + 1 &&
+            items[r.at] is Notice &&
+            items[r.at + 1] is Message &&
+            (items[r.at + 1] as Message).mine) {
+          items.removeRange(r.at, r.at + 2);
+        }
+        for (final s in items.whereType<Steps>()) {
+          s.steps.removeWhere((step) => step.run == run);
+        }
+        items.removeWhere((i) => i is Steps && i.steps.isEmpty);
+        return;
       case 'routed':
         items.add(
           Notice('Sent to ${e['name']} (System 1 was ${e['sure']}% sure)'),

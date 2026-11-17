@@ -11,6 +11,18 @@ Format:
 
 ---
 
+## D-075: Mail through Himalaya on the server; quiet routine runs (2026-11-17)
+
+**Decided:** bots use the owner's existing mailboxes through a server-answered `mail` tool: the server runs the Himalaya CLI (v1.1, already set up on the server machine with the accounts) as a subprocess, with every argument checked and never a shell. Each bot lists the Himalaya accounts it may use (`bot.mail_accounts`, set in the app; empty by default, so nothing is seeded by a migration). Reads, searches and drafts go ahead; every send, move, delete and flag change asks the owner, with no "always" rule for mail at all, and the server runs a change only as the effect ledger approved it. Also: a routine run whose reply is exactly `[nothing new]` is taken back out of the thread (`RoutineFired`, `Quiet` events) and sends no push, so a mail check every ten minutes doesn't flood the Inbox chat.
+
+**Why:** Kelvin asked for the Inbox bot to handle his personal and work mail, a narrower thing than the "email inbox per bot" the 2026-11-15 plan left out (no new mail domain, no spam handling, no new addresses). Himalaya already holds the accounts on the server machine, so the passwords stay where they are and never enter a bot computer, a node, the thread or a `proto` type, and one Rust module checks every call. Asking about each change, without "always", keeps hard rule 5 and means an approval never covers an email Kelvin didn't see: a per-tool "always" (as for `google`) would let any email go to anyone, and an exact-action "always" (as for the phone, D-059) is useless for emails, which are never the same twice. The quiet marker is the smallest change that lets a frequent routine be silent without losing anything: the run and its receipts stay in the database.
+
+**Alternatives:** credentials in the bot's computer with Himalaya there (secrets inside the one place we assume can be compromised); a mail MCP server granted to the bot (another long-running service holding the passwords, and its tools would need their own gate rules, as `MCP_READS` shows); Gmail through `gws` for the personal account (doesn't cover the work account, and gives the bot Google's whole API); seeding the Inbox bot's accounts in the migration (an open-source install would hand its Inbox bot whatever accounts are named the same); for quiet runs, deleting the run's events (clients already showed them, and history would be lost) or a System 1 pre-flight alone (it costs a model call per check and can't read mail).
+
+**Revisit if:** the approval cards for moves and flags are too many to tap (consider an exact-folder rule for moves), Himalaya's CLI changes its arguments or output, a bot needs attachments, or quiet runs hide something Kelvin wanted to see.
+
+---
+
 ## D-074: Voice calls with any bot, through the Ideas Room's voice (2026-11-17)
 
 **Decided:** Every bot's chat gets a call button that opens Grok's realtime voice as that bot's voice (`POST /api/bots/{slug}/voice`). The voice has two tools: `ask` (a question, answered on the quick model with thinking off, as the Ideas Room does) and `do` (real work, run as a normal message on the bot's own model; the call hears "(<name> has finished: …)" at the next pause). Messages from a call carry `voice: true` and show "Asked on a call". Each bot has its own `voice` setting. The Orchestrator's chat voice (D-063) becomes this same call, so there is one path; the Ideas Room keeps its own instructions, memory and session. Approvals stay taps: when a run opens a card, the voice is told it needs Kelvin's OK on the screen, and nothing said on a call answers a card.

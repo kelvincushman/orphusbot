@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "delete from approval_rule",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "687b35c5279d968075c3b183666b0c79aa42c4adf9e93e97a59b35e0f8cead3e"
+}

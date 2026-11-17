@@ -146,8 +146,13 @@ pub async fn abandon(app: &App, thread: &db::Thread, run: i64) {
     for id in open {
         ended(app, thread, run, &id, false).await;
     }
-    // Its Google calls died with it too (the Health screen, `health::google_used`).
-    lock(&app.rt).google_calls.retain(|(a, _)| a.run != run);
+    // The lost attempt's Google calls died with it too (`health::google_used`).
+    // By attempt: the run may already be running again elsewhere, and that
+    // attempt's calls stay.
+    let mut rt = lock(&app.rt);
+    let current = rt.active.get(&run).map(|a| a.attempt);
+    rt.google_calls
+        .retain(|(a, _)| a.run != run || Some(*a) == current);
 }
 
 #[cfg(test)]

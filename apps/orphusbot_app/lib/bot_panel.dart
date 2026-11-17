@@ -142,10 +142,10 @@ class _BotPanelState extends State<BotPanel> {
     try {
       // With the version this panel loaded: the server refuses the save if the
       // bot changed its notes meanwhile, rather than losing what it wrote.
-      final got = await widget.api.putJson(_path, {
+      final got = await widget.api.postJson(_path, {
         'notes': sent,
         'version': version,
-      }) as Map<String, dynamic>;
+      }, put: true) as Map<String, dynamic>;
       if (!mounted) return;
       setState(() {
         savedNotes = sent;

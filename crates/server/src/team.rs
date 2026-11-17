@@ -590,7 +590,7 @@ pub fn abilities(
         "operate" => {
             parts.push("phone: works the phone and drafts posts (Kelvin approves each, unless he has allowed that exact action always)".into())
         }
-        "draft" => parts.push("phone: drafts posts (Kelvin approves each)".into()),
+        "draft" => parts.push("phone: reads the accounts and drafts posts (Kelvin approves each)".into()),
         _ => {}
     }
     if b.media {
@@ -1123,7 +1123,7 @@ mod tests {
         };
         assert_eq!(
             abilities(&social, &grants, false),
-            "model Orphus default; phone: drafts posts (Kelvin approves each); makes images and video"
+            "model Orphus default; phone: reads the accounts and drafts posts (Kelvin approves each); makes images and video"
         );
     }
 }

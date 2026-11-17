@@ -128,16 +128,15 @@ class Api {
 
   Future<void> post(String path, Object body) => _post(path, body);
 
-  /// A PUT whose answer matters, such as the new version of what was saved.
-  Future<dynamic> putJson(String path, Object body) async =>
-      jsonDecode((await _post(path, body, put: true)).body);
-
   Future<void> delete(String path) =>
       _check(_http.delete(Uri.parse('$server$path'), headers: headers));
 
   /// A POST whose answer matters, such as a code the server made.
-  Future<dynamic> postJson(String path, Object body) async =>
-      jsonDecode((await _post(path, body)).body);
+  Future<dynamic> postJson(
+    String path,
+    Object body, {
+    bool put = false,
+  }) async => jsonDecode((await _post(path, body, put: put)).body);
 
   Future<void> send(
     String bot,

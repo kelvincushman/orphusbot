@@ -164,7 +164,8 @@ async fn remember(db: &PgPool, bot: &str, line: &str) -> sqlx::Result<String> {
         let words = l.split_whitespace().collect::<Vec<_>>().join(" ");
         words.trim_start_matches("- ").to_owned()
     };
-    if notes.lines().any(|l| bare(l) == bare(&line)) {
+    // `line` is already in that form, bullet and all.
+    if notes.lines().any(|l| bare(l) == line["- ".len()..]) {
         return Ok("ok:That's already in your notes.".into());
     }
     let notes = notes.trim_end();

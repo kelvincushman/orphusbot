@@ -1432,16 +1432,17 @@ async fn announce_released(app: &App, released: Vec<runs::Released>) {
             run: r.run,
             fence: r.fence,
         };
-        {
+        // The run may have been dispatched again between the release and now.
+        // Only the lost attempt is cleared; a newer one keeps its place, its
+        // dialogs and its steps, and the run isn't announced as queued.
+        let restarted = {
             let mut rt = lock(&app.rt);
-            // The run may have been dispatched again between the release and
-            // now: that newer attempt, its dialogs and its steps are left alone.
-            if rt.active.get(&r.run).is_some_and(|a| a.attempt != lost) {
-                rt.google_calls.retain(|(a, _)| *a != lost);
-                continue;
+            let restarted = rt.active.get(&r.run).is_some_and(|a| a.attempt != lost);
+            if !restarted {
+                rt.active.remove(&r.run);
             }
-            rt.active.remove(&r.run);
-        }
+            restarted
+        };
         expire_dialogs(app, r.run, Some(lost)).await;
         let thread = match db::run_thread(&app.db, r.run).await {
             Ok(thread) => thread,
@@ -1454,13 +1455,15 @@ async fn announce_released(app: &App, released: Vec<runs::Released>) {
             let error = Some("The bot lost its node too many times".to_owned());
             run_ended(app, &thread, r.run, RunOutcome::Failed, error).await;
         } else {
-            lock(&app.rt).waiting.remove(&r.run);
             steps::abandon(app, &thread, lost).await;
-            let event = ThreadEvent::RunQueued {
-                run: r.run,
-                waiting: None,
-            };
-            publish(app, None, Some(&thread.bot), event);
+            if !restarted {
+                lock(&app.rt).waiting.remove(&r.run);
+                let event = ThreadEvent::RunQueued {
+                    run: r.run,
+                    waiting: None,
+                };
+                publish(app, None, Some(&thread.bot), event);
+            }
         }
     }
 }
@@ -1988,38 +1991,75 @@ mod tests {
     use chrono::TimeZone;
     use orphusbot_proto::Attempt;
 
-    #[sqlx::test]
-    async fn a_late_release_leaves_the_replacement_attempt_alone(db: sqlx::PgPool) {
-        let app = crate::auth::tests::app(db);
-        let lost = Attempt { run: 7, fence: 1 };
-        let replacement = Attempt { run: 7, fence: 2 };
+    /// A run lost on the laptop is taken by the GPU box before the loss is
+    /// announced, either before `announce_released` looks at the run
+    /// (`active_first`) or while it is running.
+    async fn late_release(db: &sqlx::PgPool, active_first: bool) {
+        let app = crate::auth::tests::app(db.clone());
+        let crate::runs::Submitted::Queued(run) =
+            crate::runs::submit(db, 1, "work", Default::default())
+                .await
+                .unwrap()
+        else {
+            panic!("expected a new run")
+        };
+        let attempt = |c: crate::runs::Claimed| Attempt {
+            run: c.run,
+            fence: c.fence,
+        };
+        let lost = attempt(
+            crate::runs::claim(db, run, "laptop")
+                .await
+                .unwrap()
+                .unwrap(),
+        );
+        let released = crate::runs::release(db, Some("laptop")).await.unwrap();
+        let replacement = attempt(crate::runs::claim(db, run, "gpu").await.unwrap().unwrap());
+        let thread = crate::db::run_thread(db, run).await.unwrap();
         {
             let mut rt = super::lock(&app.rt);
-            rt.active.insert(
-                7,
-                super::Active {
+            if active_first {
+                let active = super::Active {
                     attempt: replacement,
                     node: "gpu".into(),
-                    thread: crate::db::Thread {
-                        id: 1,
-                        bot: "inbox".into(),
-                    },
-                },
-            );
-            rt.google_calls.insert((lost, "call-1".into()));
-            rt.google_calls.insert((replacement, "call-1".into()));
+                    thread: thread.clone(),
+                };
+                rt.active.insert(run, active);
+            }
+            for (a, name) in [(lost, "lost"), (replacement, "new")] {
+                let pending = super::Pending {
+                    attempt: a,
+                    thread: thread.clone(),
+                    tool_call_id: Some("call-1".into()),
+                    takeover: false,
+                    safe: false,
+                };
+                rt.dialogs.insert(format!("{name}-card"), pending);
+                rt.steps.insert((run, format!("{name}-step")), a.fence);
+                rt.google_calls.insert((a, "call-1".into()));
+            }
         }
-        // The laptop's attempt is announced as released after the GPU box took the run.
-        let released = vec![crate::runs::Released {
-            run: 7,
-            fence: 1,
-            failed: false,
-        }];
         super::announce_released(&app, released).await;
         let rt = super::lock(&app.rt);
-        assert_eq!(rt.active.get(&7).map(|a| a.attempt), Some(replacement));
+        if active_first {
+            assert_eq!(rt.active.get(&run).map(|a| a.attempt), Some(replacement));
+        }
+        let dialogs: Vec<&String> = rt.dialogs.keys().collect();
+        assert_eq!(dialogs, ["new-card"], "active_first: {active_first}");
+        let steps: Vec<&String> = rt.steps.keys().map(|(_, id)| id).collect();
+        assert_eq!(steps, ["new-step"], "active_first: {active_first}");
         let calls: Vec<Attempt> = rt.google_calls.iter().map(|(a, _)| *a).collect();
-        assert_eq!(calls, [replacement]);
+        assert_eq!(calls, [replacement], "active_first: {active_first}");
+    }
+
+    #[sqlx::test]
+    async fn a_late_release_leaves_an_active_replacement_alone(db: sqlx::PgPool) {
+        late_release(&db, true).await;
+    }
+
+    #[sqlx::test]
+    async fn a_replacement_dispatched_during_a_late_release_keeps_its_own(db: sqlx::PgPool) {
+        late_release(&db, false).await;
     }
 
     #[sqlx::test]

@@ -146,6 +146,7 @@ class Api {
     bool room = false,
     bool voice = false,
     bool work = false,
+    bool record = false,
   }) async {
     final r = await _post('/api/messages', {
       'bot': bot,
@@ -154,6 +155,7 @@ class Api {
       if (room) 'room': true,
       if (voice) 'voice': true,
       if (work) 'work': true,
+      if (record) 'record': true,
     });
     try {
       return ((jsonDecode(r.body) as Map)['run'] as num?)?.toInt();

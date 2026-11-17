@@ -475,6 +475,10 @@ struct NewMessage {
     /// model rather than answered on the quick one.
     #[serde(default)]
     work: bool,
+    /// With `voice`: the call's transcript when it ends, for the record. It is
+    /// never refused, so it may join a question's run.
+    #[serde(default)]
+    record: bool,
 }
 
 fn inbox() -> String {
@@ -523,7 +527,7 @@ async fn send_message(
     // A message from a call that joins an active run keeps that run's model, so
     // an `ask` (quick model) never joins a run, and a `do` (the bot's model) never
     // joins an `ask`'s run (DESIGN §12.8). The app checks first; this decides.
-    if msg.voice && !msg.room {
+    if msg.voice && !msg.room && !msg.record {
         let active = sqlx::query_scalar!(
             "select prompt from run where thread_id = $1 and status in ('queued', 'running')",
             thread.id

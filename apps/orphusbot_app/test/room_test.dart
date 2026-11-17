@@ -324,6 +324,24 @@ void main() {
       expect(news.last, '(Coder needs your OK on the screen.)');
     });
 
+    test('a card answered before the send returns is not told', () async {
+      line.handle(nodes());
+      runs = [1];
+      meanwhile = () {
+        line.handle(approval(1));
+        line.handle({
+          'type': 'dialog_closed',
+          'id': 'd1',
+          'outcome': 'Allowed once',
+        });
+      };
+      final answer = line.ask(api, 'coder', 'ask', {'request': 'send it?'});
+      await pumpEventQueue();
+      line.handle(reply('Sent.'));
+      line.handle(ended(1));
+      expect(await answer, 'Sent.');
+    });
+
     test('ask answers with the reply, or says it needs a tap', () async {
       line.handle(nodes());
       runs = [1, 2];

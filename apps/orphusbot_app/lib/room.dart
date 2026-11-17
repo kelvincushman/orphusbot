@@ -274,11 +274,13 @@ class _IdeasRoomState extends State<IdeasRoom>
       if (transcript.isNotEmpty) {
         try {
           // Marked as from the call, so it stays with this bot (the inbox's
-          // triage skips it) and runs on its own model.
+          // triage skips it), and as the record, so a question still being
+          // answered doesn't hold it up.
           await widget.api.send(
             widget.bot,
             voice: true,
             work: true,
+            record: true,
             'Here is what was said on our call, for the record. What I asked '
             "or handed you on it has already reached you, so don't start it "
             'again; reply in a line or two with anything still open.'
@@ -586,7 +588,7 @@ class OrchestratorLine {
   // where the thread stood, whether it completed, and whether the call was
   // told. And cards opened in runs not followed yet.
   final _ended = <int, ({int at, bool ok, bool told})>{};
-  final _cards = <int, String>{};
+  final _cards = <int, ({String id, String need})>{};
 
   void start(Api api, String bot) {
     _events = api.events().listen((e) {
@@ -617,8 +619,11 @@ class OrchestratorLine {
         } else if (run == _asked || _jobs.contains(run)) {
           onNews?.call('($name $need.)');
         } else {
-          _keep(_cards, run, need);
+          _keep(_cards, run, (id: dialog?['id'] as String? ?? '', need: need));
         }
+      case 'dialog_closed':
+        // Answered already (on another screen): nothing to tell.
+        _cards.removeWhere((_, c) => c.id == e['id']);
       case 'run_ended':
         final run = (e['run'] as num?)?.toInt();
         if (run == null) return;
@@ -706,8 +711,8 @@ class OrchestratorLine {
       } else {
         _from.putIfAbsent(run, () => mark);
         _jobs.add(run);
-        if (_cards.remove(run) case final need?) {
-          onNews?.call('($name $need.)');
+        if (_cards.remove(run) case final card?) {
+          onNews?.call('($name ${card.need}.)');
         }
       }
       return "Started. $name will say when it's finished.";
@@ -753,9 +758,9 @@ class OrchestratorLine {
     }
     _from.putIfAbsent(run, () => mark);
     _asked = run;
-    if (_cards.remove(run) case final need?) {
+    if (_cards.remove(run) case final card?) {
       _waiting = null;
-      return _needs(need);
+      return _needs(card.need);
     }
     return done.future.timeout(
       const Duration(seconds: 90),

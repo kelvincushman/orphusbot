@@ -563,6 +563,14 @@ mod tests {
         let job = json!({ "bot": "orchestrator", "text": "fix it", "voice": true, "work": true });
         assert_eq!(send(job).await.0, StatusCode::CONFLICT);
         assert_eq!(send(ask).await.0, StatusCode::CONFLICT);
+        // The call's transcript is for the record, so it may join.
+        let record = json!({ "bot": "orchestrator", "text": "what was said", "voice": true,
+                             "work": true, "record": true });
+        let (status, _, kept) = send(record).await;
+        assert_eq!(
+            (status, kept["run"].as_i64()),
+            (StatusCode::ACCEPTED, Some(run))
+        );
         // A typed message still joins, and says which run carries it.
         let (status, _, typed) = send(json!({ "bot": "orchestrator", "text": "also" })).await;
         assert_eq!(

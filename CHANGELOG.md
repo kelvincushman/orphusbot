@@ -138,6 +138,7 @@ Every pull request that changes something a user or operator would notice adds a
 
 ### Fixed
 
+- **A run that lost its node and started again at once kept working properly:** if the run was picked up by another node before the server finished noting the loss, the server used to forget the new attempt, so its progress, approvals and results were ignored. Now only the lost attempt is cleared. This was a general run-loop race, not only a Health one; it also kept Google's health from updating.
 - **The Phone bot no longer asks before opening a tab:** a tap on an app's tab or navigation button by its id (such as LinkedIn's notifications tab) goes ahead without a card. Taps that could post, like, follow, comment or send still ask (D-077).
 - **Mail drafts and sends failed** with "Himalaya gave no sender for this account": Himalaya 1.1 prints a template as `{"content": …}`, not as a string, and the server now reads it that way.
 - Private missions: when a teammate on one is stuck waiting for your answer, the Orchestrator is now told only that a card is waiting, not what the task or the card says (the voice model reads its chat). Making a running mission private now tells its chief straight away. A hand-off that has waited more than three days no longer drops out of the team's status.

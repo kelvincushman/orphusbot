@@ -124,6 +124,9 @@ pub struct Health {
     disk: Option<String>,
     /// One result written at a time, so a change is pushed once.
     writing: tokio::sync::Mutex<()>,
+    /// One round at a time, so an older round's results (a node seen
+    /// offline before a slow probe) can't land after a newer round's.
+    round: tokio::sync::Mutex<()>,
 }
 
 impl Health {
@@ -168,6 +171,7 @@ impl Health {
             ntfy: var("ORPHUSBOT_NTFY_URL").and_then(|topic| ntfy_health(&topic)),
             disk: var("HOME"),
             writing: Default::default(),
+            round: Default::default(),
         }
     }
 
@@ -180,6 +184,7 @@ impl Health {
             ntfy: None,
             disk: None,
             writing: Default::default(),
+            round: Default::default(),
         }
     }
 }
@@ -270,6 +275,7 @@ fn google_problem() -> Problem {
 /// Runs every check that is set up, stores the results and pushes changes.
 pub async fn check_now(app: &App) -> anyhow::Result<()> {
     let h = &app.health;
+    let _round = h.round.lock().await;
     let enrolled = sqlx::query_scalar!("select name from node order by name")
         .fetch_all(&app.db)
         .await?;
@@ -496,6 +502,7 @@ pub mod testkit {
             ntfy: Some("https://push.example.com/v1/health".into()),
             disk: Some("/".into()),
             writing: Default::default(),
+            round: Default::default(),
         }
     }
 }

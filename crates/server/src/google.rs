@@ -78,10 +78,12 @@ pub fn kind(args: &[String]) -> Kind {
 }
 
 /// Whether a call reaches Google, and so says whether the sign-in works
-/// (the Health screen): not a refused one, and not `schema`, which gws answers
-/// without signing in.
+/// (the Health screen): not a refused one, and not `schema`, `--help` or
+/// `--dry-run`, which gws answers without signing in.
 pub fn reaches_google(args: &[String]) -> bool {
-    kind(args) != Kind::Refused && args.first().is_some_and(|s| s != "schema")
+    kind(args) != Kind::Refused
+        && args.first().is_some_and(|s| s != "schema")
+        && !args.iter().any(|a| a == "--help" || a == "--dry-run")
 }
 
 /// The command line in a `google` tool call.
@@ -122,6 +124,17 @@ mod tests {
             "tasks", "tasks", "insert", "--json", "{}"
         ])));
         assert!(!reaches_google(&a(&["schema", "drive.files.list"])));
+        assert!(!reaches_google(&a(&[
+            "calendar", "events", "list", "--help"
+        ])));
+        assert!(!reaches_google(&a(&[
+            "calendar",
+            "events",
+            "insert",
+            "--dry-run",
+            "--json",
+            "{}"
+        ])));
         assert!(!reaches_google(&a(&["auth", "export"])));
     }
 

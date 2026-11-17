@@ -91,7 +91,9 @@ class _HealthScreenState extends State<HealthScreen> {
           Align(
             alignment: Alignment.centerLeft,
             child: FilledButton.icon(
-              onPressed: checking ? null : _checkNow,
+              // Not while the first list is loading: it could land after
+              // the check's newer answer.
+              onPressed: loading || checking ? null : _checkNow,
               icon: checking
                   ? const SizedBox.square(
                       dimension: 18,
@@ -182,19 +184,19 @@ class HealthBanner extends StatefulWidget {
   const HealthBanner({super.key, required this.api});
   final Api api;
   @override
-  State<HealthBanner> createState() => _HealthBannerState();
+  State<HealthBanner> createState() => HealthBannerState();
 }
 
-class _HealthBannerState extends State<HealthBanner> {
+class HealthBannerState extends State<HealthBanner> {
   String? message;
   Timer? every;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    refresh();
     // ponytail: polled; an event on the stream if two minutes ever feels slow.
-    every = Timer.periodic(const Duration(minutes: 2), (_) => _load());
+    every = Timer.periodic(const Duration(minutes: 2), (_) => refresh());
   }
 
   @override
@@ -203,7 +205,8 @@ class _HealthBannerState extends State<HealthBanner> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  /// Asks the server again, such as after Health closes.
+  Future<void> refresh() async {
     try {
       final got = bannerText(_checks(await widget.api.get('/api/health')));
       if (mounted) setState(() => message = got);
@@ -216,7 +219,7 @@ class _HealthBannerState extends State<HealthBanner> {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => HealthScreen(api: widget.api)),
     );
-    await _load();
+    await refresh();
   }
 
   @override

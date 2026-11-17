@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -90,6 +91,42 @@ void main() {
     await t.tap(find.text('Check now'));
     await settle(t);
     expect(posted, ['/api/health/check']);
+  });
+
+  testWidgets('Check now waits for the first list to load', (t) async {
+    final first = Completer<http.Response>();
+    final posted = <String>[];
+    final api = Api(
+      'http://server',
+      'session=x',
+      MockClient((r) async {
+        if (r.method == 'POST') {
+          posted.add(r.url.path);
+          return http.Response(jsonEncode([disk]), 200);
+        }
+        return first.future;
+      }),
+    );
+    await t.pumpWidget(MaterialApp(home: HealthScreen(api: api)));
+    await t.pump();
+    final button = find.widgetWithText(FilledButton, 'Check now');
+    expect(t.widget<FilledButton>(button).onPressed, isNull);
+    await t.tap(button);
+    await t.pump();
+    expect(posted, isEmpty);
+
+    first.complete(http.Response(jsonEncode([google]), 200));
+    await settle(t);
+    expect(t.widget<FilledButton>(button).onPressed, isNotNull);
+    await t.tap(button);
+    await settle(t);
+    expect(posted, ['/api/health/check']);
+    expect(
+      find.text('Google'),
+      findsNothing,
+      reason: "the check's answer stands",
+    );
+    expect(find.text('Disk space'), findsOneWidget);
   });
 
   testWidgets('the banner shows while red and opens Health', (t) async {

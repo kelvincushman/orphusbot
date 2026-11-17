@@ -52,9 +52,11 @@ impl crate::App {
     /// Sends a push to the phone, and the same push to open desktop apps as a
     /// live `push` event. Every push goes through here.
     pub(crate) fn push(&self, push: Push<'_>) {
-        // Redacted whole before it is cut, so a secret across the cut can't leave half of itself.
+        // Redacted here, not only by `publish`: a secret JSON has to escape
+        // (a quote) can't be matched once the event is JSON. The body is
+        // redacted whole before it is cut, so no part of a secret is left.
         let event = ThreadEvent::Push {
-            title: push.title.clone(),
+            title: self.secrets.redact(&push.title),
             body: self
                 .secrets
                 .redact(&push.body)
@@ -408,6 +410,19 @@ mod tests {
             panic!("a push event");
         };
         assert_eq!(body, format!("{}[secr", "x".repeat(995)));
+        // One with a quote, which JSON escapes, is still redacted in the title.
+        app.secrets.learn(r#"abcd"efgh"#);
+        app.push(Push {
+            title: r#"Coder used abcd"efgh"#.into(),
+            body: String::new(),
+            priority: 4,
+            tags: "",
+            bot: None,
+        });
+        let ThreadEvent::Push { title, .. } = rx.try_recv().unwrap().event else {
+            panic!("a push event");
+        };
+        assert_eq!(title, "Coder used [secret]");
         assert_eq!(live.id, None, "live only: never stored or replayed");
         assert_eq!(live.bot.as_deref(), Some("coder"));
         assert!(!live.event.is_persisted());

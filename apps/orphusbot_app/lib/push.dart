@@ -137,6 +137,16 @@ bool shouldNotify({
   required String? open,
 }) => desktop && !(focused && bot != null && bot == open);
 
+/// Closes the pages over the chat for a notification click. A page that
+/// guards its unsaved edits (a bot's settings) is asked to close, the way the
+/// back button does, rather than popped, so it can ask first.
+void backToChat(NavigatorState nav) {
+  nav.popUntil(
+    (r) => r.isFirst || r.popDisposition == RoutePopDisposition.doNotPop,
+  );
+  nav.maybePop();
+}
+
 /// The chat showing at [context]: [chosen], unless another page covers it.
 String? showingChat(BuildContext context, String chosen) =>
     ModalRoute.of(context)?.isCurrent ?? true ? chosen : null;

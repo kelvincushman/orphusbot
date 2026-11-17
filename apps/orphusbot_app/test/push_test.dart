@@ -48,6 +48,48 @@ void main() {
     expect(showingChat(chat, 'coder'), 'coder');
   });
 
+  testWidgets('a click closes pages but asks one with unsaved edits', (
+    t,
+  ) async {
+    late BuildContext chat;
+    var asked = 0;
+    await t.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (c) {
+            chat = c;
+            return const Text('chat');
+          },
+        ),
+      ),
+    );
+    final nav = Navigator.of(chat);
+    nav.push(MaterialPageRoute<void>(builder: (_) => const Text('gallery')));
+    await t.pumpAndSettle();
+    backToChat(nav);
+    await t.pumpAndSettle();
+    expect(find.text('chat'), findsOneWidget);
+    expect(find.text('gallery'), findsNothing);
+
+    // A bot's settings with an edit: it is asked, and stays when it says so.
+    nav.push(
+      MaterialPageRoute<void>(
+        builder: (_) => PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (popped, _) => asked++,
+          child: const Text('settings'),
+        ),
+      ),
+    );
+    nav.push(MaterialPageRoute<void>(builder: (_) => const Text('viewer')));
+    await t.pumpAndSettle();
+    backToChat(nav);
+    await t.pumpAndSettle();
+    expect(find.text('viewer'), findsNothing);
+    expect(find.text('settings'), findsOneWidget);
+    expect(asked, 1);
+  });
+
   test('showPush hands the event to the notifier', () async {
     final shown = <List<Object?>>[];
     Future<void> show(String title, String body, String? bot, int p) async =>

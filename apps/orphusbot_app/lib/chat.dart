@@ -71,8 +71,8 @@ class _ChatScreenState extends State<ChatScreen> {
   // A notification was clicked: back to the chat, on that bot.
   void _openBot(String bot) {
     if (!mounted) return;
-    Navigator.of(context).popUntil((r) => r.isFirst);
     setState(() => chosen = bot);
+    backToChat(Navigator.of(context));
   }
 
   @override

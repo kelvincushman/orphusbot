@@ -284,6 +284,9 @@ struct Bot {
     /// Passed through so saving keeps it.
     #[serde(default)]
     x_search: bool,
+    /// Passed through so saving keeps it.
+    #[serde(default)]
+    voice: Option<String>,
     /// Passed through so saving keeps it; set in the Flutter app.
     #[serde(default)]
     mail_accounts: Vec<String>,
@@ -707,13 +710,16 @@ fn item(item: Item, name: &dyn Fn(&str) -> String) -> AnyView {
             let line = answered_line(&name(&from), &name(&to), ticket, ok);
             view! { <p class="notice">{line}</p> }.into_any()
         }
-        Item::Message { role, text } => {
+        Item::Message { role, text, voice } => {
             let class = if role == Role::User {
                 "msg user"
             } else {
                 "msg assistant"
             };
-            view! { <div class=class>{text}</div> }.into_any()
+            // Asked on a call (D-074).
+            let label =
+                voice.then(|| view! { <small class="notice">"Asked on a call"</small><br/> });
+            view! { <div class=class>{label}{text}</div> }.into_any()
         }
         Item::Notice { text, error } => {
             view! { <p class="notice" class:error=error>{text}</p> }.into_any()

@@ -307,6 +307,7 @@ fn router(app: Shared) -> Router {
         .route("/api/models", get(models))
         .route("/api/bots/update", post(bots::update))
         .route("/api/bots/{slug}/notes", get(notes::get).put(notes::put))
+        .route("/api/bots/{slug}/voice", post(room::call))
         .route("/api/decisions", get(system1::list))
         .route("/api/decisions/health", get(system1::health))
         .route("/api/decisions/calibrations", get(calibrate::list))
@@ -356,7 +357,6 @@ fn router(app: Shared) -> Router {
         .route("/api/decisions/rollback", post(calibrate::rollback))
         .route("/api/usage", get(usage::summary))
         .route("/api/room/voice", post(room::voice))
-        .route("/api/room/voice/chat", post(room::voice_chat))
         .route("/api/room/sessions/end", post(room::end))
         .route("/api/room/sessions/rate", post(room::rate))
         .route("/api/room/ideas", post(room::idea))
@@ -467,9 +467,18 @@ struct NewMessage {
     /// it runs in the room's own session.
     #[serde(default)]
     room: bool,
-    /// Said by voice in the bot's own chat: spoken too, but in the chat's session.
+    /// Said on a voice call with the bot (`ask`): spoken too, but in the chat's
+    /// session, and labelled "Asked on a call" in the thread (D-074).
     #[serde(default)]
     voice: bool,
+    /// With `voice`: a `do` from the call, run as normal work on the bot's own
+    /// model rather than answered on the quick one.
+    #[serde(default)]
+    work: bool,
+    /// With `voice`: the call's transcript when it ends, for the record. The
+    /// busy-run check below skips it, so it may join a question's run.
+    #[serde(default)]
+    record: bool,
 }
 
 fn inbox() -> String {
@@ -483,11 +492,13 @@ struct WhichBot {
 }
 
 /// Stores the message, then queues a run, joins the waiting one, or steers the
-/// running one (B-RUN-01).
+/// running one (B-RUN-01). Answers `{run}`, the run that carries it, or
+/// `{run: null}` while System 1 is still routing it; a call follows its own
+/// work by this id (DESIGN §12.8).
 async fn send_message(
     State(app): State<Shared>,
     Json(msg): Json<NewMessage>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<(StatusCode, Json<Value>), ApiError> {
     let text = msg.text.trim().to_owned();
     if (text.is_empty() && msg.attachments.is_empty()) || text.chars().count() > MAX_MESSAGE_CHARS {
         return Err((
@@ -513,11 +524,39 @@ async fn send_message(
         ));
     }
     let files = attachments::check(&app.db, &bot.slug, &msg.attachments).await?;
+    // A message from a call that joins an active run keeps that run's model, so
+    // an `ask` (quick model) never joins a run, and a `do` (the bot's model) never
+    // joins an `ask`'s run (DESIGN §12.8). The app checks first; this decides.
+    if msg.voice && !msg.room && !msg.record {
+        let active = sqlx::query_scalar!(
+            "select prompt from run where thread_id = $1 and status in ('queued', 'running')",
+            thread.id
+        )
+        .fetch_optional(&app.db)
+        .await
+        .map_err(|e| internal("checking the bot", e))?;
+        match active {
+            Some(_) if !msg.work => {
+                return Err((
+                    StatusCode::CONFLICT,
+                    "It's busy with a task, so it can't answer quickly now",
+                ));
+            }
+            Some(prompt) if prompt.contains(room::VOICE_NOTE) => {
+                return Err((
+                    StatusCode::CONFLICT,
+                    "It's still answering a question; hand it the job once that's done",
+                ));
+            }
+            _ => {}
+        }
+    }
 
     if !text.is_empty() {
         let event = app.secrets.redact_event(ThreadEvent::Message {
             role: Role::User,
             text: text.clone(),
+            voice: msg.voice,
         });
         // Private bots' conversations aren't learned from.
         // In the background: the note for memory mustn't hold up the message.
@@ -541,6 +580,10 @@ async fn send_message(
     let mut run_text = format!("{text}{}", tickets::referenced(&app.db, &text).await);
     if msg.room {
         run_text.push_str(room::ROOM_NOTE);
+    } else if msg.voice && msg.work {
+        // ponytail: the check above and `runs::submit` are two statements, so a run
+        // started between them can still be joined; one transaction if that matters.
+        run_text.push_str(room::DO_NOTE);
     } else if msg.voice {
         run_text.push_str(room::VOICE_NOTE);
     }
@@ -562,28 +605,30 @@ async fn send_message(
     };
     // A new task for the inbox goes to System 1 first; a follow-up joins the inbox's run.
     // ponytail: messages with files skip routing; route them too if that's wanted.
-    if thread.bot == "inbox" && app.system1.enabled() && files.is_empty() {
+    // A call is with the inbox itself, so what's said on it stays there.
+    if thread.bot == "inbox" && app.system1.enabled() && files.is_empty() && !msg.voice {
         let busy = runs::busy(&app.db, thread.id)
             .await
             .map_err(|e| internal("checking the inbox", e))?;
         if !busy {
             tokio::spawn(triage(app.clone(), thread, text, run_text));
-            return Ok(StatusCode::ACCEPTED);
+            return Ok((StatusCode::ACCEPTED, Json(json!({ "run": null }))));
         }
     }
-    submit(&app, &thread, run_text, source)
+    let run = submit(&app, &thread, run_text, source)
         .await
         .map_err(|e| internal("queueing run", e))?;
-    Ok(StatusCode::ACCEPTED)
+    Ok((StatusCode::ACCEPTED, Json(json!({ "run": run }))))
 }
 
 /// Queues `text` as a run in `thread`, or adds it to the thread's active run.
+/// Returns the run that carries it.
 async fn submit(
     app: &App,
     thread: &db::Thread,
     text: String,
     source: runs::Source,
-) -> sqlx::Result<()> {
+) -> sqlx::Result<i64> {
     submit_announced(app, thread, text, source, None).await
 }
 
@@ -596,9 +641,12 @@ async fn submit_announced(
     text: String,
     source: runs::Source,
     notice: Option<String>,
-) -> sqlx::Result<()> {
+) -> sqlx::Result<i64> {
     let sent = source.attachments.clone();
     let submitted = runs::submit(&app.db, thread.id, &text, source).await?;
+    let run = match submitted {
+        Submitted::Queued(run) | Submitted::Joined(run) | Submitted::Steer { run, .. } => run,
+    };
     if let Some(notice) = notice {
         let event = match submitted {
             Submitted::Queued(run) => ThreadEvent::RoutineFired {
@@ -611,6 +659,7 @@ async fn submit_announced(
                 ThreadEvent::Message {
                     role: Role::User,
                     text: text.clone(),
+                    voice: false,
                 }
             }
         };
@@ -641,7 +690,7 @@ async fn submit_announced(
             }
         }
     }
-    Ok(())
+    Ok(run)
 }
 
 /// Asks System 1 which bot an inbox message is for (DESIGN §7.2). If it's sure,
@@ -666,6 +715,7 @@ async fn triage(app: Shared, inbox: db::Thread, text: String, run_text: String) 
             let copy = ThreadEvent::Message {
                 role: Role::User,
                 text: text.clone(),
+                voice: false,
             };
             record(&app, &target, copy).await;
             target
@@ -1439,13 +1489,15 @@ async fn events(
     Ok(Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(20))))
 }
 
-/// The live-only state a newly connected client needs: node status and the active run.
+/// The live-only state a newly connected client needs: the active runs, then
+/// node status. `nodes` comes last, so a client knows it has caught up once it
+/// arrives (a call's line waits for it, DESIGN §12.8).
 async fn current_state(app: &App) -> sqlx::Result<Vec<(Option<String>, ThreadEvent)>> {
     let (nodes, waiting) = {
         let rt = lock(&app.rt);
         (nodes_event(&rt), rt.waiting.clone())
     };
-    let mut out = vec![(None, nodes)];
+    let mut out = Vec::new();
     let runs = sqlx::query!(
         r#"select r.id, r.status::text as "status!", r.attempts, r.node, b.slug from run r
            join thread t on t.id = r.thread_id join bot b on b.id = t.bot_id
@@ -1469,6 +1521,7 @@ async fn current_state(app: &App) -> sqlx::Result<Vec<(Option<String>, ThreadEve
         };
         out.push((Some(r.slug), event));
     }
+    out.push((None, nodes));
     Ok(out)
 }
 
@@ -1816,6 +1869,7 @@ async fn reply_event(app: &App, run: i64, text: String) -> ThreadEvent {
         ThreadEvent::Message {
             role: Role::Assistant,
             text,
+            voice: false,
         }
     }
 }

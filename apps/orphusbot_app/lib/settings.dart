@@ -853,6 +853,23 @@ class _BotEditorState extends State<BotEditor> {
                 ],
                 onChanged: (p) => bot['phone'] = p,
               ),
+              DropdownButtonFormField<String?>(
+                initialValue: bot['voice'] as String?,
+                decoration: const InputDecoration(labelText: 'Voice on a call'),
+                items: [
+                  const DropdownMenuItem(
+                    value: null,
+                    child: Text("The server's default"),
+                  ),
+                  // xAI's voices (bots::VOICES on the server).
+                  for (final v in const ['ara', 'eve', 'leo', 'rex', 'sal'])
+                    DropdownMenuItem(
+                      value: v,
+                      child: Text(v[0].toUpperCase() + v.substring(1)),
+                    ),
+                ],
+                onChanged: (v) => bot['voice'] = v,
+              ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Media generation'),

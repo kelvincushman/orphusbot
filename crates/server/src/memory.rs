@@ -209,6 +209,96 @@ pub async fn heard(app: &App, thread: i64, text: &str) {
     }
 }
 
+/// [`heard`], if `thread` is a team bot's: private bots' conversations aren't
+/// learned from. Secrets are redacted first, as in a typed message.
+pub async fn heard_in(app: &App, thread: &crate::db::Thread, text: &str) {
+    if !app.memory.enabled() {
+        return;
+    }
+    match crate::bots::get(&app.db, &thread.bot).await {
+        Ok(Some(bot)) if bot.scope == "team" => {
+            heard(app, thread.id, &app.secrets.redact(text)).await;
+        }
+        Ok(_) => {}
+        Err(e) => warn!("checking a bot before noting for memory: {e}"),
+    }
+}
+
+/// How the app labels the turns in a call's transcript (`live_voice.dart`).
+const CALL_OWNER: &str = "Kelvin";
+const CALL_VOICE: &str = "Grok";
+
+/// The owner's side of a call's transcript, as one line for [`heard`]: what he
+/// said, never what Grok said for the bot, nor the app's note above the turns.
+/// `None` if he said nothing in it.
+pub fn spoken(owner: &str, transcript: &str) -> Option<String> {
+    let label = |line: &str, who: &str| {
+        line.strip_prefix(who)
+            .and_then(|l| l.strip_prefix(':'))
+            .map(|l| l.trim().to_owned())
+    };
+    // A turn may run over several lines; until the first label (the app's
+    // note, or a turn cut off at the start) nobody's turn is known.
+    let mut his = false;
+    let mut said: Vec<String> = Vec::new();
+    for line in transcript.lines().map(str::trim) {
+        if label(line, CALL_VOICE).is_some() {
+            his = false;
+        } else if let Some(l) = label(line, owner).or_else(|| label(line, CALL_OWNER)) {
+            his = true;
+            said.push(l);
+        } else if his {
+            said.push(line.to_owned());
+        }
+    }
+    said.retain(|l| !l.is_empty());
+    (!said.is_empty()).then(|| format!("On a call (speech to text): {}", said.join(" / ")))
+}
+
+/// What the owner's answer to a bot's question card says, as one line for
+/// [`heard`]. `None` for a question that asks for a credential: its answer
+/// must not become a fact every team bot is shown.
+pub fn card_answer(owner: &str, asked: &str, answer: &str) -> Option<String> {
+    let (asked, answer) = (asked.trim(), answer.trim());
+    // Whole words, with hyphens as spaces and a plural's "s" dropped, so
+    // "API-keys" is "api key" and "pin" doesn't match "opinion".
+    let words = |s: &str| {
+        let s: String = s
+            .to_lowercase()
+            .chars()
+            .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+            .collect();
+        let words: Vec<&str> = s
+            .split_whitespace()
+            .map(|w| w.strip_suffix('s').unwrap_or(w))
+            .collect();
+        format!(" {} ", words.join(" "))
+    };
+    let question = words(asked);
+    let asks_secret = [
+        "password",
+        "passcode",
+        "passphrase",
+        "token",
+        "api key",
+        "apikey",
+        "access key",
+        "private key",
+        "secret",
+        "pin",
+        "2fa",
+        "otp",
+        "one time",
+        "verification code",
+        "sign in code",
+        "login code",
+    ]
+    .iter()
+    .any(|w| question.contains(&words(w)));
+    (!asks_secret && !asked.is_empty() && !answer.is_empty())
+        .then(|| format!("Asked: {asked} — {owner} answered: {answer}"))
+}
+
 pub async fn learn_forever(app: Shared) {
     if !app.memory.enabled() {
         return;
@@ -467,6 +557,10 @@ async fn extract(
         "You keep a record of lasting facts about {owner}, taken from what {owner} writes to their assistant bots.\n\
          Below are numbered lines. Lines from {owner} are evidence. Lines marked \"context only\" are a bot's earlier reply: \
          use them to understand a short answer such as \"yes\" or \"the second one\", and never as evidence by themselves.\n\
+         Most of {owner}'s lines are typed. One that starts \"Asked:\" is {owner}'s answer to a bot's question card: \
+         the question is there to explain the answer, and only the answer is evidence. One that starts \"On a card\" \
+         is a choice {owner} made on a bot's approval card. One that starts \"On a call (speech to text)\" is what {owner} \
+         said on a voice call, turns separated by \" / \": words may be misheard, so keep only what is clear.\n\
          List what a helpful assistant should still know next month: preferences, habits, people, places, projects, plans, \
          decisions, dates, tools, and how {owner} likes things done.\n\
          Leave out: one-off instructions for the task in hand, greetings and thanks, questions, and anything a bot said that {owner} didn't confirm.\n\
@@ -1410,5 +1504,193 @@ mod tests {
             .await
             .unwrap();
         assert!(!learn_due(&memory, &db).await.unwrap());
+    }
+
+    #[test]
+    fn only_the_owners_side_of_a_call_is_kept() {
+        let record = "Here is what was said on our call, for the record.\n\n\
+                      …the end of a turn cut off\n\
+                      Kelvin: book the dentist after 11\n\
+                      Grok: Coder says it's booked for Friday.\n\
+                      Kelvin: great, and I'd rather\nnot have Mondays\n\
+                      Grok: noted";
+        assert_eq!(
+            spoken("Sam", record).as_deref(),
+            Some(
+                "On a call (speech to text): book the dentist after 11 / great, and I'd rather / not have Mondays"
+            )
+        );
+        // The owner's own name labels his turns too.
+        assert_eq!(
+            spoken("Sam", "Sam: hello\nGrok: hi").as_deref(),
+            Some("On a call (speech to text): hello")
+        );
+        assert_eq!(spoken("Sam", "note\n\nGrok: anyone there?\nKelvin:"), None);
+    }
+
+    #[test]
+    fn a_card_answer_is_one_line_unless_it_is_a_secret() {
+        assert_eq!(
+            card_answer("Sam", " Which day suits? ", "Friday").as_deref(),
+            Some("Asked: Which day suits? — Sam answered: Friday")
+        );
+        assert_eq!(
+            card_answer("Sam", "Your opinion on the logo?", "blue").as_deref(),
+            Some("Asked: Your opinion on the logo? — Sam answered: blue")
+        );
+        for q in [
+            "Enter the PIN",
+            "GitHub token?",
+            "Wi-Fi password:",
+            "Your API key",
+            "Enter your API-key",
+            "Your API keys",
+            "The one-time code we sent?",
+            "Your access keys?",
+        ] {
+            assert_eq!(card_answer("Sam", q, "hunter2"), None, "{q}");
+        }
+        assert_eq!(card_answer("Sam", "Which day?", " "), None);
+    }
+
+    /// A bot with its thread.
+    async fn chat(db: &PgPool, slug: &str, scope: &str) -> crate::db::Thread {
+        bot(db, slug, scope).await;
+        sqlx::query!(
+            "insert into thread (bot_id) select id from bot where slug = $1",
+            slug
+        )
+        .execute(db)
+        .await
+        .unwrap();
+        crate::db::bot_thread(db, slug).await.unwrap().unwrap()
+    }
+
+    async fn heard_in_thread(db: &PgPool, thread: i64) -> Vec<String> {
+        sqlx::query_scalar!(
+            "select text from memory_heard where thread_id = $1 order by id",
+            thread
+        )
+        .fetch_all(db)
+        .await
+        .unwrap()
+    }
+
+    #[sqlx::test]
+    async fn from_a_call_only_the_owners_side_of_the_transcript_is_heard(db: PgPool) {
+        use crate::auth::tests::call;
+        let (memory, _) = fake(vec![]).await;
+        let app = app_with(&db, memory);
+        let team = chat(&db, "helper", "team").await;
+        let private = chat(&db, "diary", "private").await;
+        let session = crate::auth::create_session(&db, None, crate::auth::SESSION)
+            .await
+            .unwrap();
+        let send = |body: Value| call(&app, "/api/messages", &session, Some(body));
+        let transcript = "Here is what was said on our call.\n\n\
+                          Kelvin: I only drink oat milk\nGrok: Helper will remember.";
+        for bot in ["helper", "diary"] {
+            for body in [
+                json!({ "bot": bot, "text": "typed: I like tea" }),
+                // Grok's wording, not his: the transcript has what he said.
+                json!({ "bot": bot, "text": "what milk does he like?", "voice": true }),
+                json!({ "bot": bot, "text": "order milk", "voice": true, "work": true }),
+                json!({ "bot": bot, "text": transcript, "voice": true, "work": true, "record": true }),
+            ] {
+                assert_eq!(send(body).await.0, StatusCode::ACCEPTED);
+                // Each its own run: a call's ask doesn't join a busy bot's run.
+                sqlx::query!("update run set status = 'completed' where status = 'queued'")
+                    .execute(&db)
+                    .await
+                    .unwrap();
+            }
+        }
+        // The notes are written in the background, so in either order.
+        let want = [
+            "On a call (speech to text): I only drink oat milk".to_owned(),
+            "typed: I like tea".to_owned(),
+        ];
+        for _ in 0..50 {
+            if heard_in_thread(&db, team.id).await.len() >= want.len() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        let mut heard = heard_in_thread(&db, team.id).await;
+        heard.sort();
+        assert_eq!(heard, want);
+        assert!(heard_in_thread(&db, private.id).await.is_empty());
+    }
+
+    #[sqlx::test]
+    async fn answers_on_cards_are_heard_from_team_bots_only(db: PgPool) {
+        use orphusbot_proto::DialogKind;
+        let (memory, _) = fake(vec![]).await;
+        let app = app_with(&db, memory);
+        let team = chat(&db, "helper", "team").await;
+        let private = chat(&db, "diary", "private").await;
+        let question = |title: &str| DialogKind::Question {
+            method: "select".into(),
+            title: title.into(),
+            message: None,
+            options: vec![],
+        };
+        let approval = |tool: &str| DialogKind::Approval {
+            tool: tool.into(),
+            input: json!({}),
+            uncertain: false,
+        };
+        let answer = |thread: &crate::db::Thread, kind: DialogKind, answer: crate::Answer| {
+            let app = app.clone();
+            let thread = thread.clone();
+            async move {
+                let approval = matches!(kind, DialogKind::Approval { .. });
+                let pending = crate::Pending {
+                    attempt: orphusbot_proto::Attempt { run: 0, fence: 0 },
+                    thread,
+                    tool_call_id: approval.then(|| "call".to_owned()),
+                    takeover: false,
+                    safe: false,
+                    asked: crate::card_asks(&kind),
+                };
+                crate::lock(&app.rt)
+                    .dialogs
+                    .insert(answer.id.clone(), pending);
+                crate::resolve_dialog(&app, answer).await.unwrap();
+            }
+        };
+        let value = |v: &str| crate::Answer {
+            id: "card".into(),
+            value: Some(v.into()),
+            ..Default::default()
+        };
+        let decision = |d: &str| crate::Answer {
+            id: "card".into(),
+            decision: Some(d.into()),
+            ..Default::default()
+        };
+        let no = || crate::Answer {
+            id: "card".into(),
+            confirmed: Some(false),
+            ..Default::default()
+        };
+        let dentist = question("Which day suits for the dentist?");
+        answer(&team, dentist, value("Friday")).await;
+        answer(&team, question("Book it?"), no()).await;
+        answer(&team, question("What's the Wi-Fi password?"), value("x")).await;
+        answer(&team, approval("bash"), decision("allow")).await;
+        answer(&team, approval("bash"), decision("always")).await;
+        answer(&team, approval("mail"), decision("always")).await;
+        answer(&private, question("Which day suits?"), value("Friday")).await;
+        answer(&private, approval("bash"), decision("always")).await;
+        assert_eq!(
+            heard_in_thread(&db, team.id).await,
+            [
+                "Asked: Which day suits for the dentist? — Sam answered: Friday",
+                "Asked: Book it? — Sam answered: no",
+                "On a card, Sam chose to always allow the bash tool without asking.",
+            ]
+        );
+        assert!(heard_in_thread(&db, private.id).await.is_empty());
     }
 }

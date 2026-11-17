@@ -15,6 +15,10 @@ ignore = [
   { id = "RUSTSEC-2026-0370", reason = "unmaintained, via tauri-plugin-opener in the legacy Tauri app; no vulnerability" },
   { id = "RUSTSEC-2026-0371", reason = "unmaintained, via tauri-plugin-opener in the legacy Tauri app; no vulnerability" },
   { id = "RUSTSEC-2026-0372", reason = "unmaintained, via tauri-plugin-opener in the legacy Tauri app; no vulnerability" },
+  # chrono and chrono-tz were marked unmaintained on 2026-11-17, not vulnerable, with no upgrade.
+  # Kelvin chose to ignore them for now; replace them with jiff or time if a vulnerability appears.
+  { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained; no vulnerability, no upgrade" },
+  { id = "RUSTSEC-2026-0555", reason = "chrono-tz unmaintained; no vulnerability, no upgrade" },
 ]
 
 [licenses]

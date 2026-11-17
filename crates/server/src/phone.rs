@@ -105,23 +105,59 @@ fn commits(label: &str) -> bool {
         .any(|w| COMMIT_STEMS.iter().any(|s| w.starts_with(s)))
 }
 
-/// Words that name a place in an app rather than an act: a tab, the
-/// navigation bar, search, the notifications list. Only for a tap by id
-/// alone, and only once `commits` found nothing.
-const PLACE_STEMS: &[&str] = &[
-    "tab", "nav", "home", "search", "notif", "explore", "discover", "feed", "menu", "profile",
-    "back", "close", "activity",
+/// The only words a tap-by-id's own name may contain to count as getting
+/// about: places in an app (a tab, the nav bar, search, notifications) and
+/// layout words. Every word must be one of these, so an id that also names
+/// an act (`menu_deactivate_account`) still asks (D-077).
+const PLACE_WORDS: &[&str] = &[
+    "tab",
+    "tabs",
+    "nav",
+    "navigation",
+    "bar",
+    "bottom",
+    "top",
+    "main",
+    "home",
+    "search",
+    "notification",
+    "notifications",
+    "explore",
+    "discover",
+    "feed",
+    "inbox",
+    "profile",
+    "me",
+    "button",
+    "icon",
+    "item",
+    "view",
+    "container",
 ];
 
 /// Whether a resource id (`com.linkedin.android:id/tab_notifications`) names
-/// a place to go: a word of its own name, after `id/`, starts with a place
-/// stem. An opaque id (`a7`, `xyz`) doesn't.
+/// only a place to go: every word of its own name, after `id/`, is a place or
+/// layout word, and at least one is a place. An opaque id (`a7`) doesn't.
 fn goes_to(id: &str) -> bool {
+    const LAYOUT: &[&str] = &[
+        "bar",
+        "bottom",
+        "top",
+        "main",
+        "button",
+        "icon",
+        "item",
+        "view",
+        "container",
+    ];
     let name = id.rsplit_once("id/").map_or(id, |(_, name)| name);
-    name.split(|c: char| !c.is_alphanumeric())
+    let words: Vec<String> = name
+        .split(|c: char| !c.is_alphanumeric())
         .filter(|w| !w.is_empty())
         .map(str::to_lowercase)
-        .any(|w| PLACE_STEMS.iter().any(|s| w.starts_with(s)))
+        .collect();
+    words.iter().all(|w| PLACE_WORDS.contains(&w.as_str()))
+        && words.iter().any(|w| !LAYOUT.contains(&w.as_str()))
 }
 
 pub fn kind(input: &Value) -> Kind {
@@ -221,6 +257,10 @@ mod tests {
             json!({"action": "tap", "id": "com.instagram.android:id/feed_like_button"}),
             json!({"action": "tap", "id": "com.home.app:id/a7"}),
             json!({"action": "tap", "id": "com.linkedin.android:id/tab_post"}),
+            // A place word beside an act still asks.
+            json!({"action": "tap", "id": "com.example:id/menu_deactivate_account"}),
+            json!({"action": "tap", "id": "com.example:id/back_and_discard"}),
+            json!({"action": "tap", "id": "com.example:id/button"}),
             json!({"action": "tap"}),
         ] {
             assert_eq!(kind(&commit), Kind::Commit, "{commit}");

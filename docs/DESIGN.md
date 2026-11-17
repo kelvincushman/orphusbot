@@ -721,7 +721,7 @@ Orphus's answer to multi-agent work is a context-window contract: a discussion l
   Text read off the screen or from comments comes back marked as untrusted information. The gate (`phone::kind`):
   - refuses anything that isn't a phone action, and operate actions from a `draft` bot;
   - lets through looking, queueing, opening apps, typing, swiping, and the keys that only move (`BACK`, `HOME`, `PAGE_DOWN`, …);
-  - treats `ENTER`, `DPAD_CENTER`, a tap by id alone whose id names no place to go (an opaque `a7`; whereas `tab_notifications`, `home` or `search_tab` is getting about, D-077), and any tap whose text, description or id has a word starting with a commit stem as a commit. The stems include post, repl, tweet, like, follow, connect, share, send, delete, confirm, done and more (`COMMIT_STEMS`).
+  - treats `ENTER`, `DPAD_CENTER`, a tap by id alone unless every word of the id's own name is a place or layout word (`tab_notifications`, `home` or `search_tab` is getting about; an opaque `a7` or `menu_deactivate_account` asks, D-077), and any tap whose text, description or id has a word starting with a commit stem as a commit. The stems include post, repl, tweet, like, follow, connect, share, send, delete, confirm, done and more (`COMMIT_STEMS`).
 
   A commit skips the per-tool approval rules, so an "always" given for one tap can't wave a different one (a post) through, and System 1 is never asked. **"Always" on a phone card remembers that exact action (D-059):** the answer adds an `action_rule` row (tool plus `jsonb`-equal input), and the same tap later passes without asking, so a routine that taps the same tab every day runs on its own. Any other commit still asks once. The effect ledger still stops a repeat after an interrupted attempt.
 
@@ -927,7 +927,7 @@ All status columns are Postgres enums. Every row that a decision shaped carries 
 | Ambient audio | Gate before decode; on-device STT by default; no audio stored; 7-day text retention; consent LED |
 | Secrets | Envelope encryption, master key in systemd-creds, redaction on every output path |
 | Wearable link | Pairing requires a signed-in session; device tokens hashed; per-device revoke |
-| Supply chain | `cargo deny` (licences and advisories), pinned E2B protos, pinned Laya artifact hashes |
+| Supply chain | `cargo deny` (licences and advisories; `deny.toml` ignores only advisories that report a crate as unmaintained with no vulnerability, each with its reason: `paste`, `proc-macro-error`, the zbus name crates, and `chrono`/`chrono-tz` (RUSTSEC-2026-0543, RUSTSEC-2026-0555, D-078)), pinned E2B protos, pinned Laya artifact hashes |
 
 **Threat notes:**
 

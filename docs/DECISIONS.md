@@ -11,9 +11,21 @@ Format:
 
 ---
 
+## D-078: Ignore the chrono and chrono-tz "unmaintained" advisories for now (2026-11-17)
+
+**Decided:** `deny.toml` ignores RUSTSEC-2026-0543 (`chrono`) and RUSTSEC-2026-0555 (`chrono-tz`), each with its reason, as it already ignores other unmaintained-only notices.
+
+**Why:** both were published on 2026-11-17 as "unmaintained", with no vulnerability and no upgrade, and failed the required advisories check on every PR. Kelvin chose to ignore them rather than block all work.
+
+**Alternatives:** replace `chrono` and `chrono-tz` with `jiff` or `time` (a change across the server's routines, receipts and time zones, blocking every PR until it lands).
+
+**Revisit if:** either crate gets a vulnerability advisory, or a maintained successor becomes the obvious move.
+
+---
+
 ## D-077: A tap by id that names a place is getting about (2026-11-17)
 
-**Decided:** a phone `tap` with only a resource id, no visible text or description, passes as navigation when a word of the id's own name (after `id/`) starts with a place stem (`tab`, `nav`, `home`, `search`, `notif`, `explore`, `discover`, `feed`, `menu`, `profile`, `back`, `close`, `activity`) and no word starts with a commit stem. Any other id-only tap still asks. Amends D-059, which had rejected classifying `tab_*` ids.
+**Decided:** a phone `tap` with only a resource id, no visible text or description, passes as navigation when no word starts with a commit stem and **every** word of the id's own name (after `id/`) is a place word (`tab`, `nav`, `home`, `search`, `notifications`, `explore`, `discover`, `feed`, `inbox`, `profile`, `me`, …) or a layout word (`bar`, `bottom`, `button`, `icon`, `item`, …), with at least one place word. Any other id-only tap still asks, so `menu_deactivate_account` asks although it contains `menu`. Amends D-059, which had rejected classifying `tab_*` ids.
 
 **Why:** Kelvin gave the Phone bot "always allow" and was still asked, every day, to approve its routine tap on LinkedIn's `tab_notifications`. Exact-action rules (D-059) didn't help in practice: the cards were left unanswered or expired, and every new tab is a new card. Commit stems are checked first, so `tab_post` or `feed_like_button` still ask, and an opaque id still asks. Posts and replies are unchanged: they are queued as drafts and posted by ContentSwarm only after Kelvin approves each (D-044).
 

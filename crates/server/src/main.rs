@@ -484,11 +484,13 @@ struct WhichBot {
 }
 
 /// Stores the message, then queues a run, joins the waiting one, or steers the
-/// running one (B-RUN-01).
+/// running one (B-RUN-01). Answers `{run}`, the run that carries it, or
+/// `{run: null}` while System 1 is still routing it; a call follows its own
+/// work by this id (DESIGN §12.8).
 async fn send_message(
     State(app): State<Shared>,
     Json(msg): Json<NewMessage>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<(StatusCode, Json<Value>), ApiError> {
     let text = msg.text.trim().to_owned();
     if (text.is_empty() && msg.attachments.is_empty()) || text.chars().count() > MAX_MESSAGE_CHARS {
         return Err((
@@ -577,24 +579,29 @@ async fn send_message(
             .map_err(|e| internal("checking the inbox", e))?;
         if !busy {
             tokio::spawn(triage(app.clone(), thread, text, run_text));
-            return Ok(StatusCode::ACCEPTED);
+            return Ok((StatusCode::ACCEPTED, Json(json!({ "run": null }))));
         }
     }
-    submit(&app, &thread, run_text, source)
+    let run = submit(&app, &thread, run_text, source)
         .await
         .map_err(|e| internal("queueing run", e))?;
-    Ok(StatusCode::ACCEPTED)
+    Ok((StatusCode::ACCEPTED, Json(json!({ "run": run }))))
 }
 
 /// Queues `text` as a run in `thread`, or adds it to the thread's active run.
+/// Returns the run that carries it.
 async fn submit(
     app: &App,
     thread: &db::Thread,
     text: String,
     source: runs::Source,
-) -> sqlx::Result<()> {
+) -> sqlx::Result<i64> {
     let sent = source.attachments.clone();
-    match runs::submit(&app.db, thread.id, &text, source).await? {
+    let submitted = runs::submit(&app.db, thread.id, &text, source).await?;
+    let run = match submitted {
+        Submitted::Queued(run) | Submitted::Joined(run) | Submitted::Steer { run, .. } => run,
+    };
+    match submitted {
         Submitted::Queued(run) => {
             lock(&app.rt).waiting.remove(&run);
             let event = ThreadEvent::RunQueued { run, waiting: None };
@@ -619,7 +626,7 @@ async fn submit(
             }
         }
     }
-    Ok(())
+    Ok(run)
 }
 
 /// Asks System 1 which bot an inbox message is for (DESIGN §7.2). If it's sure,

@@ -138,21 +138,29 @@ class Api {
     bool put = false,
   }) async => jsonDecode((await _post(path, body, put: put)).body);
 
-  Future<void> send(
+  /// Sends a message; returns the run that carries it, when the server says.
+  Future<int?> send(
     String bot,
     String text, {
     List<int> attachments = const [],
     bool room = false,
     bool voice = false,
     bool work = false,
-  }) => post('/api/messages', {
-    'bot': bot,
-    'text': text,
-    'attachments': attachments,
-    if (room) 'room': true,
-    if (voice) 'voice': true,
-    if (work) 'work': true,
-  });
+  }) async {
+    final r = await _post('/api/messages', {
+      'bot': bot,
+      'text': text,
+      'attachments': attachments,
+      if (room) 'room': true,
+      if (voice) 'voice': true,
+      if (work) 'work': true,
+    });
+    try {
+      return ((jsonDecode(r.body) as Map)['run'] as num?)?.toInt();
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Uploads a file for `bot`; returns its id, to send with the message.
   Future<int> upload(String bot, String name, List<int> bytes) async {

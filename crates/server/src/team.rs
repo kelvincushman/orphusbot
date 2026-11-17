@@ -337,7 +337,7 @@ pub(crate) async fn tell(app: &App, bot: &str, text: &str) -> bool {
     ))
     .await
     {
-        Ok(()) => true,
+        Ok(_) => true,
         Err(e) => {
             warn!("telling a bot: {e}");
             false

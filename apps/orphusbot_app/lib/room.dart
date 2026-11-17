@@ -543,13 +543,15 @@ class _IdeasRoomState extends State<IdeasRoom>
 /// room message and its reply is the function's answer. On a call (D-074),
 /// `ask` works the same on the quick model, and `do` starts real work and
 /// answers "started"; when that run ends, [onNews] passes the result into
-/// the call. A card the run waits on is never answered here: the voice is
-/// told it needs Kelvin's tap on the screen (hard rule 5).
+/// the call. Each is followed by the run the server says carries it. A card
+/// the run waits on is never answered here: the voice is told it needs
+/// Kelvin's tap on the screen (hard rule 5).
 class OrchestratorLine {
   OrchestratorLine({
     this.inChat = false,
     this.name = 'The Orchestrator',
     this.onNews,
+    this.catchUp = const Duration(seconds: 20),
   });
 
   /// Grok is on a call in the bot's chat, not in the Ideas Room.
@@ -560,20 +562,29 @@ class OrchestratorLine {
 
   /// Something to pass into the call at the next pause.
   final void Function(String)? onNews;
+
+  /// How long to wait for the event stream to catch up before refusing.
+  final Duration catchUp;
   final thread = t.ThreadView();
   StreamSubscription<Map<String, dynamic>>? _events;
-  Completer<String>? _waiting;
-  // A job from the call is running; its result goes to [onNews].
-  bool _doing = false;
-  // Jobs from the call still being sent: one may start a new run after the
-  // last one ended, so the end of that run doesn't end [_doing].
-  int _sending = 0;
-  int _from = 0;
 
   /// The stream replays the whole history first, then the current state,
-  /// which always starts with `nodes`. Until then nothing is acted on, so an
-  /// old reply can't pass for a new one.
+  /// whose last event is `nodes`. Until then nothing is acted on, so an old
+  /// reply can't pass for a new one and the bot's run state is known.
   final _live = Completer<void>();
+
+  // The question's run, and the answer the voice waits for. The answer is
+  // dropped once the voice was told the run waits on a tap, or it gave up
+  // waiting; the run's end then comes as news.
+  int? _asked;
+  Completer<String>? _waiting;
+  // Runs carrying jobs from the call; each one's end is news.
+  final _jobs = <int>{};
+  // Where each followed run's reply starts in the thread.
+  final _from = <int, int>{};
+  // Runs that ended without being followed, in case a send's answer comes
+  // after its run's end: (reply, completed).
+  final _ended = <int, (String?, bool)>{};
 
   void start(Api api, String bot) {
     _events = api.events().listen((e) {
@@ -590,42 +601,55 @@ class OrchestratorLine {
     thread.apply(e);
     if (!_live.isCompleted) return;
     switch (e['type']) {
-      case 'dialog_opened' when inChat && (busy || _doing):
-        final kind = ((e['dialog'] as Map?)?['kind'] as Map?)?['kind'];
-        final need = kind == 'approval'
+      case 'dialog_opened' when inChat:
+        final dialog = e['dialog'] as Map?;
+        final run = (dialog?['run'] as num?)?.toInt();
+        final need = (dialog?['kind'] as Map?)?['kind'] == 'approval'
             ? 'needs your OK on the screen'
             : 'needs you on the screen';
         final w = _waiting;
-        if (w != null) {
-          // The answer comes later, once Kelvin has tapped.
+        if (run != null && run == _asked && w != null) {
           _waiting = null;
-          _doing = true;
           w.complete('$name $need. It carries on once Kelvin has tapped.');
-        } else {
+        } else if (run != null && (run == _asked || _jobs.contains(run))) {
           onNews?.call('($name $need.)');
         }
       case 'run_ended':
-        final fresh = thread.items
-            .skip(_from)
-            .whereType<t.Message>()
-            .where((m) => !m.mine);
-        final reply = fresh.isEmpty ? null : fresh.last.text;
-        final w = _waiting;
-        if (w != null) {
+        final run = (e['run'] as num?)?.toInt();
+        if (run == null) return;
+        final reply = _reply(_from.remove(run) ?? 0);
+        final ok = e['outcome'] == 'completed';
+        final job = _jobs.remove(run);
+        if (run == _asked) {
+          _asked = null;
+          final w = _waiting;
           _waiting = null;
-          _doing = _sending > 0;
-          w.complete(reply ?? "$name didn't answer.");
-        } else if (_doing) {
-          _doing = _sending > 0;
-          _from = thread.items.length;
-          onNews?.call(
-            e['outcome'] == 'completed'
-                ? '($name has finished: ${reply ?? 'it said nothing more'})'
-                : '($name stopped without finishing${reply == null ? '' : ': $reply'})',
-          );
+          if (w != null) {
+            w.complete(reply ?? "$name didn't answer.");
+          } else if (inChat) {
+            onNews?.call(_finished(reply, ok));
+          }
+        } else if (job) {
+          onNews?.call(_finished(reply, ok));
+        } else {
+          _ended[run] = (reply, ok);
+          if (_ended.length > 20) _ended.remove(_ended.keys.first);
         }
     }
   }
+
+  /// The bot's last reply since item [from].
+  String? _reply(int from) {
+    final said = thread.items
+        .skip(from)
+        .whereType<t.Message>()
+        .where((m) => !m.mine);
+    return said.isEmpty ? null : said.last.text;
+  }
+
+  String _finished(String? reply, bool ok) => ok
+      ? '($name has finished: ${reply ?? 'it said nothing more'})'
+      : '($name stopped without finishing${reply == null ? '' : ': $reply'})';
 
   void stop() => _events?.cancel();
 
@@ -638,28 +662,28 @@ class OrchestratorLine {
     String tool,
     Map<String, dynamic> args,
   ) async {
-    // Caught up with the history first (it's normally done long before Grok
-    // has heard a word); a stream that never connects doesn't block the call.
-    await _live.future.timeout(const Duration(seconds: 20), onTimeout: () {});
+    // Caught up with the history first (normally long before Grok has heard
+    // a word). Without it the bot's state is unknown, so nothing is sent.
+    await _live.future.timeout(catchUp, onTimeout: () {});
+    if (!_live.isCompleted) {
+      return "Can't reach $name just now. Try again in a moment.";
+    }
+    final mark = thread.items.length;
     if (tool == 'do') {
       final task = args['task'] as String? ?? '';
       if (task.trim().isEmpty) return 'Nothing was asked.';
-      // A job sent now would join the question's run, on the quick model.
-      if (busy) {
-        return '$name is still answering your question. Hand it the job '
-            'once the answer is in.';
+      // A job now would join the question's run, on the quick model.
+      if (_asked != null) {
+        return '$name is still on your question. Hand it the job once '
+            "that's done.";
       }
-      if (!_doing) _from = thread.items.length;
-      final already = _doing;
-      _doing = true;
-      _sending++;
-      try {
-        await api.send(bot, task, voice: true, work: true);
-      } catch (_) {
-        _doing = already;
-        rethrow;
-      } finally {
-        _sending--;
+      final run = await api.send(bot, task, voice: true, work: true);
+      if (run == null) return 'Sent to $name.';
+      _from.putIfAbsent(run, () => mark);
+      if (_ended.remove(run) case final (String?, bool) done) {
+        onNews?.call(_finished(done.$1, done.$2));
+      } else {
+        _jobs.add(run);
       }
       return "Started. $name will say when it's finished.";
     }
@@ -671,36 +695,42 @@ class OrchestratorLine {
       _ => args['request'] as String? ?? '',
     };
     if (request.trim().isEmpty) return 'Nothing was asked.';
-    // A job that was sent as its run ended joined that run: nothing is left.
-    if (_doing && _sending == 0 && thread.run == t.RunState.idle) {
-      _doing = false;
-    }
     // The bot runs one thing at a time: a question would wait for the job,
-    // or be steered into a run on the bot's own model.
-    if (_doing) {
+    // or be steered into a run on another model.
+    if (_jobs.isNotEmpty) {
       return "$name is still on the job you gave it, so it can't answer yet. "
           "It will say when it's finished.";
     }
+    if (_asked != null) return '$name is still on your last question.';
     if (inChat && thread.run != t.RunState.idle) {
       return "$name is busy with another task, so it can't answer quickly "
           'now. Hand it a job with do, or ask again when it has finished.';
     }
     final done = Completer<String>();
     _waiting = done;
-    _from = thread.items.length;
     // The chat's voice stays in the chat's session, the room's in its own (D-063).
+    final int? run;
     try {
-      await api.send(bot, request, room: !inChat, voice: inChat);
+      run = await api.send(bot, request, room: !inChat, voice: inChat);
     } catch (_) {
       _waiting = null;
       rethrow;
     }
+    if (run == null) {
+      _waiting = null;
+      return "Sent; $name's answer will be in its chat.";
+    }
+    _from.putIfAbsent(run, () => mark);
+    if (_ended.remove(run) case final (String?, bool) ended) {
+      _waiting = null;
+      return ended.$1 ?? "$name didn't answer.";
+    }
+    _asked = run;
     return done.future.timeout(
       const Duration(seconds: 90),
       onTimeout: () {
-        _waiting = null;
         // On a call, the answer still comes, as news.
-        _doing = inChat;
+        _waiting = null;
         return '$name is still working on it; the answer will be in its chat.';
       },
     );

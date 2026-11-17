@@ -121,26 +121,44 @@ void main() {
 
   group('a call with a bot', () {
     late List<Map<String, dynamic>> sent;
-    late Api api;
     late List<String> news;
     late OrchestratorLine line;
-    Map<String, dynamic> approval() => {
+    // The run the server says carries each message, in order.
+    late List<int> runs;
+    // Called as the server takes a message, before it answers.
+    void Function()? meanwhile;
+    late Api api;
+    Map<String, dynamic> nodes() => {'type': 'nodes', 'nodes': []};
+    Map<String, dynamic> reply(String text) => {
+      'type': 'message',
+      'role': 'assistant',
+      'text': text,
+    };
+    Map<String, dynamic> ended(int run) => {
+      'type': 'run_ended',
+      'run': run,
+      'outcome': 'completed',
+    };
+    Map<String, dynamic> approval(int run) => {
       'type': 'dialog_opened',
       'dialog': {
-        'id': 'd1',
-        'run': 1,
+        'id': 'd$run',
+        'run': run,
         'kind': {'kind': 'approval', 'tool': 'send_email', 'input': {}},
       },
     };
     setUp(() {
       sent = [];
       news = [];
+      runs = [];
+      meanwhile = null;
       api = Api(
         'http://server',
         'session=x',
         MockClient((r) async {
           sent.add(jsonDecode(r.body) as Map<String, dynamic>);
-          return http.Response('', 202);
+          meanwhile?.call();
+          return http.Response(jsonEncode({'run': runs.removeAt(0)}), 202);
         }),
       );
       line = OrchestratorLine(inChat: true, name: 'Coder', onNews: news.add);
@@ -148,23 +166,38 @@ void main() {
 
     test('replayed history is never taken for a new answer', () async {
       // History: an old job that finished, replayed before the current state.
-      line.handle({'type': 'message', 'role': 'assistant', 'text': 'Old.'});
-      line.handle({'type': 'run_ended', 'run': 1, 'outcome': 'completed'});
+      line.handle(reply('Old.'));
+      line.handle(ended(7));
+      runs = [8];
       final answer = line.ask(api, 'coder', 'ask', {'request': 'status?'});
       await pumpEventQueue();
       // Nothing is sent until the stream has caught up.
       expect(sent, isEmpty);
-      line.handle({'type': 'nodes', 'nodes': []});
+      line.handle(nodes());
       await pumpEventQueue();
-      expect(sent, hasLength(1));
-      line.handle({'type': 'message', 'role': 'assistant', 'text': 'New.'});
-      line.handle({'type': 'run_ended', 'run': 2, 'outcome': 'completed'});
+      expect(sent.single, containsPair('voice', true));
+      expect(sent.single.containsKey('work'), isFalse);
+      line.handle(reply('New.'));
+      line.handle(ended(8));
       expect(await answer, 'New.');
       expect(news, isEmpty);
     });
 
+    test('nothing is sent if the stream never catches up', () async {
+      line = OrchestratorLine(
+        inChat: true,
+        name: 'Coder',
+        catchUp: Duration.zero,
+      );
+      expect(
+        await line.ask(api, 'coder', 'ask', {'request': 'status?'}),
+        contains("Can't reach Coder"),
+      );
+      expect(sent, isEmpty);
+    });
+
     test('a question is not steered into another task', () async {
-      line.handle({'type': 'nodes', 'nodes': []});
+      line.handle(nodes());
       line.handle({'type': 'run_queued', 'run': 3, 'waiting': null});
       expect(
         await line.ask(api, 'coder', 'ask', {'request': 'how is it going?'}),
@@ -174,12 +207,12 @@ void main() {
     });
 
     test('do starts work and the result comes back at a pause', () async {
-      line.handle({'type': 'nodes', 'nodes': []});
+      line.handle(nodes());
+      runs = [1];
       final out = await line.ask(api, 'coder', 'do', {'task': 'fix the tests'});
       expect(out, startsWith('Started.'));
       expect(sent.single, containsPair('voice', true));
       expect(sent.single, containsPair('work', true));
-      line.handle({'type': 'run_queued', 'run': 1, 'waiting': null});
       // A question would wait behind the job, so the voice is told at once.
       expect(
         await line.ask(api, 'coder', 'ask', {'request': 'how long?'}),
@@ -187,69 +220,66 @@ void main() {
       );
       expect(sent, hasLength(1));
       // A card is left to a tap: the voice only hears that it's waiting.
-      line.handle(approval());
+      line.handle(approval(1));
       expect(news, ['(Coder needs your OK on the screen.)']);
-      line.handle({
-        'type': 'message',
-        'role': 'assistant',
-        'text': 'All green.',
-      });
-      line.handle({'type': 'run_ended', 'run': 1, 'outcome': 'completed'});
+      // Another run's end is not this job's.
+      line.handle(ended(5));
+      expect(news, hasLength(1));
+      line.handle(reply('All green.'));
+      line.handle(ended(1));
       expect(news.last, '(Coder has finished: All green.)');
     });
 
-    test('a job sent as the last one ends still reports back', () async {
-      final held = Completer<http.Response>();
-      var calls = 0;
-      api = Api(
-        'http://server',
-        'session=x',
-        MockClient(
-          (r) async => ++calls == 2 ? held.future : http.Response('', 202),
-        ),
-      );
-      line.handle({'type': 'nodes', 'nodes': []});
+    test('each job reports back, joined or in a run of its own', () async {
+      line.handle(nodes());
+      // The second job joins the first's run; the third has its own.
+      runs = [1, 1, 2];
       await line.ask(api, 'coder', 'do', {'task': 'fix the tests'});
-      final second = line.ask(api, 'coder', 'do', {'task': 'then the docs'});
-      await pumpEventQueue();
-      line.handle({'type': 'message', 'role': 'assistant', 'text': 'Tests.'});
-      line.handle({'type': 'run_ended', 'run': 1, 'outcome': 'completed'});
-      expect(news, ['(Coder has finished: Tests.)']);
-      // The second job arrived after that run ended: a new run of its own.
-      held.complete(http.Response('', 202));
-      await second;
-      line.handle({'type': 'run_queued', 'run': 2, 'waiting': null});
-      line.handle({'type': 'message', 'role': 'assistant', 'text': 'Docs.'});
-      line.handle({'type': 'run_ended', 'run': 2, 'outcome': 'completed'});
-      expect(news.last, '(Coder has finished: Docs.)');
+      await line.ask(api, 'coder', 'do', {'task': 'and the lint'});
+      line.handle(reply('Tests and lint.'));
+      line.handle(ended(1));
+      await line.ask(api, 'coder', 'do', {'task': 'then the docs'});
+      line.handle(reply('Docs.'));
+      line.handle(ended(2));
+      expect(news, [
+        '(Coder has finished: Tests and lint.)',
+        '(Coder has finished: Docs.)',
+      ]);
+    });
+
+    test('a run that ends before its send returns still reports', () async {
+      line.handle(nodes());
+      runs = [4];
+      meanwhile = () {
+        line.handle(reply('Quick one.'));
+        line.handle(ended(4));
+      };
+      await line.ask(api, 'coder', 'do', {'task': 'tiny job'});
+      expect(news, ['(Coder has finished: Quick one.)']);
     });
 
     test('ask answers with the reply, or says it needs a tap', () async {
-      line.handle({'type': 'nodes', 'nodes': []});
+      line.handle(nodes());
+      runs = [1, 2];
       final answer = line.ask(api, 'coder', 'ask', {'request': 'status?'});
       await pumpEventQueue();
-      expect(sent.single, containsPair('voice', true));
-      expect(sent.single.containsKey('work'), isFalse);
-      // A job now would join the question's run, on the quick model.
+      line.handle(approval(1));
+      expect(await answer, startsWith('Coder needs your OK on the screen.'));
+      // Its run is still the question's: a job now would join it on the
+      // quick model.
       expect(
         await line.ask(api, 'coder', 'do', {'task': 'and send it'}),
-        contains('still answering'),
+        contains('still on your question'),
       );
       expect(sent, hasLength(1));
-      line.handle(approval());
-      expect(await answer, startsWith('Coder needs your OK on the screen.'));
-      line.handle({'type': 'message', 'role': 'assistant', 'text': 'Sent.'});
-      line.handle({'type': 'run_ended', 'run': 1, 'outcome': 'completed'});
+      line.handle(reply('Sent.'));
+      line.handle(ended(1));
       expect(news, ['(Coder has finished: Sent.)']);
 
       final next = line.ask(api, 'coder', 'ask', {'request': 'and now?'});
       await pumpEventQueue();
-      line.handle({
-        'type': 'message',
-        'role': 'assistant',
-        'text': 'All done.',
-      });
-      line.handle({'type': 'run_ended', 'run': 2, 'outcome': 'completed'});
+      line.handle(reply('All done.'));
+      line.handle(ended(2));
       expect(await next, 'All done.');
       expect(news, hasLength(1));
     });

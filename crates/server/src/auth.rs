@@ -474,6 +474,7 @@ pub(crate) mod tests {
             social: crate::social::Social::off(),
             memory: crate::memory::Memory::off(),
             xsearch: crate::xsearch::XSearch::off(),
+            mail: crate::mail::Mail::off(),
             ui_dir: String::new(),
         })
     }

@@ -75,6 +75,12 @@ pub fn label(tool: &str, input: &Value, names: &Names) -> (String, StepKind) {
         "read_notes" => fixed("Reading its notes", StepKind::Read),
         "remember" | "rewrite_notes" => fixed("Updating its notes", StepKind::Write),
         "x_search" => fixed("Searching X", StepKind::Search),
+        // Mail (DESIGN §11.11): the envelope prop; the action is matched, never shown.
+        "mail" => match input["action"].as_str() {
+            Some("draft" | "send") => fixed("Writing an email", StepKind::Google),
+            Some("move" | "delete" | "flag" | "unflag") => fixed("Sorting mail", StepKind::Google),
+            _ => fixed("Checking mail", StepKind::Google),
+        },
         // Orphus's web tools, which only run for a bot without a computer.
         "web_search" | "code_search" => fixed("Searching the web", StepKind::Search),
         "fetch_content" | "get_search_content" => fixed("Reading a web page", StepKind::Browse),
@@ -262,6 +268,24 @@ mod tests {
                 StepKind::Search,
             ),
             (
+                "mail",
+                json!({ "action": "list", "account": "work" }),
+                "Checking mail",
+                StepKind::Google,
+            ),
+            (
+                "mail",
+                json!({ "action": "send", "account": "work", "to": ["a@example.com"] }),
+                "Writing an email",
+                StepKind::Google,
+            ),
+            (
+                "mail",
+                json!({ "action": "delete", "account": "work", "ids": ["4"] }),
+                "Sorting mail",
+                StepKind::Google,
+            ),
+            (
                 "mcp:github_search_code",
                 json!({}),
                 "Using github",
@@ -334,6 +358,7 @@ mod tests {
             json!({ "args": [SECRET, SECRET] }),
             json!({ "args": ["gmail", SECRET, "--params", SECRET] }),
             json!({ "tool": SECRET, "server": SECRET, "url": SECRET, "prompt": SECRET }),
+            json!({ "action": SECRET, "account": SECRET, "to": [SECRET], "subject": SECRET }),
             json!(SECRET),
             json!([SECRET]),
         ];
@@ -351,6 +376,7 @@ mod tests {
             "remember",
             "rewrite_notes",
             "x_search",
+            "mail",
             "mcp",
             "web_search",
             "fetch_content",
@@ -378,6 +404,9 @@ mod tests {
             "Reading its notes",
             "Updating its notes",
             "Searching X",
+            "Checking mail",
+            "Writing an email",
+            "Sorting mail",
             "Using github",
             "Using a connection",
             "Searching the web",

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select b.mail_accounts from run r join thread t on t.id = r.thread_id join bot b on b.id = t.bot_id where r.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mail_accounts",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "mail_accounts"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "40aa31551702340cd1d9c63955c09534ebdfad298fc5a2f947aadfcad69c6633"
+}

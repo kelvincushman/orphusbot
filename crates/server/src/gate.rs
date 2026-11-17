@@ -189,6 +189,22 @@ pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Re
             crate::google::Kind::Change => {}
         }
     }
+    // Mail through the server's Himalaya (DESIGN §11.11, D-075): only the bot's
+    // own accounts; reads pass; a draft passes but is ledgered (B-RUN-04); a
+    // send, move, delete or flag change asks the owner every time, whatever
+    // the rules say.
+    let mut mail_change = false;
+    let mut mail_draft = false;
+    if call.tool == "mail" {
+        use crate::mail::Kind;
+        let accounts = crate::mail::accounts_for_run(db, call.attempt.run).await?;
+        match crate::mail::Request::check(call.input, &accounts).map(|r| r.op.kind()) {
+            Err(why) => return Ok(Verdict::Deny(why)),
+            Ok(Kind::Lookup) => return Ok(Verdict::Allow),
+            Ok(Kind::Draft) => mail_draft = true,
+            Ok(Kind::Change) => mail_change = true,
+        }
+    }
     // The phone (DESIGN §11.6): looking, queueing drafts and getting about pass;
     // anything that could commit asks the owner every time, whatever the rules say.
     let mut phone_commit = false;
@@ -271,6 +287,13 @@ pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Re
         _ => {}
     }
 
+    // A draft only lands in the owner's drafts folder, so it needs no card,
+    // but it is ledgered so an interrupted attempt doesn't save it twice.
+    if mail_draft {
+        record(db, call, "approved", Some("rule")).await?;
+        return Ok(Verdict::Allow);
+    }
+
     // Installing a skill changes what every bot is told, so the owner sees and
     // approves each one; no "always" rule waves it through (D-051). A phone tap that
     // could commit skips the per-tool rule too (D-045), but passes if the owner said
@@ -284,7 +307,9 @@ pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Re
         } else {
             call.tool
         };
-    let rule = if call.tool == "install_skill" {
+    // A mail change is asked about every time too: an "always" for `mail`
+    // would let any email go to anyone (D-075).
+    let rule = if call.tool == "install_skill" || mail_change {
         None
     } else if phone_commit {
         sqlx::query_scalar!(
@@ -407,6 +432,8 @@ pub async fn owner_decides(
     .fetch_optional(&mut *tx)
     .await?;
     match decided {
+        // Every mail change is the owner's own tap (D-075): no "always".
+        Some(d) if d.tool == "mail" => {}
         Some(d) if allow && always && d.tool == "phone" => {
             sqlx::query!(
                 "insert into action_rule (tool, input) values ($1, $2) on conflict do nothing",
@@ -816,6 +843,81 @@ mod tests {
                 .unwrap(),
             Verdict::Ask { .. }
         ));
+    }
+
+    #[sqlx::test]
+    async fn mail_reads_and_drafts_pass_and_every_change_asks(db: PgPool) {
+        let (first, a) = run_with_attempts(&db).await;
+        let list = json!({"action": "list", "account": "work"});
+        // No accounts: nothing passes.
+        assert!(matches!(
+            decide(&db, &call(a, "e0", "mail", &list)).await.unwrap(),
+            Verdict::Deny(_)
+        ));
+        sqlx::query!(
+            "update bot set mail_accounts = '{work}' where id = (select bot_id from thread where id = 1)"
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        let draft = json!({"action": "draft", "account": "work", "to": ["a@example.com"], "subject": "s", "body": "b"});
+        for (id, input) in [("e1", &list), ("e2", &draft)] {
+            assert_eq!(
+                decide(&db, &call(a, id, "mail", input)).await.unwrap(),
+                Verdict::Allow
+            );
+        }
+        // A draft is ledgered: one saved in an interrupted attempt isn't saved again.
+        let again = json!({"action": "draft", "account": "work", "subject": "once"});
+        assert_eq!(
+            decide(&db, &call(first, "d1", "mail", &again))
+                .await
+                .unwrap(),
+            Verdict::Allow
+        );
+        tool_done(&db, first, "d1", true, "ok:Saved").await.unwrap();
+        assert!(matches!(
+            decide(&db, &call(a, "d2", "mail", &again)).await.unwrap(),
+            Verdict::Deny(why) if why.contains("already ran")
+        ));
+        let other = json!({"action": "list", "account": "personal"});
+        assert!(matches!(
+            decide(&db, &call(a, "e3", "mail", &other)).await.unwrap(),
+            Verdict::Deny(_)
+        ));
+        // Even with an "always" rule for mail, a send asks, and "always" adds none.
+        sqlx::query!("insert into approval_rule (tool, effect) values ('mail', 'allow')")
+            .execute(&db)
+            .await
+            .unwrap();
+        let send = json!({"action": "send", "account": "work", "to": ["a@example.com"], "subject": "s", "body": "b"});
+        let delete = json!({"action": "delete", "account": "work", "ids": ["4"]});
+        for (id, input) in [("e4", &send), ("e5", &delete)] {
+            assert_eq!(
+                decide(&db, &call(a, id, "mail", input)).await.unwrap(),
+                Verdict::Ask { uncertain: false }
+            );
+        }
+        sqlx::query!("delete from approval_rule")
+            .execute(&db)
+            .await
+            .unwrap();
+        owner_decides(&db, a, "e4", true, true).await.unwrap();
+        let rules = sqlx::query_scalar!(
+            r#"select (select count(*) from approval_rule) + (select count(*) from action_rule) as "n!""#
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(rules, 0);
+        let state = sqlx::query_scalar!(
+            "select state::text from effect where run_id = $1 and tool_call_id = 'e4'",
+            a.run
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(state.as_deref(), Some("approved"));
     }
 
     #[sqlx::test]

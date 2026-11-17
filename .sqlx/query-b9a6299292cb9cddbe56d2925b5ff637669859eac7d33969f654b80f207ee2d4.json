@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select routine_id is not null as \"r!\" from run where id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "r!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b9a6299292cb9cddbe56d2925b5ff637669859eac7d33969f654b80f207ee2d4"
+}

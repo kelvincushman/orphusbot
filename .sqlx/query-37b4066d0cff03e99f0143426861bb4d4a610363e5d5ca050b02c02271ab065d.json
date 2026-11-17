@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select exists (select 1 from event where thread_id = $1 and body ->> 'type' = 'quiet'\n                  and body ->> 'run' = $2::bigint::text) as \"q!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "q!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "37b4066d0cff03e99f0143426861bb4d4a610363e5d5ca050b02c02271ab065d"
+}

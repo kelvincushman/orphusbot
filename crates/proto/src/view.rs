@@ -141,6 +141,9 @@ pub struct ThreadView {
     pub run_where: RunWhere,
     /// The label of the newest unfinished step, for the status line.
     pub doing: Option<String>,
+    /// The routine run whose two lines (its notice and prompt) start at this
+    /// item, until it ends; a `Quiet` takes them out again.
+    pub routine: Option<(i64, usize)>,
 }
 
 impl ThreadView {
@@ -345,6 +348,42 @@ impl ThreadView {
                     ticket,
                     ok,
                 });
+            }
+            ThreadEvent::RoutineFired { run, notice, text } => {
+                self.routine = Some((run, self.items.len()));
+                self.items.push(Item::Notice {
+                    text: notice,
+                    error: false,
+                });
+                self.items.push(Item::Message {
+                    role: Role::User,
+                    text,
+                });
+            }
+            ThreadEvent::Quiet { run } => {
+                // Its reply never arrives as a message; drop what streamed.
+                self.streaming = None;
+                if let Some((r, start)) = self.routine.take()
+                    && r == run
+                    && matches!(self.items.get(start), Some(Item::Notice { .. }))
+                    && matches!(
+                        self.items.get(start + 1),
+                        Some(Item::Message {
+                            role: Role::User,
+                            ..
+                        })
+                    )
+                {
+                    self.items.drain(start..start + 2);
+                }
+                for item in &mut self.items {
+                    if let Item::Steps { steps, .. } = item {
+                        steps.retain(|s| s.run != run);
+                    }
+                }
+                self.items
+                    .retain(|i| !matches!(i, Item::Steps { steps, .. } if steps.is_empty()));
+                return;
             }
         }
         // Whatever comes after a fold-up closes it to new steps.
@@ -863,5 +902,66 @@ mod tests {
             view.status(&nodes),
             "gpu-box, laptop (on battery) online · waiting: gpu-box is busy"
         );
+    }
+
+    #[test]
+    fn a_quiet_routine_run_leaves_nothing_behind() {
+        let fired = |run: i64| ThreadEvent::RoutineFired {
+            run,
+            notice: "Routine \"Mail\" (schedule)".into(),
+            text: "Check the mail.".into(),
+        };
+        let step = |run: i64, id: &str| ThreadEvent::StepStarted {
+            run,
+            id: id.into(),
+            label: "Checking mail".into(),
+            kind: StepKind::Google,
+        };
+        let ended = |run: i64| ThreadEvent::RunEnded {
+            run,
+            outcome: RunOutcome::Completed,
+            error: None,
+        };
+        let mut view = fold(vec![
+            ThreadEvent::Message {
+                role: Role::User,
+                text: "hello".into(),
+            },
+            fired(7),
+            step(7, "a"),
+            ThreadEvent::StepEnded {
+                run: 7,
+                id: "a".into(),
+                ok: true,
+            },
+            ThreadEvent::Delta {
+                run: 7,
+                text: crate::QUIET_REPLY.into(),
+            },
+            ThreadEvent::Quiet { run: 7 },
+            ended(7),
+        ]);
+        assert_eq!(view.items, vec![msg(Role::User, "hello")]);
+        assert_eq!(view.streaming, None);
+
+        // One with something to say stays, prompt and all.
+        for e in [
+            fired(8),
+            step(8, "b"),
+            ThreadEvent::Message {
+                role: Role::Assistant,
+                text: "Two new emails.".into(),
+            },
+            ended(8),
+            // A quiet for another run takes nothing.
+            ThreadEvent::Quiet { run: 9 },
+        ] {
+            view.apply(e);
+        }
+        assert_eq!(view.items.len(), 5);
+        assert!(matches!(&view.items[1], Item::Notice { text, .. } if text.starts_with("Routine")));
+        assert_eq!(view.items[2], msg(Role::User, "Check the mail."));
+        assert!(matches!(&view.items[3], Item::Steps { steps, .. } if steps.len() == 1));
+        assert_eq!(view.items[4], msg(Role::Assistant, "Two new emails."));
     }
 }

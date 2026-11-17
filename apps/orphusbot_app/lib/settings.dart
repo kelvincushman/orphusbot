@@ -664,6 +664,9 @@ class _BotEditorState extends State<BotEditor> {
     text: bot['instructions'] as String,
   );
   late final model = TextEditingController(text: bot['model'] as String?);
+  late final mail = TextEditingController(
+    text: ((bot['mail_accounts'] as List?) ?? []).join(', '),
+  );
   List<String> models = [];
   String? error;
   bool get isNew => widget.bot == null;
@@ -681,7 +684,7 @@ class _BotEditorState extends State<BotEditor> {
 
   @override
   void dispose() {
-    for (final c in [name, remit, instructions, model]) {
+    for (final c in [name, remit, instructions, model, mail]) {
       c.dispose();
     }
     super.dispose();
@@ -695,6 +698,10 @@ class _BotEditorState extends State<BotEditor> {
       'remit': remit.text.trim(),
       'instructions': instructions.text,
       'model': m.isEmpty ? null : m,
+      'mail_accounts': [
+        for (final a in mail.text.split(','))
+          if (a.trim().isNotEmpty) a.trim(),
+      ],
     };
     try {
       await widget.api.post(isNew ? '/api/bots' : '/api/bots/update', edited);
@@ -863,6 +870,17 @@ class _BotEditorState extends State<BotEditor> {
                 ),
                 value: bot['x_search'] as bool? ?? false,
                 onChanged: (x) => setState(() => bot['x_search'] = x),
+              ),
+              TextField(
+                controller: mail,
+                decoration: const InputDecoration(
+                  labelText: 'Mail accounts',
+                  hintText: 'personal, work',
+                  helperText:
+                      "Names of the server's Himalaya accounts this bot may use. "
+                      'Reading and drafts go ahead; sending, moving and deleting ask you.',
+                  helperMaxLines: 3,
+                ),
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,

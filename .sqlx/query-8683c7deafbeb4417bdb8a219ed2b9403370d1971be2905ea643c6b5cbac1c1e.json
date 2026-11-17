@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update bot set mail_accounts = '{work}' where id = (select bot_id from thread where id = 1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "8683c7deafbeb4417bdb8a219ed2b9403370d1971be2905ea643c6b5cbac1c1e"
+}

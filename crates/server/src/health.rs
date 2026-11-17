@@ -417,7 +417,7 @@ async fn record(
 fn tell(app: &App, news: Option<(String, String)>) {
     if let Some((title, body)) = news {
         let broke = !title.ends_with("working again");
-        app.notifier.send(crate::notify::Push {
+        app.push(crate::notify::Push {
             title,
             body,
             priority: if broke { 4 } else { 3 },

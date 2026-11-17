@@ -1435,14 +1435,12 @@ async fn announce_released(app: &App, released: Vec<runs::Released>) {
         // The run may have been dispatched again between the release and now.
         // Only the lost attempt is cleared; a newer one keeps its place, its
         // dialogs and its steps, and the run isn't announced as queued.
-        let restarted = {
+        {
             let mut rt = lock(&app.rt);
-            let restarted = rt.active.get(&r.run).is_some_and(|a| a.attempt != lost);
-            if !restarted {
+            if rt.active.get(&r.run).is_some_and(|a| a.attempt == lost) {
                 rt.active.remove(&r.run);
             }
-            restarted
-        };
+        }
         expire_dialogs(app, r.run, Some(lost)).await;
         let thread = match db::run_thread(&app.db, r.run).await {
             Ok(thread) => thread,
@@ -1456,8 +1454,12 @@ async fn announce_released(app: &App, released: Vec<runs::Released>) {
             run_ended(app, &thread, r.run, RunOutcome::Failed, error).await;
         } else {
             steps::abandon(app, &thread, lost).await;
-            if !restarted {
-                lock(&app.rt).waiting.remove(&r.run);
+            // Checked again and announced under the lock: a replacement goes
+            // into `active` under it before it announces `RunStarted`, so a
+            // client never sees "queued" after "started".
+            let mut rt = lock(&app.rt);
+            if !rt.active.contains_key(&r.run) {
+                rt.waiting.remove(&r.run);
                 let event = ThreadEvent::RunQueued {
                     run: r.run,
                     waiting: None,
@@ -2039,7 +2041,14 @@ mod tests {
                 rt.google_calls.insert((a, "call-1".into()));
             }
         }
+        let mut live = app.live.subscribe();
         super::announce_released(&app, released).await;
+        let mut queued = false;
+        while let Ok(l) = live.try_recv() {
+            queued |= matches!(l.event, orphusbot_proto::ThreadEvent::RunQueued { .. });
+        }
+        // Announced as queued only when no replacement had registered.
+        assert_eq!(queued, !active_first);
         let rt = super::lock(&app.rt);
         if active_first {
             assert_eq!(rt.active.get(&run).map(|a| a.attempt), Some(replacement));

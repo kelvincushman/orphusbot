@@ -557,6 +557,25 @@ mod tests {
             &json!({ "bot": "blog", "task": "Hush task" }),
         )
         .await;
+        // Nor in the teammate's chat: the hand-off is drawn in the chief's only,
+        // when it's made and when it's answered.
+        let shown = async |slug: String| {
+            sqlx::query_scalar!(
+                r#"select e.body ->> 'type' as "kind!" from event e
+                   join thread t on t.id = e.thread_id join bot b on b.id = t.bot_id
+                   where b.slug = $1 and e.body ->> 'type' in ('asked', 'answered') order by e.id"#,
+                slug
+            )
+            .fetch_all(&db)
+            .await
+            .unwrap()
+        };
+        assert_eq!(shown(chief(secret)).await, ["asked"]);
+        assert!(shown("blog".into()).await.is_empty());
+        let blog_run = run_of(&db, "blog").await;
+        team::answered(&app, blog_run, orphusbot_proto::RunOutcome::Failed, None).await;
+        assert_eq!(shown(chief(secret)).await, ["asked", "answered"]);
+        assert!(shown("blog".into()).await.is_empty());
         sqlx::query!("update mission set team = '{coder}' where id = $1", secret)
             .execute(&db)
             .await

@@ -4,13 +4,16 @@
 // legs, wheels, tracks, rotors…), each with the state machine `Bot`: a
 // `state` input that follows the bot (ThreadView.mood) and a `poke` trigger.
 // Tapping fires poke from inside the file; idle robots also fidget now and
-// then by themselves.
+// then by themselves. `give` and `receive` are fired from outside, for a
+// hand-off. How much of this moves follows the Animation setting (motion.dart).
 import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:rive/rive.dart' as rive;
+
+import 'motion.dart';
 
 // Loaded once per style and shared by every face using it.
 final _files = <String, Future<rive.File?>>{};
@@ -45,6 +48,7 @@ class BotAvatar extends StatefulWidget {
     this.doing = 0,
     this.size = 40,
     this.body = false,
+    this.flip = false,
   });
   final String slug;
   final int mood;
@@ -57,20 +61,39 @@ class BotAvatar extends StatefulWidget {
   /// The whole robot (`Robot`, [size] wide and 1.3 times as tall) instead of the head.
   final bool body;
 
+  /// Mirrored, to face a partner on its left: the files' give and receive
+  /// reach to the right.
+  final bool flip;
+
   @override
-  State<BotAvatar> createState() => _BotAvatarState();
+  State<BotAvatar> createState() => BotAvatarState();
 }
 
-class _BotAvatarState extends State<BotAvatar> {
+class BotAvatarState extends State<BotAvatar> {
   rive.RiveWidgetController? controller;
   rive.NumberInput? state;
   rive.NumberInput? doing;
   rive.TriggerInput? poke;
+  rive.TriggerInput? _give;
+  rive.TriggerInput? _receive;
   Timer? fidget;
+
+  /// Hands a note to the partner on its right (or left, if flipped).
+  void give() {
+    if (motionOf(context) != Motion.off) _give?.fire();
+  }
+
+  /// Takes a note from the partner.
+  void receive() {
+    if (motionOf(context) != Motion.off) _receive?.fire();
+  }
+
+  void _motionChanged() => setState(() {});
 
   @override
   void initState() {
     super.initState();
+    motion.addListener(_motionChanged);
     faceFile(widget.slug).then((f) {
       if (f == null || !mounted) return;
       setState(() {
@@ -86,6 +109,10 @@ class _BotAvatarState extends State<BotAvatar> {
         poke = controller!.stateMachine.trigger('poke');
         // ignore: deprecated_member_use
         doing = controller!.stateMachine.number('doing');
+        // ignore: deprecated_member_use
+        _give = controller!.stateMachine.trigger('give');
+        // ignore: deprecated_member_use
+        _receive = controller!.stateMachine.trigger('receive');
         state?.value = widget.mood.toDouble();
         doing?.value = widget.doing.toDouble();
       });
@@ -97,22 +124,26 @@ class _BotAvatarState extends State<BotAvatar> {
   void _fidgetLater() {
     fidget = Timer(Duration(seconds: 20 + Random().nextInt(30)), () {
       if (!mounted) return;
-      if (widget.mood == 0) poke?.fire();
+      // Calm and off drop the fidgets.
+      if (widget.mood == 0 && motionOf(context) == Motion.full) poke?.fire();
       _fidgetLater();
     });
   }
 
   @override
-  void didUpdateWidget(BotAvatar old) {
-    super.didUpdateWidget(old);
+  void didUpdateWidget(BotAvatar oldWidget) {
+    super.didUpdateWidget(oldWidget);
     state?.value = widget.mood.toDouble();
     doing?.value = widget.doing.toDouble();
   }
 
   @override
   void dispose() {
+    motion.removeListener(_motionChanged);
     fidget?.cancel();
     poke?.dispose();
+    _give?.dispose();
+    _receive?.dispose();
     state?.dispose();
     doing?.dispose();
     controller?.dispose();
@@ -120,13 +151,26 @@ class _BotAvatarState extends State<BotAvatar> {
   }
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    width: widget.size,
-    height: widget.body ? widget.size * 1.3 : widget.size,
-    child: controller == null
-        ? null
-        : rive.RiveWidget(controller: controller!, fit: rive.Fit.contain),
-  );
+  Widget build(BuildContext context) {
+    // Off: the face is drawn but doesn't advance, so it stands still.
+    final moving = motionOf(context) != Motion.off;
+    if (controller != null && controller!.active != moving) {
+      controller!.active = moving;
+    }
+    return SizedBox(
+      width: widget.size,
+      height: widget.body ? widget.size * 1.3 : widget.size,
+      child: controller == null
+          ? null
+          : Transform.flip(
+              flipX: widget.flip,
+              child: rive.RiveWidget(
+                controller: controller!,
+                fit: rive.Fit.contain,
+              ),
+            ),
+    );
+  }
 }
 
 /// Every face in the library: the styles shipped in assets/faces.

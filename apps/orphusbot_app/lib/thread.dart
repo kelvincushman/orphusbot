@@ -88,6 +88,40 @@ class Steps extends Item {
   }
 }
 
+/// One bot handed another a job as ticket OB-[ticket]; [from] and [to] are
+/// slugs. Shown as a strip that plays once, then as [line].
+class Asked extends Item {
+  Asked(this.from, this.to, this.ticket, {this.play = false});
+  final String from;
+  final String to;
+  final int ticket;
+
+  /// How it ended; null while the answer hasn't come.
+  bool? answered;
+
+  /// It arrived just now in the open chat, so its strip plays; the strip
+  /// clears this, so it plays once.
+  bool play;
+
+  /// "Researcher asked Coder · OB-142", and "· waiting" until the answer comes.
+  String line(String Function(String slug) name) =>
+      '${name(from)} asked ${name(to)} · OB-$ticket'
+      '${answered == null ? ' · waiting' : ''}';
+}
+
+/// The answer went back from the teammate ([from]) to the asker ([to]).
+class Answered extends Item {
+  Answered(this.from, this.to, this.ticket, this.ok, {this.play = false});
+  final String from;
+  final String to;
+  final int ticket;
+  final bool ok;
+  bool play;
+
+  String line(String Function(String slug) name) =>
+      '${name(from)} ${ok ? 'answered' : "couldn't finish for"} ${name(to)} · OB-$ticket';
+}
+
 enum RunState { idle, queued, running }
 
 class ThreadView {
@@ -140,7 +174,9 @@ class ThreadView {
     return '';
   }
 
-  void apply(Map<String, dynamic> e) {
+  /// Folds in an event. [live]: it happened just now and this chat is open,
+  /// so a hand-off in it plays ([Asked.play]).
+  void apply(Map<String, dynamic> e, {bool live = false}) {
     // When it happened, in milliseconds (the envelope's `at`).
     final at = e['at'] as int? ?? 0;
     final before = items.length;
@@ -253,6 +289,32 @@ class ThreadView {
             .expand((s) => s.steps.reversed)
             .where((s) => s.run == e['run'] && s.done == null)
             .firstOrNull;
+      case 'asked':
+        items.add(
+          Asked(
+            e['from'] as String,
+            e['to'] as String,
+            e['ticket'] as int,
+            play: live,
+          ),
+        );
+      case 'answered':
+        final ticket = e['ticket'] as int;
+        final ok = e['ok'] as bool;
+        // The answer settles the ask it belongs to; one with no ask in this
+        // thread still shows.
+        for (final a in items.whereType<Asked>()) {
+          if (a.ticket == ticket) a.answered = ok;
+        }
+        items.add(
+          Answered(
+            e['from'] as String,
+            e['to'] as String,
+            ticket,
+            ok,
+            play: live,
+          ),
+        );
     }
     // Whatever comes after a fold-up closes it to new steps.
     if (items.length > before && before > 0) {

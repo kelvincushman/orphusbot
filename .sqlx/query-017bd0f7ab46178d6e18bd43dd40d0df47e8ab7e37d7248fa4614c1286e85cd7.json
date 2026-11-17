@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select e.body as \"body!\" from event e join thread t on t.id = e.thread_id\n               join bot b on b.id = t.bot_id\n               where b.slug = $1 and e.body ->> 'type' in ('asked', 'answered') order by e.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "body!",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "event",
+            "name": "body"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "017bd0f7ab46178d6e18bd43dd40d0df47e8ab7e37d7248fa4614c1286e85cd7"
+}

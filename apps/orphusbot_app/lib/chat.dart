@@ -17,6 +17,7 @@ import 'avatar.dart';
 import 'bot_panel.dart';
 import 'discuss.dart';
 import 'gallery.dart';
+import 'handoff.dart';
 import 'memory.dart';
 import 'push.dart';
 import 'room.dart';
@@ -24,6 +25,7 @@ import 'schedules.dart';
 import 'update.dart';
 import 'settings.dart';
 import 'social.dart';
+import 'stage.dart';
 import 'thread.dart' as t;
 import 'viewer.dart';
 import 'wearable.dart';
@@ -39,7 +41,17 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   List<Map<String, dynamic>> bots = [];
+  // Every bot's name, the closed missions' chiefs too, for hand-off lines.
+  var names = <String, String>{};
   final threads = <String, t.ThreadView>{};
+  // Unfinished hand-offs (`/api/team/open`), for the faces and the Team stage.
+  List<Map<String, dynamic>> open = [];
+  // The Team stage's feed, from the one event stream: `changed` when a
+  // thread, the bots or `open` change, `handoffs` for each hand-off as it happens.
+  final changed = ValueNotifier(0);
+  final handoffs = StreamController<Map<String, dynamic>>.broadcast();
+  // The stored history has been replayed; what follows is happening now.
+  bool live = false;
   // The Orchestrator is the main bot; older servers start on the first bot listed.
   String chosen = 'orchestrator';
   String? problem;
@@ -107,6 +119,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final list = await widget.api.get('/api/bots') as List<dynamic>;
     if (!mounted) return;
     setState(() {
+      names = {
+        for (final b in list.cast<Map<String, dynamic>>())
+          b['slug'] as String: b['name'] as String,
+      };
       bots = list
           .cast<Map<String, dynamic>>()
           .where((b) => b['disabled'] != true)
@@ -115,26 +131,34 @@ class _ChatScreenState extends State<ChatScreen> {
         chosen = bots.first['slug'] as String;
       }
     });
+    changed.value++;
   }
+
+  // Counts the loads below, so an answer that comes back late is dropped.
+  int _teamLoads = 0;
 
   /// How many hand-offs each bot is waiting on, for its face.
   Future<void> _loadTeam() async {
+    final load = ++_teamLoads;
     try {
       final got =
           await widget.api.get('/api/team/open') as Map<String, dynamic>;
       final counts = <String, int>{};
-      for (final o
-          in (got['open'] as List<dynamic>).cast<Map<String, dynamic>>()) {
+      final list = (got['open'] as List<dynamic>).cast<Map<String, dynamic>>();
+      for (final o in list) {
         final asker = o['asked_by'] as String;
         counts[asker] = (counts[asker] ?? 0) + 1;
       }
-      if (!mounted) return;
+      // A newer load is out: its answer is the one to show.
+      if (!mounted || load != _teamLoads) return;
       setState(() {
+        open = list;
         for (final slug in {...threads.keys, ...counts.keys}) {
           threads.putIfAbsent(slug, t.ThreadView.new).waitingOn =
               counts[slug] ?? 0;
         }
       });
+      changed.value++;
     } catch (_) {
       // Faces only; an older server just doesn't have this.
     }
@@ -182,11 +206,31 @@ class _ChatScreenState extends State<ChatScreen> {
     sub = widget.api.events().listen(
       (e) {
         final bot = e['bot'] as String?;
+        final type = e['type'];
+        // On connecting the server replays what's stored and then says which
+        // nodes are on; from there events are news.
+        if (type == 'nodes') live = true;
         if (bot == null) return;
-        setState(() => threads.putIfAbsent(bot, t.ThreadView.new).apply(e));
+        // Not after a reconnect that catches up on what was missed, though:
+        // only what happened in the last minute moves.
+        final age =
+            DateTime.now().millisecondsSinceEpoch - (e['at'] as int? ?? 0);
+        final now = live && age.abs() < 60000;
+        setState(
+          () => threads
+              .putIfAbsent(bot, t.ThreadView.new)
+              .apply(e, live: now && bot == chosen),
+        );
+        changed.value++;
+        final handoff = type == 'asked' || type == 'answered';
+        // It's in both bots' threads; the asker's copy is the one that's
+        // always there (a private mission's stays with its chief).
+        if (handoff && now && bot == e[type == 'asked' ? 'from' : 'to']) {
+          handoffs.add(e);
+        }
         if (bot == chosen) _toBottom();
-        if (e['type'] == 'run_ended') _loadUsage();
-        if (e['type'] == 'run_ended' || e['type'] == 'run_queued') _loadTeam();
+        if (type == 'run_ended') _loadUsage();
+        if (type == 'run_ended' || type == 'run_queued' || handoff) _loadTeam();
         // A mission's new Chief of Staff, which this list hasn't heard of yet.
         if (e['type'] == 'run_queued' && !bots.any((b) => b['slug'] == bot)) {
           _act(_loadBots);
@@ -202,6 +246,8 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     life.dispose();
     sub?.cancel();
+    handoffs.close();
+    changed.dispose();
     composer.dispose();
     search.dispose();
     scroll.dispose();
@@ -530,6 +576,23 @@ class _ChatScreenState extends State<ChatScreen> {
               Icons.photo_library_outlined,
               'Gallery',
               GalleryScreen(api: widget.api, bots: bots),
+            ),
+            place(
+              Icons.groups_outlined,
+              'Team',
+              TeamStage(
+                api: widget.api,
+                changed: changed,
+                bots: () => bots,
+                name: _name,
+                threads: threads,
+                open: () => open,
+                handoffs: handoffs.stream,
+                onOpen: (slug) {
+                  Navigator.of(context).pop();
+                  _open(slug);
+                },
+              ),
             ),
             place(
               Icons.forum_outlined,
@@ -864,6 +927,25 @@ class _ChatScreenState extends State<ChatScreen> {
     t.Artifact() => _artifact(item, scheme),
     t.Attached() => _attached(item, scheme),
     t.Card() => _card(item, scheme, name),
+    t.Asked(:final from, :final to, :final ticket) => _handoff(
+      item,
+      from,
+      to,
+      ticket,
+      item.line(_name),
+      answer: false,
+      play: item.play,
+    ),
+    t.Answered(:final from, :final to, :final ticket, :final ok) => _handoff(
+      item,
+      to,
+      from,
+      ticket,
+      item.line(_name),
+      answer: true,
+      ok: ok,
+      play: item.play,
+    ),
     // One grey line that opens to the list of steps.
     t.Steps(:final steps, :final open, :final line) => ExpansionTile(
       dense: true,
@@ -904,6 +986,37 @@ class _ChatScreenState extends State<ChatScreen> {
       ],
     ),
   };
+
+  String _name(String slug) => names[slug] ?? slug;
+
+  /// A hand-off between two bots: it plays once if it has just arrived, and
+  /// rests as its line, which opens the ticket.
+  Widget _handoff(
+    t.Item item,
+    String asker,
+    String teammate,
+    int ticket,
+    String line, {
+    required bool answer,
+    bool ok = true,
+    required bool play,
+  }) {
+    // Once: a rebuilt list, or coming back to this chat, finds it at rest.
+    if (item case t.Asked()) item.play = false;
+    if (item case t.Answered()) item.play = false;
+    String face(String slug) =>
+        faceOf(bots.where((b) => b['slug'] == slug).firstOrNull, slug);
+    return HandoffStrip(
+      key: ObjectKey(item),
+      asker: face(asker),
+      teammate: face(teammate),
+      line: line,
+      answer: answer,
+      ok: ok,
+      play: play,
+      onOpen: () => showTicket(context, widget.api, ticket),
+    );
+  }
 
   /// The owner's words in a grey bubble on the right; a bot's reply as plain
   /// text across the page with its actions underneath, as in Grok.

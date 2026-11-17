@@ -222,4 +222,77 @@ void main() {
       expect((v.items.first as Steps).line, 'Worked for 1h 2m · 1 step');
     });
   });
+
+  Map<String, dynamic> asked(int ticket) => {
+    'type': 'asked',
+    'from': 'researcher',
+    'to': 'coder',
+    'ticket': ticket,
+  };
+  Map<String, dynamic> answered(int ticket, bool ok) => {
+    'type': 'answered',
+    'from': 'coder',
+    'to': 'researcher',
+    'ticket': ticket,
+    'ok': ok,
+  };
+  // The hand-off lines, with the slugs standing in for names.
+  List<String> handoffs(ThreadView v) => [
+    for (final i in v.items)
+      if (i is Asked) i.line((s) => s) else if (i is Answered) i.line((s) => s),
+  ];
+
+  // The same cases as the server's reducer (crates/proto/src/view.rs).
+  test('an answer settles the ask with its ticket and no other', () {
+    final v = ThreadView()
+      ..apply(asked(142))
+      ..apply(asked(143))
+      ..apply(answered(143, true));
+    expect(handoffs(v), [
+      'researcher asked coder · OB-142 · waiting',
+      'researcher asked coder · OB-143',
+      'coder answered researcher · OB-143',
+    ]);
+  });
+
+  test('an answer that never comes leaves the ask waiting', () {
+    final v = ThreadView()
+      ..apply(asked(142))
+      ..apply({'type': 'run_ended', 'run': 1, 'outcome': 'completed'});
+    expect(handoffs(v), ['researcher asked coder · OB-142 · waiting']);
+  });
+
+  test('a teammate that failed answers not ok; a lone answer still shows', () {
+    final v = ThreadView()
+      ..apply(asked(142))
+      ..apply(answered(142, false))
+      ..apply(answered(7, true));
+    expect(handoffs(v), [
+      'researcher asked coder · OB-142',
+      "coder couldn't finish for researcher · OB-142",
+      'coder answered researcher · OB-7',
+    ]);
+  });
+
+  test('a denied ask is a failed step and no hand-off', () {
+    final v = ThreadView()
+      ..apply({
+        'type': 'step_started',
+        'run': 1,
+        'id': 'a',
+        'label': 'Checking with Coder',
+        'kind': 'talk',
+      })
+      ..apply({'type': 'step_ended', 'run': 1, 'id': 'a', 'ok': false});
+    expect(handoffs(v), isEmpty);
+    expect((v.items.single as Steps).steps.single.done, isFalse);
+  });
+
+  test('a hand-off plays only when it arrives live', () {
+    final v = ThreadView()
+      ..apply(asked(142))
+      ..apply(answered(142, true), live: true);
+    expect((v.items[0] as Asked).play, isFalse);
+    expect((v.items[1] as Answered).play, isTrue);
+  });
 }

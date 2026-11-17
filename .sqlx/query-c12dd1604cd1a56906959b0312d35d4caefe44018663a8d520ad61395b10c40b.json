@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select t.id, t.title, b.slug as \"asker!\", w.name as \"worker!\", r.thread_id\n           from run r join ticket t on t.id = r.ticket_id\n           join bot b on b.id = t.asked_by join bot w on w.id = t.bot_id\n           where r.id = $1",
+  "query": "select t.id, t.title, b.slug as \"asker!\", w.name as \"worker!\", w.slug as \"teammate!\",\n                  coalesce(m.private, false) as \"private!\", r.thread_id\n           from run r join ticket t on t.id = r.ticket_id\n           join bot b on b.id = t.asked_by join bot w on w.id = t.bot_id\n           left join mission m on m.id = t.mission_id\n           where r.id = $1",
   "describe": {
     "columns": [
       {
@@ -49,6 +49,23 @@
       },
       {
         "ordinal": 4,
+        "name": "teammate!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bot",
+            "name": "slug"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "private!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
         "name": "thread_id",
         "type_info": "Int8",
         "origin": {
@@ -69,8 +86,10 @@
       false,
       false,
       false,
+      false,
+      null,
       false
     ]
   },
-  "hash": "d3472fca56cdb3e115e71c614c35097d47c246df0a3b51380b41ce061f687ab4"
+  "hash": "c12dd1604cd1a56906959b0312d35d4caefe44018663a8d520ad61395b10c40b"
 }

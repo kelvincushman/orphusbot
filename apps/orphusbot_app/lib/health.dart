@@ -205,11 +205,15 @@ class HealthBannerState extends State<HealthBanner> {
     super.dispose();
   }
 
+  // Counts requests, so a slow older answer can't replace a newer one.
+  int asked = 0;
+
   /// Asks the server again, such as after Health closes.
   Future<void> refresh() async {
+    final mine = ++asked;
     try {
       final got = bannerText(_checks(await widget.api.get('/api/health')));
-      if (mounted) setState(() => message = got);
+      if (mounted && mine == asked) setState(() => message = got);
     } catch (_) {
       // Offline or signed out: the rest of the screen says so.
     }

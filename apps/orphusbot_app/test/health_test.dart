@@ -145,6 +145,33 @@ void main() {
     expect(find.text('Health'), findsOneWidget);
   });
 
+  testWidgets('a slow older answer never replaces a newer one', (t) async {
+    final slow = Completer<http.Response>();
+    var calls = 0;
+    final key = GlobalKey<HealthBannerState>();
+    final api = Api(
+      'http://server',
+      'session=x',
+      MockClient((r) async {
+        // The first answer (still red) arrives after the second (fixed).
+        if (++calls == 1) return slow.future;
+        return http.Response(jsonEncode([disk]), 200);
+      }),
+    );
+    await t.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: HealthBanner(key: key, api: api),
+        ),
+      ),
+    );
+    await key.currentState!.refresh();
+    await t.pump();
+    slow.complete(http.Response(jsonEncode([google]), 200));
+    await settle(t);
+    expect(find.byType(InkWell), findsNothing);
+  });
+
   testWidgets('no banner when everything works', (t) async {
     await t.pumpWidget(
       MaterialApp(

@@ -241,7 +241,8 @@ impl ThreadView {
                 size,
             }),
             // The node list is for every thread; clients keep it beside their thread views.
-            ThreadEvent::Nodes { .. } => {}
+            // A push is shown by the desktop app as a notification, not in the thread.
+            ThreadEvent::Nodes { .. } | ThreadEvent::Push { .. } => {}
             ThreadEvent::DialogOpened { dialog } => self.items.push(Item::Card {
                 dialog,
                 outcome: None,

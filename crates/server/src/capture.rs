@@ -225,7 +225,7 @@ pub async fn extracted(app: &App, id: i64, text: Option<String>, error: Option<S
     info!(window = id, filed, "capture mined");
     // Standard waits for the digest; Focus support also says so straight away.
     if filed > 0 && profile.focus {
-        app.notifier.send(crate::notify::Push {
+        app.push(crate::notify::Push {
             title: format!(
                 "{filed} thing{} from your conversation",
                 if filed == 1 { "" } else { "s" }

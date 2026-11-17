@@ -486,6 +486,14 @@ pub enum ThreadEvent {
     Quiet {
         run: i64,
     },
+    /// A push just went to the owner (DESIGN §12, D-079): the same title, body
+    /// and priority (1 to 5) as on the phone, so an open desktop app can show
+    /// it as a system notification. The envelope's `bot` is the bot it opens.
+    Push {
+        title: String,
+        body: String,
+        priority: u8,
+    },
 }
 
 /// The whole final reply of a routine's run that has nothing to tell the
@@ -663,5 +671,19 @@ mod tests {
             }
             .is_persisted()
         );
+        let push = Envelope {
+            bot: Some("coder".into()),
+            at: 9,
+            event: ThreadEvent::Push {
+                title: "Coder failed".into(),
+                body: "The build broke.".into(),
+                priority: 4,
+            },
+        };
+        assert_eq!(
+            serde_json::to_string(&push).unwrap(),
+            r#"{"bot":"coder","at":9,"type":"push","title":"Coder failed","body":"The build broke.","priority":4}"#
+        );
+        assert!(!push.event.is_persisted(), "a push is never replayed");
     }
 }

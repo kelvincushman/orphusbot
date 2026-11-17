@@ -32,7 +32,7 @@ OrphusBot is an open-source, self-hosted bot service. You hand it a task from th
 | **X search** | Optional, off by default, switched on per bot. A bot asks what people are saying on X and gets a written answer with links to the posts. The server asks xAI, so the key never reaches a bot, and stops at a daily number of searches you set. The bot's query goes to xAI. |
 | **Mail** | Optional, per bot. Your existing mailboxes through [Himalaya](https://github.com/pimalaya/himalaya) on the server: list, search, read and save drafts; send, move, delete and flags ask you every time, on a card that shows the whole email. Passwords stay in the server's Himalaya config; a bot reaches only the accounts you name for it. |
 | **A team you can watch** | In the app every bot is a small robot that shows what it's doing. When one bot hands another a job, a note passes between them in both chats, and the Team screen shows who is waiting on whom. Animation can be set to full, calm or off, and everything that moves is also said in words. |
-| **Everywhere** | One Rust UI for the web, a desktop app and an Android app, kept in sync live. Push notifications through self-hosted ntfy; no Google account needed. |
+| **Everywhere** | One Rust UI for the web, a desktop app and an Android app, kept in sync live. Push notifications through self-hosted ntfy, no Google account needed, and system notifications from the open app on Linux and macOS. |
 
 ## How it fits together
 

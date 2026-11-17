@@ -16,9 +16,14 @@
 //! takeover, an ask that expired on the wrist), any failed run, and finished
 //! work the owner didn't start from a chat (a routine, a ticket, the wearable).
 //! Quiet hours and the Focus profile's digests arrive with capture profiles.
+//!
+//! Every push is also published on the event stream as a live-only `push`
+//! event (D-079): the desktop app, which holds that stream while it is open,
+//! shows it as a system notification on Linux and macOS.
 
 use std::time::Duration;
 
+use orphusbot_proto::ThreadEvent;
 use serde_json::json;
 use sqlx::PgPool;
 use tracing::warn;
@@ -41,6 +46,20 @@ pub struct Push<'a> {
     pub priority: u8,
     pub tags: &'a str,
     pub bot: Option<&'a str>,
+}
+
+impl crate::App {
+    /// Sends a push to the phone, and the same push to open desktop apps as a
+    /// live `push` event. Every push goes through here.
+    pub(crate) fn push(&self, push: Push<'_>) {
+        let event = ThreadEvent::Push {
+            title: push.title.clone(),
+            body: push.body.chars().take(1_000).collect(),
+            priority: push.priority.clamp(1, 5),
+        };
+        crate::publish(self, None, push.bot, event);
+        self.notifier.send(push);
+    }
 }
 
 impl Notifier {
@@ -78,7 +97,8 @@ impl Notifier {
     }
 
     /// Sends in the background; a push that fails is logged, never retried.
-    pub fn send(&self, push: Push<'_>) {
+    /// Callers use [`crate::App::push`], which also tells the desktop apps.
+    fn send(&self, push: Push<'_>) {
         self.to_endpoints(&push);
         let Some(topic) = self.topic.clone() else {
             return;
@@ -355,5 +375,30 @@ mod tests {
         assert_eq!(msg["title"], "Coder failed");
         assert_eq!(msg["bot"], "coder");
         assert_eq!(msg["priority"], 4);
+    }
+
+    #[sqlx::test]
+    async fn a_push_is_also_a_live_event_for_desktop_apps(db: PgPool) {
+        let app = crate::auth::tests::app(db);
+        let mut rx = app.live.subscribe();
+        app.push(Push {
+            title: "Coder failed".into(),
+            body: "x".repeat(1_200),
+            priority: 9,
+            tags: "warning",
+            bot: Some("coder"),
+        });
+        let live = rx.try_recv().expect("the push is published");
+        assert_eq!(live.id, None, "live only: never stored or replayed");
+        assert_eq!(live.bot.as_deref(), Some("coder"));
+        assert!(!live.event.is_persisted());
+        assert_eq!(
+            live.event,
+            ThreadEvent::Push {
+                title: "Coder failed".into(),
+                body: "x".repeat(1_000),
+                priority: 5,
+            }
+        );
     }
 }

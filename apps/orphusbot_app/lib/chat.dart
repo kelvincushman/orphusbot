@@ -210,6 +210,12 @@ class _ChatScreenState extends State<ChatScreen> {
         // On connecting the server replays what's stored and then says which
         // nodes are on; from there events are news.
         if (type == 'nodes') live = true;
+        // A push to the owner, live only: a system notification on a
+        // desktop. One that can't be shown (no notification daemon) is let go.
+        if (type == 'push') {
+          showPush(e, open: chosen).onError((_, _) {});
+          return;
+        }
         if (bot == null) return;
         // Not after a reconnect that catches up on what was missed, though:
         // only what happened in the last minute moves.

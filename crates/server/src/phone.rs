@@ -105,6 +105,61 @@ fn commits(label: &str) -> bool {
         .any(|w| COMMIT_STEMS.iter().any(|s| w.starts_with(s)))
 }
 
+/// The only words a tap-by-id's own name may contain to count as getting
+/// about: places in an app (a tab, the nav bar, search, notifications) and
+/// layout words. Every word must be one of these, so an id that also names
+/// an act (`menu_deactivate_account`) still asks (D-077).
+const PLACE_WORDS: &[&str] = &[
+    "tab",
+    "tabs",
+    "nav",
+    "navigation",
+    "bar",
+    "bottom",
+    "top",
+    "main",
+    "home",
+    "search",
+    "notification",
+    "notifications",
+    "explore",
+    "discover",
+    "feed",
+    "inbox",
+    "profile",
+    "me",
+    "button",
+    "icon",
+    "item",
+    "view",
+    "container",
+];
+
+/// Whether a resource id (`com.linkedin.android:id/tab_notifications`) names
+/// only a place to go: every word of its own name, after `id/`, is a place or
+/// layout word, and at least one is a place. An opaque id (`a7`) doesn't.
+fn goes_to(id: &str) -> bool {
+    const LAYOUT: &[&str] = &[
+        "bar",
+        "bottom",
+        "top",
+        "main",
+        "button",
+        "icon",
+        "item",
+        "view",
+        "container",
+    ];
+    let name = id.rsplit_once("id/").map_or(id, |(_, name)| name);
+    let words: Vec<String> = name
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(str::to_lowercase)
+        .collect();
+    words.iter().all(|w| PLACE_WORDS.contains(&w.as_str()))
+        && words.iter().any(|w| !LAYOUT.contains(&w.as_str()))
+}
+
 pub fn kind(input: &Value) -> Kind {
     let s = |k: &str| input[k].as_str().unwrap_or_default();
     match s("action") {
@@ -115,8 +170,11 @@ pub fn kind(input: &Value) -> Kind {
         "key" => Kind::Commit,
         "tap" => {
             let labels = [s("text"), s("desc"), s("id")];
-            // A tap by id alone has no visible label to judge, so it asks.
-            if (s("text").is_empty() && s("desc").is_empty()) || labels.iter().any(|l| commits(l)) {
+            // A tap by id alone has no visible label to judge, so it asks
+            // unless the id names a place to go, such as LinkedIn's
+            // `tab_notifications` (D-077).
+            let unlabelled = s("text").is_empty() && s("desc").is_empty();
+            if labels.iter().any(|l| commits(l)) || (unlabelled && !goes_to(s("id"))) {
                 Kind::Commit
             } else {
                 Kind::Navigate
@@ -170,6 +228,19 @@ mod tests {
             kind(&json!({"action": "tap", "desc": "Search and Explore"})),
             Kind::Navigate
         );
+        // An id alone that names a place to go (D-077).
+        for place in [
+            "com.linkedin.android:id/tab_notifications",
+            "com.twitter.android:id/home",
+            "com.instagram.android:id/search_tab",
+            "com.zhiliaoapp.musically:id/profile_tab",
+        ] {
+            assert_eq!(
+                kind(&json!({"action": "tap", "id": place})),
+                Kind::Navigate,
+                "{place}"
+            );
+        }
         for commit in [
             json!({"action": "tap", "text": "Post"}),
             json!({"action": "tap", "text": "POST ALL"}),
@@ -181,6 +252,15 @@ mod tests {
             json!({"action": "tap", "text": "Open", "id": "com.twitter.android:id/button_tweet"}),
             // No visible label to judge.
             json!({"action": "tap", "id": "com.linkedin.android:id/xyz"}),
+            // A place word doesn't outweigh a commit word, and the package
+            // name doesn't count.
+            json!({"action": "tap", "id": "com.instagram.android:id/feed_like_button"}),
+            json!({"action": "tap", "id": "com.home.app:id/a7"}),
+            json!({"action": "tap", "id": "com.linkedin.android:id/tab_post"}),
+            // A place word beside an act still asks.
+            json!({"action": "tap", "id": "com.example:id/menu_deactivate_account"}),
+            json!({"action": "tap", "id": "com.example:id/back_and_discard"}),
+            json!({"action": "tap", "id": "com.example:id/button"}),
             json!({"action": "tap"}),
         ] {
             assert_eq!(kind(&commit), Kind::Commit, "{commit}");

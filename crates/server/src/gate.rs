@@ -998,10 +998,16 @@ mod tests {
             decide(&db, &call(a, "p6", "phone", &post)).await.unwrap(),
             Verdict::Allow
         );
+        let opaque = json!({"action": "tap", "id": "com.example:id/a7"});
+        assert_eq!(
+            decide(&db, &call(a, "p7", "phone", &opaque)).await.unwrap(),
+            Verdict::Ask { uncertain: false }
+        );
+        // A tab by id is getting about, not a commit (D-077).
         let tab = json!({"action": "tap", "id": "com.example:id/tab_notifications"});
         assert_eq!(
-            decide(&db, &call(a, "p7", "phone", &tab)).await.unwrap(),
-            Verdict::Ask { uncertain: false }
+            decide(&db, &call(a, "p8", "phone", &tab)).await.unwrap(),
+            Verdict::Allow
         );
     }
 }

@@ -347,6 +347,9 @@ class LiveVoice {
 
   bool get isOpen => _state != LiveState.closed && _ws != null;
 
+  /// Where the conversation is now; only [LiveState.listening] is a pause.
+  LiveState get state => _state;
+
   /// Stops Grok mid-sentence and drops what was queued; the next reply opens
   /// a fresh stream.
   Future<void> _hush() async {

@@ -136,7 +136,10 @@ class _IdeasRoomState extends State<IdeasRoom>
     setState(() => phase = p);
     // News goes in at a pause, never over Grok.
     final said = news;
-    if (p == Phase.listening && said != null && (live?.isOpen ?? false)) {
+    if (p == Phase.listening &&
+        live?.state == LiveState.listening &&
+        said != null &&
+        (live?.isOpen ?? false)) {
       news = null;
       live!.sendText(said);
     }
@@ -270,8 +273,12 @@ class _IdeasRoomState extends State<IdeasRoom>
       // if it was only the owner's turn.
       if (transcript.isNotEmpty) {
         try {
+          // Marked as from the call, so it stays with this bot (the inbox's
+          // triage skips it) and runs on its own model.
           await widget.api.send(
             widget.bot,
+            voice: true,
+            work: true,
             'Here is what was said on our call, for the record. What I asked '
             "or handed you on it has already reached you, so don't start it "
             'again; reply in a line or two with anything still open.'
@@ -560,15 +567,25 @@ class OrchestratorLine {
   bool _doing = false;
   int _from = 0;
 
+  /// The stream replays the whole history first, then the current state,
+  /// which always starts with `nodes`. Until then nothing is acted on, so an
+  /// old reply can't pass for a new one.
+  final _live = Completer<void>();
+
   void start(Api api, String bot) {
     _events = api.events().listen((e) {
-      if (e['bot'] == bot) handle(e);
+      if (e['type'] == 'nodes' || e['bot'] == bot) handle(e);
     }, onError: (_) {});
   }
 
   /// Folds in one of the bot's events, answering what's waiting on it.
   void handle(Map<String, dynamic> e) {
+    if (e['type'] == 'nodes') {
+      if (!_live.isCompleted) _live.complete();
+      return;
+    }
     thread.apply(e);
+    if (!_live.isCompleted) return;
     switch (e['type']) {
       case 'dialog_opened' when inChat && (busy || _doing):
         final kind = ((e['dialog'] as Map?)?['kind'] as Map?)?['kind'];
@@ -617,9 +634,17 @@ class OrchestratorLine {
     String tool,
     Map<String, dynamic> args,
   ) async {
+    // Caught up with the history first (it's normally done long before Grok
+    // has heard a word); a stream that never connects doesn't block the call.
+    await _live.future.timeout(const Duration(seconds: 20), onTimeout: () {});
     if (tool == 'do') {
       final task = args['task'] as String? ?? '';
       if (task.trim().isEmpty) return 'Nothing was asked.';
+      // A job sent now would join the question's run, on the quick model.
+      if (busy) {
+        return '$name is still answering your question. Hand it the job '
+            'once the answer is in.';
+      }
       if (!_doing) _from = thread.items.length;
       final already = _doing;
       _doing = true;
@@ -639,10 +664,15 @@ class OrchestratorLine {
       _ => args['request'] as String? ?? '',
     };
     if (request.trim().isEmpty) return 'Nothing was asked.';
-    // The bot runs one thing at a time: a question would wait for the job.
+    // The bot runs one thing at a time: a question would wait for the job,
+    // or be steered into a run on the bot's own model.
     if (_doing) {
       return "$name is still on the job you gave it, so it can't answer yet. "
           "It will say when it's finished.";
+    }
+    if (inChat && thread.run != t.RunState.idle) {
+      return "$name is busy with another task, so it can't answer quickly "
+          'now. Hand it a job with do, or ask again when it has finished.';
     }
     final done = Completer<String>();
     _waiting = done;

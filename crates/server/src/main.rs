@@ -544,6 +544,10 @@ async fn send_message(
     if msg.room {
         run_text.push_str(room::ROOM_NOTE);
     } else if msg.voice && msg.work {
+        // ponytail: a call message that joins an active run keeps that run's model
+        // (quick for `ask`, the bot's for `do`). The app keeps them apart: no `ask`
+        // while a run is active, no `do` while an `ask` waits. Upgrade path: make
+        // `runs::submit` queue a separate run when the model kind differs.
         run_text.push_str(room::DO_NOTE);
     } else if msg.voice {
         run_text.push_str(room::VOICE_NOTE);

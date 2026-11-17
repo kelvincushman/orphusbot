@@ -146,7 +146,35 @@ void main() {
       line = OrchestratorLine(inChat: true, name: 'Coder', onNews: news.add);
     });
 
+    test('replayed history is never taken for a new answer', () async {
+      // History: an old job that finished, replayed before the current state.
+      line.handle({'type': 'message', 'role': 'assistant', 'text': 'Old.'});
+      line.handle({'type': 'run_ended', 'run': 1, 'outcome': 'completed'});
+      final answer = line.ask(api, 'coder', 'ask', {'request': 'status?'});
+      await pumpEventQueue();
+      // Nothing is sent until the stream has caught up.
+      expect(sent, isEmpty);
+      line.handle({'type': 'nodes', 'nodes': []});
+      await pumpEventQueue();
+      expect(sent, hasLength(1));
+      line.handle({'type': 'message', 'role': 'assistant', 'text': 'New.'});
+      line.handle({'type': 'run_ended', 'run': 2, 'outcome': 'completed'});
+      expect(await answer, 'New.');
+      expect(news, isEmpty);
+    });
+
+    test('a question is not steered into another task', () async {
+      line.handle({'type': 'nodes', 'nodes': []});
+      line.handle({'type': 'run_queued', 'run': 3, 'waiting': null});
+      expect(
+        await line.ask(api, 'coder', 'ask', {'request': 'how is it going?'}),
+        contains('busy with another task'),
+      );
+      expect(sent, isEmpty);
+    });
+
     test('do starts work and the result comes back at a pause', () async {
+      line.handle({'type': 'nodes', 'nodes': []});
       final out = await line.ask(api, 'coder', 'do', {'task': 'fix the tests'});
       expect(out, startsWith('Started.'));
       expect(sent.single, containsPair('voice', true));
@@ -170,10 +198,17 @@ void main() {
     });
 
     test('ask answers with the reply, or says it needs a tap', () async {
+      line.handle({'type': 'nodes', 'nodes': []});
       final answer = line.ask(api, 'coder', 'ask', {'request': 'status?'});
       await pumpEventQueue();
       expect(sent.single, containsPair('voice', true));
       expect(sent.single.containsKey('work'), isFalse);
+      // A job now would join the question's run, on the quick model.
+      expect(
+        await line.ask(api, 'coder', 'do', {'task': 'and send it'}),
+        contains('still answering'),
+      );
+      expect(sent, hasLength(1));
       line.handle(approval());
       expect(await answer, startsWith('Coder needs your OK on the screen.'));
       line.handle({'type': 'message', 'role': 'assistant', 'text': 'Sent.'});

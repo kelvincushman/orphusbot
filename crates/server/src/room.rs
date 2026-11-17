@@ -30,11 +30,11 @@ Kelvin and asked you this. Your reply goes back to Grok, who passes it on aloud,
 and briefly in a few sentences, with no Markdown, tables or links. Use your wiki, notes and team as \
 needed.)";
 
-/// For `do` on a call (D-074): real work, on the bot's own model; the reply is
-/// read out in the call when the run ends.
-pub const DO_NOTE: &str = "\n\n(Kelvin asked for this on a voice call with you. Do it as you \
-would any task. When you finish, your reply is read out to him in the call, so end with a short, \
-plain summary of what you did, with no Markdown, tables or links.)";
+/// For `do` on a call, and the call's transcript (D-074): real work, on the
+/// bot's own model; the reply may be read out in the call when the run ends.
+pub const DO_NOTE: &str = "\n\n(This comes from a voice call with Kelvin. Do it as you would \
+any task. End your reply with a short, plain summary of what you did, with no Markdown, tables or \
+links, since it may be read out to him.)";
 
 /// The Ideas Room keeps its own engine session (D-063), so what's said in the
 /// bot's chat, by voice or typed, isn't in the room's memory.

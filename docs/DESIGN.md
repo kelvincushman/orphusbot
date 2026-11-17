@@ -154,7 +154,7 @@ reconcile (30 s)     → advisory-lock leader: re-enqueue expired leases, arm du
                        remind waiting runs (digest), expire stale waits
 ```
 
-Fences are checked on every node message: a message carrying an old fence is dropped and the node is told to abort that turn. This is what makes "kill the node mid-run and it recovers" safe (PRD M1 exit). A release reports the fence it released (`runs::Released.fence`), and the server clears only that attempt: if the run was already dispatched again before the release was announced, the newer attempt, its dialogs and its steps are left alone.
+Fences are checked on every node message: a message carrying an old fence is dropped and the node is told to abort that turn. This is what makes "kill the node mid-run and it recovers" safe (PRD M1 exit). A release reports the fence it released (`runs::Released.fence`), and the server clears only that attempt: its entry in the active runs (if still current), its open dialogs, its open steps (each step remembers its attempt's fence) and its tracked Google calls. A newer attempt, whether dispatched before or while the release is announced, keeps all of its own.
 
 ### 3.4 Effect ledger
 

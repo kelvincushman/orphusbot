@@ -92,13 +92,15 @@ pub fn label(tool: &str, input: &Value, names: &Names) -> (String, StepKind) {
 pub async fn started(
     app: &App,
     thread: &db::Thread,
-    run: i64,
+    attempt: Attempt,
     id: &str,
     tool: &str,
     input: &Value,
 ) {
+    let run = attempt.run;
     // A call asked about twice is still one step.
-    if !lock(&app.rt).steps.insert((run, id.to_owned())) {
+    let key = (run, id.to_owned());
+    if lock(&app.rt).steps.insert(key, attempt.fence).is_some() {
         return;
     }
     let mut names = Names::default();
@@ -128,28 +130,35 @@ pub async fn started(
 /// The call finished or was refused. Only an open step ends, and only once:
 /// a refused call may also report a failed result.
 pub async fn ended(app: &App, thread: &db::Thread, run: i64, id: &str, ok: bool) {
-    if !lock(&app.rt).steps.remove(&(run, id.to_owned())) {
+    if lock(&app.rt).steps.remove(&(run, id.to_owned())).is_none() {
         return;
     }
     let id = id.to_owned();
     record(app, thread, ThreadEvent::StepEnded { run, id, ok }).await;
 }
 
-/// The run lost its node and goes back in the queue: its open calls died
-/// with the attempt, so they end as failed and none is left as the current step.
+/// The run lost its node and goes back in the queue: the lost attempt's open
+/// calls died with it, so they end as failed and none is left as the current
+/// step. Only that attempt's: the run may already be running again elsewhere.
 pub async fn abandon(app: &App, thread: &db::Thread, lost: Attempt) {
     let run = lost.run;
     let open: Vec<String> = {
-        let rt = lock(&app.rt);
-        let of_run = rt.steps.iter().filter(|(r, _)| *r == run);
-        of_run.map(|(_, id)| id.clone()).collect()
+        let mut rt = lock(&app.rt);
+        let mut open = Vec::new();
+        rt.steps.retain(|(r, id), fence| {
+            let lost_step = *r == run && *fence == lost.fence;
+            if lost_step {
+                open.push(id.clone());
+            }
+            !lost_step
+        });
+        // Its Google calls too (`health::google_used`).
+        rt.google_calls.retain(|(a, _)| *a != lost);
+        open
     };
     for id in open {
-        ended(app, thread, run, &id, false).await;
+        record(app, thread, ThreadEvent::StepEnded { run, id, ok: false }).await;
     }
-    // The lost attempt's Google calls died with it too (`health::google_used`).
-    // Only that attempt's: the run may already be running again elsewhere.
-    lock(&app.rt).google_calls.retain(|(a, _)| *a != lost);
 }
 
 #[cfg(test)]
@@ -174,6 +183,14 @@ mod tests {
         for a in [lost, replacement, other] {
             lock(&app.rt).google_calls.insert((a, "call-1".into()));
         }
+        // Each attempt has an open step; the replacement's was opened after
+        // the release was noticed.
+        lock(&app.rt)
+            .steps
+            .insert((7, "lost-step".into()), lost.fence);
+        lock(&app.rt)
+            .steps
+            .insert((7, "new-step".into()), replacement.fence);
         let thread = db::Thread {
             id: 1,
             bot: "inbox".into(),
@@ -182,6 +199,12 @@ mod tests {
         let mut left: Vec<Attempt> = lock(&app.rt).google_calls.iter().map(|(a, _)| *a).collect();
         left.sort_by_key(|a| (a.run, a.fence));
         assert_eq!(left, [replacement, other]);
+        let steps: Vec<String> = lock(&app.rt)
+            .steps
+            .keys()
+            .map(|(_, id)| id.clone())
+            .collect();
+        assert_eq!(steps, ["new-step"], "only the lost attempt's step ends");
     }
 
     #[test]

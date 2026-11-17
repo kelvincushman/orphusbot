@@ -158,7 +158,8 @@ struct Runtime {
     /// Open dialogs by Orphus request id.
     dialogs: HashMap<String, Pending>,
     /// Tool calls shown as started and not yet ended, by run and tool-call id (`steps`).
-    steps: std::collections::HashSet<(i64, String)>,
+    /// The value is the attempt's fence, so a lost attempt's steps can be told apart.
+    steps: HashMap<(i64, String), i64>,
     /// `google` calls that reach Google, by run and tool-call id, so their
     /// results can tell the Health screen whether Google's sign-in works.
     /// Keyed by attempt too: a retry may reuse a tool-call id.
@@ -887,14 +888,15 @@ async fn record(app: &App, thread: &db::Thread, event: ThreadEvent) -> bool {
     }
 }
 
-/// Closes every open dialog for `run`: its attempt ended, so nobody is waiting.
-async fn expire_dialogs(app: &App, run: i64) {
+/// Closes every open dialog for `run` (or only `only`'s, an attempt that was
+/// lost while the run may already be running again): nobody is waiting.
+async fn expire_dialogs(app: &App, run: i64, only: Option<Attempt>) {
     let closed: Vec<(String, db::Thread)> = {
         let mut rt = lock(&app.rt);
         let ids: Vec<String> = rt
             .dialogs
             .iter()
-            .filter(|(_, p)| p.attempt.run == run)
+            .filter(|(_, p)| p.attempt.run == run && only.is_none_or(|a| p.attempt == a))
             .map(|(id, _)| id.clone())
             .collect();
         ids.into_iter()
@@ -1035,7 +1037,7 @@ async fn on_dialog(app: &Shared, active: Active, request: Value) {
             },
             helpers_gated: call["helpersGated"].as_bool().unwrap_or(false),
         };
-        steps::started(app, &active.thread, attempt.run, call_id, &tool, &input).await;
+        steps::started(app, &active.thread, attempt, call_id, &tool, &input).await;
         if tool == "google" && google::reaches_google(&google::args(&input)) {
             let call = (attempt, call_id.to_owned());
             lock(&app.rt).google_calls.insert(call);
@@ -1440,7 +1442,7 @@ async fn announce_released(app: &App, released: Vec<runs::Released>) {
             }
             rt.active.remove(&r.run);
         }
-        expire_dialogs(app, r.run).await;
+        expire_dialogs(app, r.run, Some(lost)).await;
         let thread = match db::run_thread(&app.db, r.run).await {
             Ok(thread) => thread,
             Err(e) => {
@@ -1859,10 +1861,10 @@ async fn run_ended(
     outcome: RunOutcome,
     error: Option<String>,
 ) {
-    expire_dialogs(app, run).await;
+    expire_dialogs(app, run, None).await;
     {
         let mut rt = lock(&app.rt);
-        rt.steps.retain(|(r, _)| *r != run);
+        rt.steps.retain(|(r, _), _| *r != run);
         rt.google_calls.retain(|(a, _)| a.run != run);
     }
     tickets::run_ended(&app.db, run, outcome).await;
@@ -2018,6 +2020,31 @@ mod tests {
         assert_eq!(rt.active.get(&7).map(|a| a.attempt), Some(replacement));
         let calls: Vec<Attempt> = rt.google_calls.iter().map(|(a, _)| *a).collect();
         assert_eq!(calls, [replacement]);
+    }
+
+    #[sqlx::test]
+    async fn a_lost_attempt_expires_only_its_own_dialogs(db: sqlx::PgPool) {
+        let app = crate::auth::tests::app(db);
+        let lost = Attempt { run: 7, fence: 1 };
+        let replacement = Attempt { run: 7, fence: 2 };
+        let thread = crate::db::Thread {
+            id: 1,
+            bot: "inbox".into(),
+        };
+        for (id, attempt) in [("lost-card", lost), ("new-card", replacement)] {
+            let pending = super::Pending {
+                attempt,
+                thread: thread.clone(),
+                tool_call_id: Some("call-1".into()),
+                takeover: false,
+                safe: false,
+            };
+            super::lock(&app.rt).dialogs.insert(id.into(), pending);
+        }
+        // The replacement asked for approval after the release was noticed.
+        super::expire_dialogs(&app, 7, Some(lost)).await;
+        let left: Vec<String> = super::lock(&app.rt).dialogs.keys().cloned().collect();
+        assert_eq!(left, ["new-card"]);
     }
 
     #[test]

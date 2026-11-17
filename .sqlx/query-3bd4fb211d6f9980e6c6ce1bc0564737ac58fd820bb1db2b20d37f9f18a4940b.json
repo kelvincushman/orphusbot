@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select status = 'open' as \"open!\", private from mission where id = $1 for update",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "open!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "private",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "mission",
+            "name": "private"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      false
+    ]
+  },
+  "hash": "3bd4fb211d6f9980e6c6ce1bc0564737ac58fd820bb1db2b20d37f9f18a4940b"
+}

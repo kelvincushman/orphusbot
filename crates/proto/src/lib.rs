@@ -454,6 +454,21 @@ pub enum ThreadEvent {
         id: String,
         ok: bool,
     },
+    /// Bot `from` handed bot `to` a job as ticket OB-`ticket` (DESIGN §12.7).
+    /// It goes to both bots' threads; `from` and `to` are slugs.
+    Asked {
+        from: String,
+        to: String,
+        ticket: i64,
+    },
+    /// The answer to that ticket went back, from the teammate (`from`) to the
+    /// bot that asked (`to`). `ok` is false if the teammate failed or was stopped.
+    Answered {
+        from: String,
+        to: String,
+        ticket: i64,
+        ok: bool,
+    },
 }
 
 /// What sort of work a step is, for clients that draw it.
@@ -522,6 +537,8 @@ impl ThreadEvent {
                 | Self::Notice { .. }
                 | Self::StepStarted { .. }
                 | Self::StepEnded { .. }
+                | Self::Asked { .. }
+                | Self::Answered { .. }
         )
     }
 }
@@ -596,6 +613,17 @@ mod tests {
                 ..
             })
         ));
+        let answered = ThreadEvent::Answered {
+            from: "coder".into(),
+            to: "researcher".into(),
+            ticket: 142,
+            ok: true,
+        };
+        assert_eq!(
+            serde_json::to_string(&answered).unwrap(),
+            r#"{"type":"answered","from":"coder","to":"researcher","ticket":142,"ok":true}"#
+        );
+        assert!(answered.is_persisted());
         let ev = ThreadEvent::RunEnded {
             run: 3,
             outcome: RunOutcome::Cancelled,

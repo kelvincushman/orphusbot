@@ -11,6 +11,18 @@ Format:
 
 ---
 
+## D-073: Bots show their hand-offs in motion, calm by default (2026-11-16)
+
+**Decided:** `ask_bot` and its answer are thread events (`Asked`, `Answered`) in both bots' threads. The app plays each once as a note passing between the two faces and then leaves a plain line that opens the ticket. A **Team** screen in the menu shows every bot's robot, moves the asker across to its teammate, and joins the two with a line while the job is open. A setting on each device offers **Animation: full, calm or off**; full is the default, and the system's reduce-motion setting makes it calm. A private mission's hand-offs are recorded only in its chief's thread. The note and the travel are Flutter widgets; each Rive file still holds one bot.
+
+**Why:** Kelvin asked for more animated feedback, most of all between bots, and who is waiting on whom is information the text hid: the only sign of a hand-off was a message when the answer came back. Events in the thread mean every client folds them the same way and history shows them. It is calm by default in the sense that matters: motion follows a change and stops, every animation has words beside it, and the owner can turn it down or off.
+
+**Alternatives:** status words only (no sense of the team); one Rive scene holding every bot (the files are generated per style, and a shared scene would be rebuilt whenever a bot is added); a separate stream for the stage (the app already folds every bot's thread from one stream); the stage as the app's home (the chat is what the owner opens the app for; it is one tap away in the menu); calm as the default (Kelvin asked for more animation, and the system setting still wins); showing a private mission's hand-off in the teammate's chat as a generic line (the teammate's chat already has the ticket, so a second line adds nothing, and leaving it out keeps one rule: a private mission's events live in its own chat).
+
+**Revisit if:** the motion distracts more than it informs, the stage is what Kelvin opens first (make it the home), or discussions and routed Inbox messages should play on the stage too.
+
+---
+
 ## D-072: X research goes through the server (2026-11-16)
 
 **Decided:** bots research X with an `x_search` tool that the server answers by asking xAI's Responses API with its `x_search` tool. It is a per-bot setting, off by default, read-class at the gate (no card), with a daily cap counted in the database (`ORPHUSBOT_X_SEARCH_PER_DAY`, default 50 across all bots). A bot filters by handles to include or to leave out, not both, because xAI refuses both in one request.

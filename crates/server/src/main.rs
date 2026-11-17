@@ -24,6 +24,7 @@ mod links;
 mod memory;
 mod missions;
 mod nodes;
+mod notes;
 mod notify;
 mod oauth;
 mod phone;
@@ -301,6 +302,7 @@ fn router(app: Shared) -> Router {
         .route("/api/bots/new-conversation", post(bots::new_conversation))
         .route("/api/models", get(models))
         .route("/api/bots/update", post(bots::update))
+        .route("/api/bots/{slug}/notes", get(notes::get).put(notes::put))
         .route("/api/decisions", get(system1::list))
         .route("/api/decisions/health", get(system1::health))
         .route("/api/decisions/calibrations", get(calibrate::list))
@@ -852,6 +854,15 @@ async fn on_dialog(app: &Shared, active: Active, request: Value) {
         });
         return;
     }
+    if method == "input" && title == notes::NOTES_TITLE {
+        let request: Value = request["placeholder"]
+            .as_str()
+            .and_then(|p| serde_json::from_str(p).ok())
+            .unwrap_or_default();
+        // Always the bot whose run this is: a bot reaches only its own notes.
+        let answer = notes::answer(&app.db, &active.thread.bot, &request).await;
+        return respond(app, attempt, ui_response(&id, "value", json!(answer))).await;
+    }
     if method == "input" && title == xsearch::TITLE {
         let request: Value = request["placeholder"]
             .as_str()
@@ -1233,6 +1244,9 @@ async fn start(app: &App, run: i64, bot: &bots::Bot, node: String, why: &str) {
     {
         spec.instructions.push_str(&note);
     }
+    // Its own notes (DESIGN §5.6): every bot, team or private, and only its own.
+    spec.instructions
+        .push_str(&notes::for_run(app, &bot.slug).await);
     // A team bot is also told what has been learned about the owner, and may
     // look up more (DESIGN §11.9). In the instructions, so it is said once and
     // not again in every message; the engine restarts when it changes.

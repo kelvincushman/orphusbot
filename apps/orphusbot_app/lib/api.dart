@@ -117,13 +117,14 @@ class Api {
     (await _check(_http.get(Uri.parse('$server$path'), headers: headers))).body,
   );
 
-  Future<http.Response> _post(String path, Object body) => _check(
-    _http.post(
-      Uri.parse('$server$path'),
-      headers: {...headers, 'content-type': 'application/json'},
-      body: jsonEncode(body),
-    ),
-  );
+  Future<http.Response> _post(String path, Object body, {bool put = false}) =>
+      _check(
+        (put ? _http.put : _http.post)(
+          Uri.parse('$server$path'),
+          headers: {...headers, 'content-type': 'application/json'},
+          body: jsonEncode(body),
+        ),
+      );
 
   Future<void> post(String path, Object body) => _post(path, body);
 
@@ -131,8 +132,11 @@ class Api {
       _check(_http.delete(Uri.parse('$server$path'), headers: headers));
 
   /// A POST whose answer matters, such as a code the server made.
-  Future<dynamic> postJson(String path, Object body) async =>
-      jsonDecode((await _post(path, body)).body);
+  Future<dynamic> postJson(
+    String path,
+    Object body, {
+    bool put = false,
+  }) async => jsonDecode((await _post(path, body, put: put)).body);
 
   Future<void> send(
     String bot,

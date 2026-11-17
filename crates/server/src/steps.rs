@@ -71,6 +71,9 @@ pub fn label(tool: &str, input: &Value, names: &Names) -> (String, StepKind) {
         "media" => fixed("Making an image", StepKind::Media),
         "phone" => fixed("Using the phone", StepKind::Phone),
         "recall" => fixed("Looking through its memory", StepKind::Search),
+        // Its own notes (DESIGN §5.6); what it wrote stays out of the thread.
+        "read_notes" => fixed("Reading its notes", StepKind::Read),
+        "remember" | "rewrite_notes" => fixed("Updating its notes", StepKind::Write),
         "x_search" => fixed("Searching X", StepKind::Search),
         // Orphus's web tools, which only run for a bot without a computer.
         "web_search" | "code_search" => fixed("Searching the web", StepKind::Search),
@@ -239,6 +242,19 @@ mod tests {
                 "Looking through its memory",
                 StepKind::Search,
             ),
+            ("read_notes", json!({}), "Reading its notes", StepKind::Read),
+            (
+                "remember",
+                json!({ "line": "Short replies" }),
+                "Updating its notes",
+                StepKind::Write,
+            ),
+            (
+                "rewrite_notes",
+                json!({ "text": "- Short replies", "version": 3 }),
+                "Updating its notes",
+                StepKind::Write,
+            ),
             (
                 "x_search",
                 json!({ "query": "rust async", "handles": ["rustlang"] }),
@@ -331,6 +347,9 @@ mod tests {
             "media",
             "phone",
             "recall",
+            "read_notes",
+            "remember",
+            "rewrite_notes",
             "x_search",
             "mcp",
             "web_search",
@@ -356,6 +375,8 @@ mod tests {
             "Making an image",
             "Using the phone",
             "Looking through its memory",
+            "Reading its notes",
+            "Updating its notes",
             "Searching X",
             "Using github",
             "Using a connection",

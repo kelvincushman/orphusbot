@@ -37,6 +37,8 @@ const READ_ONLY: &[&str] = &[
     "team_status",
     // Reads what has been learned about the owner (DESIGN §11.9).
     "recall",
+    // Reads the calling bot's own notes (DESIGN §5.6).
+    "read_notes",
     // Reads X through the server, which caps the searches a day (DESIGN §11.10).
     "x_search",
     // Only answers a card the gate already marked safe (`safe_to_accept`).
@@ -49,6 +51,14 @@ const READ_ONLY: &[&str] = &[
     // names a tool arrives as `mcp:<tool>` (see `main.rs` `on_dialog`) and asks.
     "mcp",
 ];
+
+/// Tools that change only the calling bot's own notes, a row the server keeps
+/// for it (DESIGN §5.6, D-071). They run without asking, like a file in its own
+/// computer: nothing leaves, nothing of anyone else's changes, the owner sees
+/// and edits the notes in the app, and a rewrite from an old copy is refused.
+/// Not ledgered: `remember` skips a line that's already there, and
+/// `rewrite_notes` is fenced by its version.
+const OWN_NOTES: &[&str] = &["remember", "rewrite_notes"];
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Verdict {
@@ -217,7 +227,7 @@ pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Re
             Verdict::Deny("This bot can't generate media. Ask the media creator.".into())
         });
     }
-    if READ_ONLY.contains(&call.tool) || memory_read(call) {
+    if READ_ONLY.contains(&call.tool) || OWN_NOTES.contains(&call.tool) || memory_read(call) {
         return Ok(Verdict::Allow);
     }
     // Helpers must run inside the turn: once it ends, the server answers no more of
@@ -562,6 +572,36 @@ mod tests {
             decide(&db, &call(a, "c3", "write", &input)).await.unwrap(),
             Verdict::Allow
         );
+    }
+
+    #[sqlx::test]
+    async fn a_bot_keeps_its_own_notes_without_a_card(db: PgPool) {
+        let (_, a) = run_with_attempts(&db).await;
+        let calls = [
+            ("read_notes", json!({})),
+            ("remember", json!({"line": "Short replies"})),
+            (
+                "rewrite_notes",
+                json!({"text": "- Short replies", "version": 1}),
+            ),
+        ];
+        for (tool, input) in &calls {
+            assert_eq!(
+                decide(&db, &call(a, "n1", tool, input)).await.unwrap(),
+                Verdict::Allow,
+                "{tool}"
+            );
+            // Never something the Orchestrator accepts for a teammate: there is no card.
+            assert!(!safe_to_accept(tool, true, false), "{tool}");
+        }
+        // Only those names: a tool that merely sounds like one still asks.
+        for tool in ["remember_all", "write_notes", "notes"] {
+            assert_eq!(
+                decide(&db, &call(a, "n2", tool, &json!({}))).await.unwrap(),
+                Verdict::Ask { uncertain: false },
+                "{tool}"
+            );
+        }
     }
 
     #[sqlx::test]

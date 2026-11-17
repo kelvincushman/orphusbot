@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update bot set notes = $2, notes_version = notes_version + 1 where slug = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8688175198ed16fa47c6f95fe18dca6d5a8c67f36169c8d9208e7d4b491b72c7"
+}

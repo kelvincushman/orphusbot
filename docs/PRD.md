@@ -104,7 +104,7 @@ Priority: **P0** = v1 blocker, **P1** = v1 target, **P2** = later.
 | B-RUN-01 | A message to a bot either answers its pending question, steers its live run, or creates a new task and run, in one transaction with the message | P0 |
 | B-RUN-02 | Runs are leased with a fence; a lost lease aborts the engine turn. A reconciler re-enqueues lost work every 30 s | P0 |
 | B-RUN-03 | Kelvin can stop a run, steer it mid-turn, or queue a follow-up from any client | P0 |
-| B-RUN-04 | Side-effecting tool calls are recorded in the effect ledger; after a crash, completed effects replay their result and in-flight ones are marked **uncertain** and shown to Kelvin, never re-executed | P0 |
+| B-RUN-04 | Side-effecting tool calls are recorded in the effect ledger; after a crash, completed effects replay their result and in-flight ones are marked **uncertain** and shown to Kelvin, never re-executed. One agreed exception: a bot's writes to its own notes (`remember`, `rewrite_notes`, B-BOT-05) are not ledgered and may run again after a crash. `remember` adds its line only if it isn't there, and `rewrite_notes` is refused when the notes changed since the bot read them, so a repeat changes nothing; the one effect is that a repeated `remember` can put back a line Kelvin deleted in between | P0 |
 | B-RUN-05 | A bot can ask Kelvin a question (select / confirm / input) and park in `waiting_input`; reminders are gentle and batched, and the run expires after a configurable time | P0 |
 | B-RUN-06 | Runs can launch an Orphus fleet or a Goal workflow instead of a single turn | P1 |
 | B-RUN-07 | Every message, progress delta, tool event, approval and decision is an event with a per-thread sequence number | P0 |
@@ -117,6 +117,7 @@ Priority: **P0** = v1 blocker, **P1** = v1 target, **P2** = later.
 | B-BOT-02 | Each bot is an Orphus role, so bots can sit in Orphus rooms and fleets; a group thread is a room | P1 |
 | B-BOT-03 | An "inbox" bot exists by default and receives anything System 1 can't route confidently | P0 |
 | B-BOT-04 | Per-bot memory and skills come from Orphus; OrphusBot shows and edits them | P2 |
+| B-BOT-05 | Each bot has its own short notes on how the owner likes it to work: the bot adds to them when corrected, the owner reads and edits them beside its instructions, they are read into every run, and no bot can reach another's | P1 |
 
 ### 7.3 Tickets and routines
 

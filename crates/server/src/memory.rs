@@ -73,8 +73,8 @@ pub struct Memory {
     embed_model: String,
     /// The model name for embedding a search, where the server has one.
     query_model: String,
-    /// What facts call the owner.
-    owner: String,
+    /// What facts and a bot's notes call the owner.
+    pub owner: String,
 }
 
 impl Memory {

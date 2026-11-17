@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update bot set notes = $1 where slug = 'helper'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "59dd0553b9212c10f8d3b1eb2078006572c896c1f25e3caa4cfac82b736f19e1"
+}

@@ -557,9 +557,10 @@ pub async fn answered(app: &App, run: i64, outcome: RunOutcome, error: Option<&s
     tell(app, &t.asker, &text).await;
 }
 
-/// What a bot can do, in one line, for the team roster: its model, Google
-/// access, connections and special tools (DESIGN §5.3).
-fn abilities(
+/// What a bot can do, in one line, for the team roster and the app's "Can do":
+/// its model, Google access, connections, phone, media and special tools
+/// (DESIGN §5.3).
+pub fn abilities(
     b: &crate::bots::Bot,
     connections: &HashMap<String, Vec<String>>,
     google_ready: bool,
@@ -584,6 +585,16 @@ fn abilities(
             parts.push(format!("connections: {}", names.join(", ")))
         }
         _ => {}
+    }
+    match b.phone.as_str() {
+        "operate" => {
+            parts.push("phone: works the phone and drafts posts (Kelvin approves each, unless he has allowed that exact action always)".into())
+        }
+        "draft" => parts.push("phone: reads the accounts and drafts posts (Kelvin approves each)".into()),
+        _ => {}
+    }
+    if b.media {
+        parts.push("makes images and video".into());
     }
     if b.slug == "orchestrator" {
         parts.push("starts discussions and runs fleets".into());
@@ -1104,5 +1115,15 @@ mod tests {
         let none = roster_note(&roster, "coder", &grants, false).unwrap();
         assert!(!none.contains("Google: looks up"));
         assert!(none.contains("isn't set up yet"));
+        // The phone and media show in the same line (the app's "Can do" reads it too).
+        let social = crate::bots::Bot {
+            phone: "draft".into(),
+            media: true,
+            ..b("social", false)
+        };
+        assert_eq!(
+            abilities(&social, &grants, false),
+            "model Orphus default; phone: reads the accounts and drafts posts (Kelvin approves each); makes images and video"
+        );
     }
 }

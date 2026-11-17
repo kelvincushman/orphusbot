@@ -34,8 +34,9 @@ var _id = DateTime.now().millisecondsSinceEpoch ~/ 1000 % 100000;
 
 // Once; a notification shown meanwhile waits for it. A failure is tried
 // again with the next notification.
-// ponytail: on Linux the plugin counts a failed first try as done, so after
-// one, notifications still show but a click may not open the chat until a restart.
+// ponytail: on Linux the plugin counts a failed first try as done and never
+// tries again, so after one, notifications or clicks may not work until the
+// app restarts. A fix belongs in the plugin (flutter_local_notifications_linux).
 Future<void> _init() => _ready ??= _notes
     .initialize(
       settings: InitializationSettings(

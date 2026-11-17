@@ -255,6 +255,29 @@ async fn check_disk(probe: &dyn Probe, path: &str) -> Option<Problem> {
     }
 }
 
+/// Every mail account any bot may use (DESIGN §11.11).
+async fn mail_accounts(app: &App) -> sqlx::Result<Vec<String>> {
+    sqlx::query_scalar!(
+        r#"select distinct unnest(mail_accounts) as "account!" from bot order by 1"#
+    )
+    .fetch_all(&app.db)
+    .await
+}
+
+async fn check_mail(app: &App, account: String) -> Option<Problem> {
+    match app.mail.reachable(&account).await {
+        Ok(()) => None,
+        Err(e) => {
+            // Himalaya's own words stay in the log: they may name addresses.
+            warn!(account, "checking a mail account: {e:#}");
+            problem(
+                format!("Mail account {account} isn't working"),
+                format!("Check the Himalaya account {account} on the server."),
+            )
+        }
+    }
+}
+
 fn node_problem(node: &str) -> Option<Problem> {
     problem(
         format!("The node {node} is offline"),
@@ -306,7 +329,17 @@ pub async fn check_now(app: &App) -> anyhow::Result<()> {
         let check = Box::pin(check_disk(&*h.probe, path));
         checks.push(("disk".into(), "Disk space".into(), check));
     }
-    // A new check (such as the mail accounts, DESIGN §11.11) is one more entry here.
+    if app.mail.ready() {
+        for account in mail_accounts(app).await? {
+            let check = Box::pin(check_mail(app, account.clone()));
+            checks.push((
+                format!("mail:{account}"),
+                format!("Mail ({account})"),
+                check,
+            ));
+        }
+    }
+    // A new check is one more entry here.
 
     let names: Vec<String> = checks.iter().map(|(name, ..)| name.clone()).collect();
     let results = join_all(checks.into_iter().map(|(name, label, check)| async move {
@@ -617,6 +650,47 @@ mod tests {
         let app = app_with(&db, Health::off());
         check_now(&app).await.unwrap();
         assert_eq!(states(&db).await, [("google".to_owned(), true)]);
+    }
+
+    #[sqlx::test]
+    async fn checks_each_mail_account_a_bot_may_use(db: PgPool) {
+        sqlx::query!(
+            "insert into bot (slug, name, mail_accounts) values
+             ('mail-one', 'Mail one', '{personal,work}'), ('mail-two', 'Mail two', '{work}')"
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        let (mail, ran) = crate::mail::testkit::fake(None);
+        let mut app = app_with(&db, Health::off());
+        Arc::get_mut(&mut app).unwrap().mail = mail;
+        check_now(&app).await.unwrap();
+        assert_eq!(
+            states(&db).await,
+            [
+                ("mail:personal".to_owned(), false),
+                ("mail:work".to_owned(), false),
+            ]
+        );
+        let fix = sqlx::query_scalar!("select fix from health_check where name = 'mail:work'")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(
+            fix.as_deref(),
+            Some("Check the Himalaya account work on the server.")
+        );
+        // Read-only: each account's folders listed once, nothing else run.
+        let ran: Vec<Vec<String>> = ran.lock().unwrap().iter().map(|r| r.args.clone()).collect();
+        assert_eq!(ran.len(), 2);
+        for args in &ran {
+            assert_eq!(args[2..4], ["folder", "list"]);
+        }
+
+        let (mail, _) = crate::mail::testkit::fake(Some("[]"));
+        Arc::get_mut(&mut app).unwrap().mail = mail;
+        check_now(&app).await.unwrap();
+        assert!(states(&db).await.iter().all(|(_, ok)| *ok));
     }
 
     #[sqlx::test]

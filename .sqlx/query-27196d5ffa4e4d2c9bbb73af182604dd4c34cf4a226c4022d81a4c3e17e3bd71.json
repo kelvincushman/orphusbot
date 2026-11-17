@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select fix from health_check where name = 'mail:work'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "fix",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "health_check",
+            "name": "fix"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "27196d5ffa4e4d2c9bbb73af182604dd4c34cf4a226c4022d81a4c3e17e3bd71"
+}

@@ -475,8 +475,8 @@ struct NewMessage {
     /// model rather than answered on the quick one.
     #[serde(default)]
     work: bool,
-    /// With `voice`: the call's transcript when it ends, for the record. It is
-    /// never refused, so it may join a question's run.
+    /// With `voice`: the call's transcript when it ends, for the record. The
+    /// busy-run check below skips it, so it may join a question's run.
     #[serde(default)]
     record: bool,
 }

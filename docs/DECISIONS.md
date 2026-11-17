@@ -23,6 +23,18 @@ Format:
 
 ---
 
+## D-079: Desktop notifications come over the event stream (2026-11-17)
+
+**Decided:** every push the server sends (approvals, questions, takeovers, failed runs, finished work the owner didn't start from a chat, and the rest `notify` already sends) is also published as a live-only `push` event on `/api/events`. The Linux and macOS app shows it as a system notification with `flutter_local_notifications`, which it already had for Android; a click opens that bot's chat, and nothing is shown while the window is focused on that bot's chat. Android ignores the event and keeps UnifiedPush.
+
+**Why:** the desktop app is normally open and already holds the stream, so this needs no new service, endpoint, table or dependency, and the policy of what pushes stays in one place (`App::push`). The plugin's Linux side talks D-Bus directly, so it needs only the notification daemon Omarchy already runs.
+
+**Alternatives:** UnifiedPush on the desktop (the ntfy app has no Linux or macOS distributor we'd want to run); the app subscribing to the ntfy topic itself (a second connection and a token on every computer); APNs for macOS (an Apple account and a signed app); the app deciding from ordinary events what deserves a notification, as the CLI does (a second copy of the policy that would drift).
+
+**Revisit if:** the owner wants notifications with the app closed (then a small background process or a distributor), or a desktop client other than the Flutter app needs them.
+
+---
+
 ## D-078: Ignore the chrono and chrono-tz "unmaintained" advisories for now (2026-11-17)
 
 **Decided:** `deny.toml` ignores RUSTSEC-2026-0543 (`chrono`) and RUSTSEC-2026-0555 (`chrono-tz`), each with its reason, as it already ignores other unmaintained-only notices.

@@ -2,16 +2,24 @@
 // ntfy app is the distributor, connected to OrphusBot's own ntfy server. It
 // hands us an endpoint, which the server posts every push to as JSON; we
 // show it as our own notification, and a tap opens that bot.
+//
+// On Linux and macOS (D-079) the open app already holds the event stream, and
+// the server sends each push on it too, as a live `push` event; the app shows
+// it as a system notification (on Linux over D-Bus to the notification
+// daemon), and a click opens that bot.
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:unifiedpush/unifiedpush.dart';
 
 import 'api.dart';
 
 final _notes = FlutterLocalNotificationsPlugin();
-var _ready = false;
+Future<void>? _ready;
+// Opens a bot's chat on a click: the chat screen showing now, if any.
+void Function(String bot)? _open;
 
 const _channel = AndroidNotificationDetails(
   'bots',
@@ -21,28 +29,44 @@ const _channel = AndroidNotificationDetails(
   priority: Priority.high,
 );
 
-Future<void> _init(void Function(String bot)? open) async {
-  if (_ready) return;
-  _ready = true;
-  await _notes.initialize(
-    settings: const InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-    ),
-    onDidReceiveNotificationResponse: (r) {
-      final bot = r.payload;
-      if (bot != null && bot.isNotEmpty) open?.call(bot);
-    },
-  );
-}
+// A new id each time, so one notification never replaces another.
+var _id = DateTime.now().millisecondsSinceEpoch ~/ 1000 % 100000;
+
+// Once; a notification shown meanwhile waits for it. A failure is tried
+// again with the next notification.
+// ponytail: on Linux the plugin counts a failed first try as done and never
+// tries again, so after one, notifications or clicks may not work until the
+// app restarts. A fix belongs in the plugin (flutter_local_notifications_linux).
+Future<void> _init() => _ready ??= _notes
+    .initialize(
+      settings: InitializationSettings(
+        android: const AndroidInitializationSettings('@mipmap/ic_launcher'),
+        // The `orphusbot` icon the app installs in the hicolor theme.
+        linux: LinuxInitializationSettings(
+          defaultActionName: 'Open',
+          defaultIcon: ThemeLinuxIcon('orphusbot'),
+        ),
+        // Initialising asks the owner for permission, once.
+        macOS: const DarwinInitializationSettings(),
+      ),
+      onDidReceiveNotificationResponse: (r) {
+        final bot = r.payload;
+        if (bot != null && bot.isNotEmpty) _open?.call(bot);
+      },
+    )
+    .catchError((Object e) {
+      _ready = null;
+      throw e;
+    });
 
 /// Shows one push from the server: `{title, body, bot, priority}`.
 Future<void> _show(PushMessage m) async {
   // ponytail: the payload isn't Web Push encrypted; it only crosses our own
   // ntfy over TLS. Encrypt with the endpoint's pubKeySet if a public distributor is used.
   final msg = jsonDecode(utf8.decode(m.content)) as Map<String, dynamic>;
-  await _init(null);
+  await _init();
   await _notes.show(
-    id: DateTime.now().millisecondsSinceEpoch ~/ 1000 % 100000,
+    id: _id++,
     title: msg['title'] as String?,
     body: msg['body'] as String?,
     notificationDetails: const NotificationDetails(android: _channel),
@@ -54,8 +78,13 @@ Future<void> _show(PushMessage m) async {
 /// distributor installed), else null. [open] is called with a bot's slug
 /// when a notification is tapped, including the one that launched the app.
 Future<String?> startPush(Api api, void Function(String bot) open) async {
+  _open = open;
+  if (_desktop) {
+    await _init();
+    return null;
+  }
   if (!Platform.isAndroid) return null;
-  await _init(open);
+  await _init();
   await _notes
       .resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin
@@ -79,4 +108,98 @@ Future<String?> startPush(Api api, void Function(String bot) open) async {
   }
   await UnifiedPush.register();
   return null;
+}
+
+/// The chat screen [open] (given to [startPush]) is closing: clicks no longer go to it.
+void stopPush(void Function(String bot) open) {
+  if (_open == open) _open = null;
+}
+
+/// Where `push` events become notifications. Android has UnifiedPush, which
+/// works with the app closed, so the event would only be a duplicate there.
+final _desktop = Platform.isLinux || Platform.isMacOS;
+
+/// Shows a notification; the plugin in the app, a fake in tests.
+typedef ShowNote = Future<void> Function(
+  String title,
+  String body,
+  String? bot,
+  int priority,
+);
+
+/// Whether a `push` event about [bot] becomes a notification: on a desktop,
+/// unless the window is focused with that bot's chat ([open]) showing.
+/// [open] is null when no chat is showing, such as with the Gallery on top.
+bool shouldNotify({
+  required bool desktop,
+  required bool focused,
+  required String? bot,
+  required String? open,
+}) => desktop && !(focused && bot != null && bot == open);
+
+/// Closes the pages over the chat for a notification click. A page that
+/// guards its unsaved edits (a bot's settings) is asked to close, the way the
+/// back button does, rather than popped, so it can ask first.
+void backToChat(NavigatorState nav) {
+  nav.popUntil(
+    (r) => r.isFirst || r.popDisposition == RoutePopDisposition.doNotPop,
+  );
+  nav.maybePop();
+}
+
+/// The chat showing at [context]: [chosen], unless another page covers it.
+String? showingChat(BuildContext context, String chosen) =>
+    ModalRoute.of(context)?.isCurrent ?? true ? chosen : null;
+
+/// Shows a `push` event from the server (`{bot?, title, body, priority}`) as a
+/// system notification, if [shouldNotify] says so. [open] is the bot whose
+/// chat is showing.
+Future<void> showPush(
+  Map<String, dynamic> e, {
+  required String? open,
+  bool? desktop,
+  bool? focused,
+  ShowNote? show,
+}) async {
+  final bot = e['bot'] as String?;
+  final yes = shouldNotify(
+    desktop: desktop ?? _desktop,
+    focused:
+        focused ??
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
+    bot: bot,
+    open: open,
+  );
+  if (!yes) return;
+  await (show ?? _showDesktop)(
+    e['title'] as String? ?? '',
+    e['body'] as String? ?? '',
+    bot,
+    e['priority'] as int? ?? 3,
+  );
+}
+
+Future<void> _showDesktop(
+  String title,
+  String body,
+  String? bot,
+  int priority,
+) async {
+  await _init();
+  await _notes.show(
+    id: _id++,
+    title: title,
+    body: body,
+    notificationDetails: NotificationDetails(
+      linux: LinuxNotificationDetails(
+        // What needs the owner (4 and 5) stays until it is seen.
+        urgency: priority >= 4
+            ? LinuxNotificationUrgency.critical
+            : priority <= 2
+            ? LinuxNotificationUrgency.low
+            : LinuxNotificationUrgency.normal,
+      ),
+    ),
+    payload: bot,
+  );
 }

@@ -219,7 +219,7 @@ async fn digest(app: &App, profile: &Profile, now: DateTime<Utc>) -> sqlx::Resul
     let Some(text) = digest_text(&waiting, &open) else {
         return Ok(());
     };
-    app.notifier.send(crate::notify::Push {
+    app.push(crate::notify::Push {
         title: "From your conversations".into(),
         body: text.clone(),
         priority: 2,
@@ -279,7 +279,7 @@ async fn nudges(app: &App, now: DateTime<Utc>) -> sqlx::Result<()> {
         } else {
             format!("Starts in {minutes} min")
         };
-        app.notifier.send(crate::notify::Push {
+        app.push(crate::notify::Push {
             title: format!("{when}: {}", p.title),
             body: String::new(),
             priority: 4,

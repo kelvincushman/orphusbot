@@ -34,7 +34,7 @@ OrphusBot is an open-source, self-hosted bot service. You hand it a task from th
 | **A team you can watch** | In the app every bot is a small robot that shows what it's doing. When one bot hands another a job, a note passes between them in both chats, and the Team screen shows who is waiting on whom. Animation can be set to full, calm or off, and everything that moves is also said in words. |
 | **Call any bot** | Optional, needs an xAI key. A call button in every bot's chat opens a live voice for that bot: ask it things, or hand it work and hear when it's done. Approvals stay taps on the screen. About $0.05 a minute. During a call your speech and the chat's last messages go to xAI, and for the Orchestrator also what the team is working on. |
 | **Health** | One screen says whether what the bots rely on is working: Google, each machine, the xAI key, the model servers, push, disk space and mail accounts, each with the fix in plain words. A red bar on the main screen while anything is wrong, one push when it breaks and one when it's fixed, and bots say plainly when Google needs reconnecting instead of failing quietly. |
-| **Everywhere** | One Rust UI for the web, a desktop app and an Android app, kept in sync live. Push notifications through self-hosted ntfy; no Google account needed. |
+| **Everywhere** | One Rust UI for the web, a desktop app and an Android app, kept in sync live. Push notifications through self-hosted ntfy, no Google account needed, and system notifications from the open app on Linux and macOS. |
 
 ## How it fits together
 

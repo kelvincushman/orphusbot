@@ -69,18 +69,19 @@ class _ChatScreenState extends State<ChatScreen> {
     onResume: () => _act(_loadBots),
   );
 
+  // A notification was clicked: back to the chat, on that bot.
+  void _openBot(String bot) {
+    if (!mounted) return;
+    setState(() => chosen = bot);
+    backToChat(Navigator.of(context));
+  }
+
   @override
   void initState() {
     super.initState();
     life;
     _start();
-    startPush(widget.api, (bot) {
-      if (mounted) {
-        setState(() {
-          chosen = bot;
-        });
-      }
-    }).then(
+    startPush(widget.api, _openBot).then(
       (note) {
         if (note != null && mounted) setState(() => problem = note);
       },
@@ -212,6 +213,13 @@ class _ChatScreenState extends State<ChatScreen> {
         // On connecting the server replays what's stored and then says which
         // nodes are on; from there events are news.
         if (type == 'nodes') live = true;
+        // A push to the owner, live only: a system notification on a
+        // desktop. One that can't be shown (no notification daemon) is let go.
+        if (type == 'push') {
+          if (!mounted) return;
+          showPush(e, open: showingChat(context, chosen)).onError((_, _) {});
+          return;
+        }
         if (bot == null) return;
         // Not after a reconnect that catches up on what was missed, though:
         // only what happened in the last minute moves.
@@ -246,6 +254,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    stopPush(_openBot);
     life.dispose();
     sub?.cancel();
     handoffs.close();

@@ -117,7 +117,7 @@ impl Secrets {
         Ok(())
     }
 
-    fn learn(&self, value: &str) {
+    pub(crate) fn learn(&self, value: &str) {
         let forms = [
             value.to_owned(),
             openssl::base64::encode_block(value.as_bytes()),

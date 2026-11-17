@@ -236,7 +236,7 @@ Priority: **P0** = v1 blocker, **P1** = v1 target, **P2** = later.
 | B-CLI-02 | Live sync over SSE from the last seen event number; a reconnect replays exactly what was missed | P0 |
 | B-CLI-03 | Views: inbox (needs-you first), bot list, thread, ticket board, routines, captures, computer view, decisions (receipts + calibration health), nodes, wearable, settings | P0 |
 | B-CLI-04 | Approval cards show the action, the System 1 answer and confidence, and approve / deny / always-allow in one tap | P0 |
-| B-CLI-05 | Android: offline outbox for unsent messages; push through self-hosted ntfy / UnifiedPush (no Google account) for needs-you / finished / takeover | P1 |
+| B-CLI-05 | Android: offline outbox for unsent messages; push through self-hosted ntfy / UnifiedPush (no Google account) for needs-you / finished / takeover. The same pushes show as system notifications in the open Linux and macOS app | P1 |
 | B-CLI-06 | Sign-in with passkeys; long-lived device tokens on mobile; reachable only over NetBird | P0 |
 | B-CLI-07 | Command palette and full keyboard path on web and desktop | P1 |
 | B-CLI-08 | A Health screen shows every outside service the bots rely on (Google, nodes, xAI, model servers, ntfy, disk) as working or not, with the problem and its fix in plain words; the owner gets one push when one breaks and one when it is fixed, and bots say plainly when Google needs reconnecting instead of retrying | P1 |

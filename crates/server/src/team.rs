@@ -1096,6 +1096,7 @@ mod tests {
             phone: "none".into(),
             media: false,
             x_search: false,
+            mail_accounts: Vec::new(),
             session_gen: 0,
         };
         let roster = [

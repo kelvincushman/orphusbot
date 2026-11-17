@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select t.id from thread t join bot b on b.id = t.bot_id where b.slug = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "thread",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "be5dead5b3af0ba979e847c75ad8cff6e9e7a00cae40e4e2f215221c046a1231"
+}

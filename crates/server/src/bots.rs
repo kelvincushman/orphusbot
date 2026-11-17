@@ -77,6 +77,10 @@ pub struct Bot {
     /// May research X through the server's `x_search` tool (DESIGN §11.10).
     #[serde(default)]
     pub x_search: bool,
+    /// The server's Himalaya accounts it may use through the `mail` tool
+    /// (DESIGN §11.11); none means no mail.
+    #[serde(default)]
+    pub mail_accounts: Vec<String>,
     /// How many times "New conversation" moved it to a fresh engine session.
     #[serde(default)]
     pub session_gen: i32,
@@ -188,6 +192,8 @@ impl Bot {
             media: self.media,
             // Offered only while the server has an xAI key (`main.rs` `start`).
             x_search: self.x_search,
+            // Offered only while the server has a `himalaya` (`main.rs` `start`).
+            mail_accounts: self.mail_accounts.clone(),
             // Set when a run starts, for a team bot while memory is on.
             recall: false,
             display_name: self.name.clone(),
@@ -205,6 +211,13 @@ impl Bot {
             .map(|m| m.trim().to_owned())
             .filter(|m| !m.is_empty());
         self.thinking = self.thinking.filter(|t| !t.is_empty());
+        let mut accounts: Vec<String> = Vec::new();
+        for a in self.mail_accounts.iter().map(|a| a.trim()) {
+            if !a.is_empty() && !accounts.iter().any(|b| b == a) {
+                accounts.push(a.to_owned());
+            }
+        }
+        self.mail_accounts = accounts;
         let tool_ok = |t: &String| {
             (1..=40).contains(&t.len()) && t.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
         };
@@ -259,6 +272,14 @@ impl Bot {
             _ if !["none", "draft", "operate"].contains(&self.phone.as_str()) => {
                 Err("Phone is none, draft or operate")
             }
+            _ if self.mail_accounts.len() > 8
+                || !self
+                    .mail_accounts
+                    .iter()
+                    .all(|a| crate::mail::account_name_ok(a)) =>
+            {
+                Err("Mail accounts are up to 8 Himalaya account names: letters, digits, _, - and .")
+            }
             _ => Ok(self),
         }
     }
@@ -296,7 +317,7 @@ fn slugify(name: &str) -> String {
 pub async fn all(db: &PgPool) -> sqlx::Result<Vec<Bot>> {
     sqlx::query_as!(
         Bot,
-        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media, x_search, session_gen
+        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media, x_search, mail_accounts, session_gen
          from bot order by disabled, slug <> 'orchestrator', slug <> 'inbox', name"
     )
     .fetch_all(db)
@@ -306,7 +327,7 @@ pub async fn all(db: &PgPool) -> sqlx::Result<Vec<Bot>> {
 pub async fn get(db: &PgPool, slug: &str) -> sqlx::Result<Option<Bot>> {
     sqlx::query_as!(
         Bot,
-        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media, x_search, session_gen
+        "select slug, name, remit, instructions, model, thinking, exclude_tools, scope, disabled, computer, google, face, desktop, phone, media, x_search, mail_accounts, session_gen
          from bot where slug = $1",
         slug
     )
@@ -349,6 +370,8 @@ pub struct NewBot {
     media: bool,
     #[serde(default)]
     x_search: bool,
+    #[serde(default)]
+    mail_accounts: Vec<String>,
 }
 
 fn private() -> String {
@@ -376,6 +399,7 @@ pub async fn create(
         phone: new.phone,
         media: new.media,
         x_search: new.x_search,
+        mail_accounts: new.mail_accounts,
         session_gen: 0,
     }
     .check()
@@ -403,8 +427,8 @@ pub async fn create(
         .find(|s| !taken.contains(s))
         .unwrap_or_default();
     let id = sqlx::query_scalar!(
-        "insert into bot (slug, name, remit, instructions, model, thinking, exclude_tools, scope, computer, google, face, desktop, phone, media, x_search)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) returning id",
+        "insert into bot (slug, name, remit, instructions, model, thinking, exclude_tools, scope, computer, google, face, desktop, phone, media, x_search, mail_accounts)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) returning id",
         slug,
         bot.name,
         bot.remit,
@@ -419,7 +443,8 @@ pub async fn create(
         bot.desktop,
         bot.phone,
         bot.media,
-        bot.x_search
+        bot.x_search,
+        &bot.mail_accounts
     )
     .fetch_one(&mut *tx)
     .await
@@ -469,7 +494,7 @@ pub async fn update(
                 exclude_tools = $7,
                 team_since = case when scope <> $8 and $8 = 'team' then now() else team_since end,
                 scope = $8, disabled = $9, computer = $10, google = $11, face = $12,
-                desktop = $13, phone = $14, media = $15, x_search = $16
+                desktop = $13, phone = $14, media = $15, x_search = $16, mail_accounts = $17
          where slug = $1",
         bot.slug,
         bot.name,
@@ -486,7 +511,8 @@ pub async fn update(
         bot.desktop,
         bot.phone,
         bot.media,
-        bot.x_search
+        bot.x_search,
+        &bot.mail_accounts
     )
     .execute(&app.db)
     .await
@@ -620,6 +646,7 @@ mod tests {
             phone: "none".into(),
             media: false,
             x_search: false,
+            mail_accounts: Vec::new(),
             session_gen: 0,
         };
         let ok = bot(" Researcher ", Some("high")).check().unwrap();

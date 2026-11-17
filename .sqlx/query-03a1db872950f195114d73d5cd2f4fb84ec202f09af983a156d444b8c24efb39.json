@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select input as \"input: Json<Value>\" from effect\n           where run_id = $1 and fence = $2 and tool_call_id = $3 and tool = 'mail' and state = 'approved'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "input: Json<Value>",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "effect",
+            "name": "input"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "03a1db872950f195114d73d5cd2f4fb84ec202f09af983a156d444b8c24efb39"
+}

@@ -707,6 +707,12 @@ impl Engine {
         if bot.x_search {
             command.env("ORPHUSBOT_X_SEARCH", "1");
         }
+        // The `mail` tool (DESIGN §11.11): the server answers it through its own
+        // Himalaya; only the account names reach the engine.
+        command.env_remove("ORPHUSBOT_MAIL_ACCOUNTS");
+        if !bot.mail_accounts.is_empty() {
+            command.env("ORPHUSBOT_MAIL_ACCOUNTS", bot.mail_accounts.join(","));
+        }
         let mut child = command
             .args([
                 "--mode",

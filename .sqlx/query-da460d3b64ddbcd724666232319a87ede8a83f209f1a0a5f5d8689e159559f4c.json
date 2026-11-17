@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select state::text from effect where run_id = $1 and tool_call_id = 'e4'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "da460d3b64ddbcd724666232319a87ede8a83f209f1a0a5f5d8689e159559f4c"
+}

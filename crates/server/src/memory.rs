@@ -260,40 +260,41 @@ pub fn spoken(owner: &str, transcript: &str) -> Option<String> {
 /// must not become a fact every team bot is shown.
 pub fn card_answer(owner: &str, asked: &str, answer: &str) -> Option<String> {
     let (asked, answer) = (asked.trim(), answer.trim());
-    // Whole words only, so "pin" doesn't match "opinion".
-    let words: String = asked
-        .to_lowercase()
-        .chars()
-        .map(|c| {
-            if c.is_alphanumeric() || c == '-' {
-                c
-            } else {
-                ' '
-            }
-        })
-        .collect();
-    let words = format!(
-        " {} ",
-        words.split_whitespace().collect::<Vec<_>>().join(" ")
-    );
+    // Whole words, with hyphens as spaces and a plural's "s" dropped, so
+    // "API-keys" is "api key" and "pin" doesn't match "opinion".
+    let words = |s: &str| {
+        let s: String = s
+            .to_lowercase()
+            .chars()
+            .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+            .collect();
+        let words: Vec<&str> = s
+            .split_whitespace()
+            .map(|w| w.strip_suffix('s').unwrap_or(w))
+            .collect();
+        format!(" {} ", words.join(" "))
+    };
+    let question = words(asked);
     let asks_secret = [
         "password",
-        "passwords",
         "passcode",
         "passphrase",
         "token",
         "api key",
+        "apikey",
+        "access key",
+        "private key",
         "secret",
         "pin",
         "2fa",
         "otp",
-        "one-time",
+        "one time",
         "verification code",
-        "sign-in code",
+        "sign in code",
         "login code",
     ]
     .iter()
-    .any(|w| words.contains(&format!(" {w} ")));
+    .any(|w| question.contains(&words(w)));
     (!asks_secret && !asked.is_empty() && !answer.is_empty())
         .then(|| format!("Asked: {asked} — {owner} answered: {answer}"))
 }
@@ -1542,6 +1543,10 @@ mod tests {
             "GitHub token?",
             "Wi-Fi password:",
             "Your API key",
+            "Enter your API-key",
+            "Your API keys",
+            "The one-time code we sent?",
+            "Your access keys?",
         ] {
             assert_eq!(card_answer("Sam", q, "hunter2"), None, "{q}");
         }

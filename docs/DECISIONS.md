@@ -11,6 +11,18 @@ Format:
 
 ---
 
+## D-081: Plain writing through the STE80 humanizer; social drafts keep blader's (2026-11-17)
+
+**Decided:** the [ste80-humanizer](https://github.com/Dodaios/ste80-humanizer) skill (MIT), pinned at commit `0d6f799`, is installed in Orphus's user skills folder on the node. The house style tells every bot to run it before sharing a document, a README or an email draft, or sending a long reply. Social posts and phone drafts keep blader's humanizer, which the `phone` tool's `draft` requires (`humanizer-3.1.0`).
+
+**Why:** Kelvin asked for it. It removes the marks of AI writing and then makes the text plainer (one idea per sentence, active voice, plain words), which suits documents and emails. Its helper script uses only the Python standard library and makes no network calls, and the skill is plain instructions, so nothing new runs with access. Posts in Kelvin's own voice read worse in Simplified Technical English, and the phone gate already names the humanizer it trusts, so moving drafts over would mean changing that check for a style that doesn't fit them.
+
+**Alternatives:** replacing blader's humanizer everywhere (simpler, but posts would lose Kelvin's voice); offering STE80 only when a bot is asked (it would rarely be used); vendoring the skill into this repository (a copy to keep in step; the node is where skills live).
+
+**Revisit if:** replies or documents come out stiff, the skill's upstream changes in a way that matters (update the pin), or social drafts start to read as AI-written despite the humanizer.
+
+---
+
 ## D-080: Learned memory hears card answers and the owner's side of calls (2026-11-17)
 
 **Decided:** learned memory (§11.9) also notes, for team-scope bots only, (1) the owner's answers to bots' question cards, as `Asked: <question> — <owner> answered: <answer>`, and an approval card's **Always** as one line; and (2) the owner's side of a voice call's transcript, sent when the call ends, as one `On a call (speech to text): …` line. A call's `ask` and `do` messages, and the Ideas Room's questions, are no longer noted. Single allow/deny taps, takeovers, dismissals, mail's "Always", and answers to cards that ask for a credential are not noted. The learner's prompt says what these lines are and that speech may be misheard.

@@ -161,7 +161,8 @@ struct Runtime {
     steps: std::collections::HashSet<(i64, String)>,
     /// `google` calls that reach Google, by run and tool-call id, so their
     /// results can tell the Health screen whether Google's sign-in works.
-    google_calls: std::collections::HashSet<(i64, String)>,
+    /// Keyed by attempt too: a retry may reuse a tool-call id.
+    google_calls: std::collections::HashSet<(Attempt, String)>,
     /// Capture windows sent to a node for extraction and not yet answered.
     extracting: std::collections::HashSet<i64>,
     /// Open screen viewers by stream number, with the node serving each.
@@ -1036,7 +1037,7 @@ async fn on_dialog(app: &Shared, active: Active, request: Value) {
         };
         steps::started(app, &active.thread, attempt.run, call_id, &tool, &input).await;
         if tool == "google" && google::reaches_google(&google::args(&input)) {
-            let call = (attempt.run, call_id.to_owned());
+            let call = (attempt, call_id.to_owned());
             lock(&app.rt).google_calls.insert(call);
         }
         let verdict = gate::decide(&app.db, &app.system1, &gate_call)
@@ -1829,7 +1830,7 @@ async fn on_node_message(app: &Shared, node: &str, msg: FromNode) {
                     warn!("recording tool result: {e}");
                 }
                 steps::ended(app, &a.thread, attempt.run, &tool_call_id, ok).await;
-                let call = (attempt.run, tool_call_id);
+                let call = (attempt, tool_call_id);
                 if lock(&app.rt).google_calls.remove(&call) {
                     health::google_used(app, ok, &result).await;
                 }
@@ -1849,7 +1850,7 @@ async fn run_ended(
     {
         let mut rt = lock(&app.rt);
         rt.steps.retain(|(r, _)| *r != run);
-        rt.google_calls.retain(|(r, _)| *r != run);
+        rt.google_calls.retain(|(a, _)| a.run != run);
     }
     tickets::run_ended(&app.db, run, outcome).await;
     // Boxed: starting the next ticket can lead back here when its run ends.

@@ -79,15 +79,17 @@ impl Probe for Real {
     }
 
     fn free_bytes<'a>(&'a self, path: &'a str) -> BoxFuture<'a, anyhow::Result<u64>> {
-        let path = path.to_owned();
         Box::pin(async move {
-            // POSIX `df` rather than a new dependency for statvfs.
-            let out = tokio::task::spawn_blocking(move || {
-                std::process::Command::new("df")
-                    .args(["-Pk", "--", &path])
-                    .output()
-            })
-            .await??;
+            // POSIX `df` rather than a new dependency for statvfs. On a
+            // timeout the child is dropped, so killed: a stalled filesystem
+            // can't leave commands piling up round after round.
+            let df = tokio::process::Command::new("df")
+                .args(["-Pk", "--", path])
+                .kill_on_drop(true)
+                .output();
+            let out = tokio::time::timeout(TIMEOUT, df)
+                .await
+                .context("df took too long")??;
             anyhow::ensure!(out.status.success(), "df failed");
             available_kib(&String::from_utf8_lossy(&out.stdout))
                 .map(|kib| kib * 1024)

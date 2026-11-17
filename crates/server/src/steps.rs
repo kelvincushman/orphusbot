@@ -2,7 +2,7 @@
 //! (DESIGN §12.6, D-067). The label is the server's own words. It carries at
 //! most one name the server already holds, never the call's arguments.
 
-use orphusbot_proto::{StepKind, ThreadEvent};
+use orphusbot_proto::{Attempt, StepKind, ThreadEvent};
 use serde_json::Value;
 
 use crate::{App, bots, connections, db, lock, record};
@@ -137,7 +137,8 @@ pub async fn ended(app: &App, thread: &db::Thread, run: i64, id: &str, ok: bool)
 
 /// The run lost its node and goes back in the queue: its open calls died
 /// with the attempt, so they end as failed and none is left as the current step.
-pub async fn abandon(app: &App, thread: &db::Thread, run: i64) {
+pub async fn abandon(app: &App, thread: &db::Thread, lost: Attempt) {
+    let run = lost.run;
     let open: Vec<String> = {
         let rt = lock(&app.rt);
         let of_run = rt.steps.iter().filter(|(r, _)| *r == run);
@@ -147,12 +148,8 @@ pub async fn abandon(app: &App, thread: &db::Thread, run: i64) {
         ended(app, thread, run, &id, false).await;
     }
     // The lost attempt's Google calls died with it too (`health::google_used`).
-    // By attempt: the run may already be running again elsewhere, and that
-    // attempt's calls stay.
-    let mut rt = lock(&app.rt);
-    let current = rt.active.get(&run).map(|a| a.attempt);
-    rt.google_calls
-        .retain(|(a, _)| a.run != run || Some(*a) == current);
+    // Only that attempt's: the run may already be running again elsewhere.
+    lock(&app.rt).google_calls.retain(|(a, _)| *a != lost);
 }
 
 #[cfg(test)]
@@ -165,6 +162,26 @@ mod tests {
             bots: vec![("coder".into(), "Coder".into())],
             connections: vec!["pa".into(), "pa_mail".into(), "github".into()],
         }
+    }
+
+    #[sqlx::test]
+    async fn a_lost_attempt_drops_only_its_own_google_calls(db: sqlx::PgPool) {
+        let app = crate::auth::tests::app(db);
+        let lost = Attempt { run: 7, fence: 1 };
+        // The run was dispatched again before the loss was announced.
+        let replacement = Attempt { run: 7, fence: 2 };
+        let other = Attempt { run: 8, fence: 1 };
+        for a in [lost, replacement, other] {
+            lock(&app.rt).google_calls.insert((a, "call-1".into()));
+        }
+        let thread = db::Thread {
+            id: 1,
+            bot: "inbox".into(),
+        };
+        abandon(&app, &thread, lost).await;
+        let mut left: Vec<Attempt> = lock(&app.rt).google_calls.iter().map(|(a, _)| *a).collect();
+        left.sort_by_key(|a| (a.run, a.fence));
+        assert_eq!(left, [replacement, other]);
     }
 
     #[test]

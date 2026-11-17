@@ -1440,7 +1440,11 @@ async fn announce_released(app: &App, released: Vec<runs::Released>) {
             run_ended(app, &thread, r.run, RunOutcome::Failed, error).await;
         } else {
             lock(&app.rt).waiting.remove(&r.run);
-            steps::abandon(app, &thread, r.run).await;
+            let lost = Attempt {
+                run: r.run,
+                fence: r.fence,
+            };
+            steps::abandon(app, &thread, lost).await;
             let event = ThreadEvent::RunQueued {
                 run: r.run,
                 waiting: None,

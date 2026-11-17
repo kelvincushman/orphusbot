@@ -513,11 +513,17 @@ fn argv(account: &str, op: &Op) -> Vec<String> {
     }
 }
 
-/// Himalaya's `-o json` output of a single text (a message, a template, a
-/// "done" line) is a JSON string; anything else is kept as it came.
+/// Himalaya's `-o json` output of a single text (a message, a "done" line) is
+/// a JSON string, and of a template an object whose `content` is the text
+/// (`{"content": "From: …", "cursor": {…}}` in v1.1); anything else is kept
+/// as it came.
 fn text_of(out: &str) -> String {
     match serde_json::from_str::<Value>(out.trim()) {
         Ok(Value::String(s)) => s,
+        Ok(Value::Object(mut o)) => match o.remove("content") {
+            Some(Value::String(s)) => s,
+            _ => out.trim().to_owned(),
+        },
         _ => out.trim().to_owned(),
     }
 }
@@ -752,7 +758,8 @@ pub mod testkit {
                 } else {
                     format!("{FROM}\nTo: \nSubject: \n\n-- \nsig\n")
                 };
-                Ok(serde_json::to_string(&tpl).unwrap())
+                // As Himalaya 1.1 prints a template with `-o json`.
+                Ok(serde_json::json!({"content": tpl, "cursor": {"row": 5, "col": 0}}).to_string())
             } else {
                 self.answer.clone().context("the fake is down")
             };
@@ -790,6 +797,15 @@ mod tests {
 
     fn check(input: Value) -> Result<Request, String> {
         Request::check(&input, &accounts())
+    }
+
+    #[test]
+    fn a_template_is_read_out_of_himalayas_json_object() {
+        // Himalaya 1.1 prints a template as an object, a message as a string.
+        let tpl = r#"{"content":"From: A <a@example.com>\nTo: \nSubject: \n\n","cursor":{"row":5,"col":0}}"#;
+        assert_eq!(text_of(tpl), "From: A <a@example.com>\nTo: \nSubject: \n\n");
+        assert_eq!(text_of(r#""Hello""#), "Hello");
+        assert_eq!(text_of("not json"), "not json");
     }
 
     fn strings(a: &[&str]) -> Vec<String> {

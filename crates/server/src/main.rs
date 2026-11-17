@@ -2100,6 +2100,7 @@ mod tests {
                     tool_call_id: Some("call-1".into()),
                     takeover: false,
                     safe: false,
+                    asked: None,
                 };
                 rt.dialogs.insert(format!("{name}-card"), pending);
                 rt.steps.insert((run, format!("{name}-step")), a.fence);
@@ -2152,6 +2153,7 @@ mod tests {
                 tool_call_id: Some("call-1".into()),
                 takeover: false,
                 safe: false,
+                asked: None,
             };
             super::lock(&app.rt).dialogs.insert(id.into(), pending);
         }

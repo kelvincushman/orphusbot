@@ -1555,9 +1555,9 @@ String mailTitle(String name, Map input) {
       '$name wants to move $emails from $folder to ${input['to_folder']} ($account)',
     'delete' => '$name wants to delete $emails in $folder ($account)',
     'flag' =>
-      '$name wants to mark $emails ${(input['flags'] as List?)?.join(', ')} ($account)',
+      '$name wants to mark $emails ${(input['flags'] as List?)?.join(', ')} in $folder ($account)',
     'unflag' =>
-      '$name wants to unmark $emails ${(input['flags'] as List?)?.join(', ')} ($account)',
+      '$name wants to unmark $emails ${(input['flags'] as List?)?.join(', ')} in $folder ($account)',
     _ => 'Allow $name to use mail ($account)?',
   };
 }

@@ -40,5 +40,15 @@ void main() {
       'Inbox wants to delete 1 email in Spam (work)',
     );
     expect(mailDetail(delete), 'Envelope ids: 9');
+    expect(
+      mailTitle('Inbox', {
+        'action': 'flag',
+        'account': 'work',
+        'folder': 'Spam',
+        'ids': ['9'],
+        'flags': ['seen'],
+      }),
+      'Inbox wants to mark 1 email seen in Spam (work)',
+    );
   });
 }

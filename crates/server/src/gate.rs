@@ -190,15 +190,19 @@ pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Re
         }
     }
     // Mail through the server's Himalaya (DESIGN §11.11, D-075): only the bot's
-    // own accounts; reads and drafts pass; a send, move, delete or flag change
-    // asks the owner every time, whatever the rules say.
+    // own accounts; reads pass; a draft passes but is ledgered (B-RUN-04); a
+    // send, move, delete or flag change asks the owner every time, whatever
+    // the rules say.
     let mut mail_change = false;
+    let mut mail_draft = false;
     if call.tool == "mail" {
+        use crate::mail::Kind;
         let accounts = crate::mail::accounts_for_run(db, call.attempt.run).await?;
-        match crate::mail::Request::check(call.input, &accounts) {
+        match crate::mail::Request::check(call.input, &accounts).map(|r| r.op.kind()) {
             Err(why) => return Ok(Verdict::Deny(why)),
-            Ok(r) if r.op.kind() != crate::mail::Kind::Change => return Ok(Verdict::Allow),
-            Ok(_) => mail_change = true,
+            Ok(Kind::Lookup) => return Ok(Verdict::Allow),
+            Ok(Kind::Draft) => mail_draft = true,
+            Ok(Kind::Change) => mail_change = true,
         }
     }
     // The phone (DESIGN §11.6): looking, queueing drafts and getting about pass;
@@ -281,6 +285,13 @@ pub async fn decide(db: &PgPool, system1: &System1, call: &Call<'_>) -> sqlx::Re
             return Ok(Verdict::Ask { uncertain: true });
         }
         _ => {}
+    }
+
+    // A draft only lands in the owner's drafts folder, so it needs no card,
+    // but it is ledgered so an interrupted attempt doesn't save it twice.
+    if mail_draft {
+        record(db, call, "approved", Some("rule")).await?;
+        return Ok(Verdict::Allow);
     }
 
     // Installing a skill changes what every bot is told, so the owner sees and
@@ -836,7 +847,7 @@ mod tests {
 
     #[sqlx::test]
     async fn mail_reads_and_drafts_pass_and_every_change_asks(db: PgPool) {
-        let (_, a) = run_with_attempts(&db).await;
+        let (first, a) = run_with_attempts(&db).await;
         let list = json!({"action": "list", "account": "work"});
         // No accounts: nothing passes.
         assert!(matches!(
@@ -856,6 +867,19 @@ mod tests {
                 Verdict::Allow
             );
         }
+        // A draft is ledgered: one saved in an interrupted attempt isn't saved again.
+        let again = json!({"action": "draft", "account": "work", "subject": "once"});
+        assert_eq!(
+            decide(&db, &call(first, "d1", "mail", &again))
+                .await
+                .unwrap(),
+            Verdict::Allow
+        );
+        tool_done(&db, first, "d1", true, "ok:Saved").await.unwrap();
+        assert!(matches!(
+            decide(&db, &call(a, "d2", "mail", &again)).await.unwrap(),
+            Verdict::Deny(why) if why.contains("already ran")
+        ));
         let other = json!({"action": "list", "account": "personal"});
         assert!(matches!(
             decide(&db, &call(a, "e3", "mail", &other)).await.unwrap(),

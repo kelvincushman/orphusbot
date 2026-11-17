@@ -194,7 +194,7 @@ Priority: **P0** = v1 blocker, **P1** = v1 target, **P2** = later.
 | B-INT-03 | Tool sources with more than 20 tools are exposed as search / load / execute wrappers | P1 |
 | B-INT-04 | Secrets for bots are envelope-encrypted on the server, bound to an origin where relevant, redacted from all output | P1 |
 | B-INT-05 | Composio or Pipedream as an aggregator | P2 |
-| B-INT-06 | A bot can use the owner's **existing** mailboxes through Himalaya on the server, only the accounts he names for it: read, search and drafts go ahead; every send, move, delete or flag change asks him with a card showing the account, recipients, subject and body. Credentials never reach a bot. A mailbox of a bot's own (a mail domain per bot) stays not planned (D-075) | P1 |
+| B-INT-06 | A bot can use the owner's **existing** mailboxes through Himalaya on the server, only the accounts he names for it: read, search and drafts go ahead; every send, move, delete or flag change asks him with a card: a send's card shows the account, recipients, subject and body; a move, delete or flag change's card shows the account, folder, envelope ids and what it does. Drafts are ledgered like other effects. Credentials never reach a bot. A mailbox of a bot's own (a mail domain per bot) stays not planned (D-075) | P1 |
 
 ### 7.9 Wearable
 

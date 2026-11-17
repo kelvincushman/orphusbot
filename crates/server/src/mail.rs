@@ -379,16 +379,21 @@ impl Runner for Cli {
                 .kill_on_drop(true)
                 .spawn()
                 .context("starting himalaya")?;
-            if let (Some(text), Some(mut pipe)) = (stdin, child.stdin.take()) {
-                pipe.write_all(text.as_bytes())
-                    .await
-                    .context("writing to himalaya")?;
-                // Dropped here, so Himalaya sees the end of its input.
-            }
-            let out = tokio::time::timeout(TIMEOUT, child.wait_with_output())
+            let pipe = child.stdin.take();
+            // One deadline for writing the input and waiting: Himalaya may
+            // stall before it reads. On timeout the child is dropped, so killed.
+            let exchange = async move {
+                if let (Some(text), Some(mut pipe)) = (stdin, pipe) {
+                    pipe.write_all(text.as_bytes())
+                        .await
+                        .context("writing to himalaya")?;
+                    // Dropped here, so Himalaya sees the end of its input.
+                }
+                child.wait_with_output().await.context("running himalaya")
+            };
+            let out = tokio::time::timeout(TIMEOUT, exchange)
                 .await
-                .context("himalaya took too long")?
-                .context("running himalaya")?;
+                .context("himalaya took too long")??;
             if out.status.success() {
                 Ok(String::from_utf8_lossy(&out.stdout).into_owned())
             } else {
@@ -565,6 +570,7 @@ async fn write(
     account: &str,
     letter: &Letter,
     send: bool,
+    wanted: &(dyn Fn() -> bool + Sync),
 ) -> anyhow::Result<String> {
     let generate = match &letter.reply_to {
         Some(id) => {
@@ -576,26 +582,39 @@ async fn write(
     };
     let generated = text_of(&runner.run(generate, None).await?);
     let filled = template(&generated, letter).map_err(anyhow::Error::msg)?;
+    // The run may have been stopped while the template was made.
+    anyhow::ensure!(wanted(), "the run ended before the email was saved or sent");
     // `drafts` is Himalaya's name for the account's drafts folder, whatever
-    // the server calls it (its `folder.aliases.drafts`).
-    let args = if send {
-        base(&["template", "send"], account, None)
-    } else {
-        base(&["template", "save"], account, Some("drafts"))
-    };
+    // the server calls it (its `folder.aliases.drafts`). No `-o json`: with
+    // it, Himalaya 1.1's `template save` ignores stdin.
+    let mut args: Vec<String> = [
+        "template",
+        if send { "send" } else { "save" },
+        "-a",
+        account,
+    ]
+    .map(str::to_owned)
+    .into();
+    if !send {
+        args.extend(["-f".into(), "drafts".into()]);
+    }
     runner.run(args, Some(filled)).await
 }
 
 /// Runs one checked request and words the result for the bot.
-async fn run(runner: &dyn Runner, request: &Request) -> anyhow::Result<String> {
+async fn run(
+    runner: &dyn Runner,
+    request: &Request,
+    wanted: &(dyn Fn() -> bool + Sync),
+) -> anyhow::Result<String> {
     let account = &request.account;
     Ok(match &request.op {
         Op::Draft(letter) => {
-            write(runner, account, letter, false).await?;
+            write(runner, account, letter, false, wanted).await?;
             format!("ok:Saved to the drafts folder of {account}.")
         }
         Op::Send(letter) => {
-            write(runner, account, letter, true).await?;
+            write(runner, account, letter, true, wanted).await?;
             format!("ok:Sent from {account}.")
         }
         op @ (Op::Folders | Op::List { .. } | Op::Read { .. }) => {
@@ -618,12 +637,17 @@ async fn run(runner: &dyn Runner, request: &Request) -> anyhow::Result<String> {
     })
 }
 
-/// The approved input of this change, if the gate recorded it as approved
-/// for this attempt (by the owner's tap; no rule or System 1 can approve one).
-async fn approved(db: &PgPool, attempt: Attempt, call: &str) -> sqlx::Result<Option<Value>> {
+/// Claims the approved input of this change, if the gate recorded it as
+/// approved for this attempt (by the owner's tap; no rule or System 1 can
+/// approve one) and nothing has claimed it yet. One statement, so two dialogs
+/// for the same call can't both run it. The claim is a placeholder `result`;
+/// the state stays `approved` until `gate::tool_done` writes the real result.
+async fn claim(db: &PgPool, attempt: Attempt, call: &str) -> sqlx::Result<Option<Value>> {
     let input = sqlx::query_scalar!(
-        r#"select input as "input: Json<Value>" from effect
-           where run_id = $1 and fence = $2 and tool_call_id = $3 and tool = 'mail' and state = 'approved'"#,
+        r#"update effect set result = 'running', updated_at = now()
+           where run_id = $1 and fence = $2 and tool_call_id = $3 and tool = 'mail'
+             and state = 'approved' and result is null
+           returning input as "input: Json<Value>""#,
         attempt.run,
         attempt.fence,
         call
@@ -642,7 +666,7 @@ pub async fn answer(
     bot: &str,
     attempt: Attempt,
     dialog: &Value,
-    wanted: impl Fn() -> bool,
+    wanted: impl Fn() -> bool + Sync,
 ) -> String {
     let accounts = match crate::bots::get(&app.db, bot).await {
         Ok(Some(bot)) => bot.mail_accounts,
@@ -662,7 +686,7 @@ pub async fn answer(
     if request.op.kind() == Kind::Change {
         // Run what the owner approved, not what arrived with the dialog.
         let call = dialog["call"].as_str().unwrap_or_default();
-        let input = match approved(&app.db, attempt, call).await {
+        let input = match claim(&app.db, attempt, call).await {
             Ok(Some(input)) => input,
             Ok(None) => return "error:This change wasn't approved.".into(),
             Err(e) => {
@@ -678,7 +702,7 @@ pub async fn answer(
     if !wanted() {
         return "error:The run ended before the mail was touched.".into();
     }
-    match run(runner.as_ref(), &request).await {
+    match run(runner.as_ref(), &request, &wanted).await {
         Ok(answer) => answer,
         Err(e) => {
             // What Himalaya said goes to the bot, which needs it ("no such
@@ -1022,20 +1046,18 @@ mod tests {
             super::answer(&app, "inbox-test", a, &draft, || true).await,
             "ok:Saved to the drafts folder of personal."
         );
-        let ran = ran.lock().unwrap().clone();
-        assert_eq!(ran.len(), 3);
+        let seen = ran.lock().unwrap().clone();
+        assert_eq!(seen.len(), 3);
         assert_eq!(
-            ran[1].args,
+            seen[1].args,
             strings(&["-o", "json", "template", "write", "-a", "personal"])
         );
         assert_eq!(
-            ran[2].args,
-            strings(&[
-                "-o", "json", "template", "save", "-a", "personal", "-f", "drafts"
-            ])
+            seen[2].args,
+            strings(&["template", "save", "-a", "personal", "-f", "drafts"])
         );
         assert_eq!(
-            ran[2].stdin.as_deref(),
+            seen[2].stdin.as_deref(),
             Some(
                 format!(
                     "{}\nTo: a@example.com\nSubject: Hi\n\nHello\n",
@@ -1044,6 +1066,16 @@ mod tests {
                 .as_str()
             )
         );
+
+        // A run stopped while the template was made saves nothing.
+        let asked = std::sync::atomic::AtomicUsize::new(0);
+        let until_template = || asked.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0;
+        assert!(
+            super::answer(&app, "inbox-test", a, &draft, until_template)
+                .await
+                .starts_with("error:")
+        );
+        assert_eq!(ran.lock().unwrap().len(), 4, "only the template was made");
 
         // Another bot, an account it hasn't got, or a stopped run: nothing runs.
         let (mail, ran) = testkit::fake(Some("[]"));
@@ -1099,24 +1131,29 @@ mod tests {
         .await
         .unwrap();
         // The dialog says something else: what was approved is what runs.
+        // Two dialogs for the same call at once: one sends, the other is refused.
         let swapped = json!({ "call": "c1", "request": {
             "action": "send", "account": "work", "to": ["x@example.com"], "subject": "s", "body": "b",
         } });
+        let (one, two) = tokio::join!(
+            answer(&app, "inbox-test", a, &swapped, || true),
+            answer(&app, "inbox-test", a, &send, || true),
+        );
+        let mut answers = [one, two];
+        answers.sort();
         assert_eq!(
-            answer(&app, "inbox-test", a, &swapped, || true).await,
-            "ok:Sent from work."
+            answers,
+            ["error:This change wasn't approved.", "ok:Sent from work."]
         );
         let ran = ran.lock().unwrap().clone();
+        assert_eq!(ran.len(), 2);
         assert_eq!(
             ran[0].args,
             strings(&[
                 "-o", "json", "template", "reply", "-a", "work", "-f", "INBOX", "7"
             ])
         );
-        assert_eq!(
-            ran[1].args,
-            strings(&["-o", "json", "template", "send", "-a", "work"])
-        );
+        assert_eq!(ran[1].args, strings(&["template", "send", "-a", "work"]));
         let sent = ran[1].stdin.clone().unwrap();
         assert!(sent.contains("To: a@example.com\n"), "{sent}");
         assert!(sent.contains("In-Reply-To: <a@example.com>\n"), "{sent}");

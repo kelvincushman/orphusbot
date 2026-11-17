@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select input as \"input: Json<Value>\" from effect\n           where run_id = $1 and fence = $2 and tool_call_id = $3 and tool = 'mail' and state = 'approved'",
+  "query": "update effect set result = 'running', updated_at = now()\n           where run_id = $1 and fence = $2 and tool_call_id = $3 and tool = 'mail'\n             and state = 'approved' and result is null\n           returning input as \"input: Json<Value>\"",
   "describe": {
     "columns": [
       {
@@ -26,5 +26,5 @@
       false
     ]
   },
-  "hash": "03a1db872950f195114d73d5cd2f4fb84ec202f09af983a156d444b8c24efb39"
+  "hash": "6b7269282f1d2067d61f48ab97f629601d2457e0abfe7cf75e96310b6c0ef1a8"
 }

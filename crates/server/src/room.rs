@@ -547,6 +547,30 @@ mod tests {
         assert_eq!(ideas_session(&format!("fix it{DO_NOTE}"), "coder"), None);
     }
 
+    #[sqlx::test]
+    async fn a_call_never_puts_ask_and_do_in_one_run(db: sqlx::PgPool) {
+        use crate::auth::tests::{app, call};
+        let app = app(db.clone());
+        let session = crate::auth::create_session(&db, None, crate::auth::SESSION)
+            .await
+            .unwrap();
+        let send = |body: Value| call(&app, "/api/messages", &session, Some(body));
+        let ask = json!({ "bot": "orchestrator", "text": "how's it going?", "voice": true });
+        let (status, _, sent) = send(ask.clone()).await;
+        assert_eq!(status, StatusCode::ACCEPTED);
+        let run = sent["run"].as_i64().unwrap();
+        // While the question's run is open: no job joins it, and no second question.
+        let job = json!({ "bot": "orchestrator", "text": "fix it", "voice": true, "work": true });
+        assert_eq!(send(job).await.0, StatusCode::CONFLICT);
+        assert_eq!(send(ask).await.0, StatusCode::CONFLICT);
+        // A typed message still joins, and says which run carries it.
+        let (status, _, typed) = send(json!({ "bot": "orchestrator", "text": "also" })).await;
+        assert_eq!(
+            (status, typed["run"].as_i64()),
+            (StatusCode::ACCEPTED, Some(run))
+        );
+    }
+
     #[test]
     fn spoken_ideas_get_a_short_title() {
         assert_eq!(

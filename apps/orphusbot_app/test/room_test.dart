@@ -258,6 +258,72 @@ void main() {
       expect(news, ['(Coder has finished: Quick one.)']);
     });
 
+    test('an early end with no reply never borrows an old one', () async {
+      line.handle(reply('Old.'));
+      line.handle(ended(7));
+      line.handle(nodes());
+      runs = [8];
+      meanwhile = () => line.handle(ended(8));
+      expect(
+        await line.ask(api, 'coder', 'ask', {'request': 'status?'}),
+        "Coder didn't answer.",
+      );
+    });
+
+    test(
+      'a job joining a run that ends before its answer is told once',
+      () async {
+        line.handle(nodes());
+        runs = [1, 1, 2];
+        await line.ask(api, 'coder', 'do', {'task': 'fix the tests'});
+        meanwhile = () {
+          line.handle(reply('Both done.'));
+          line.handle(ended(1));
+        };
+        await line.ask(api, 'coder', 'do', {'task': 'and the lint'});
+        meanwhile = null;
+        expect(news, ['(Coder has finished: Both done.)']);
+        // Nothing is left waiting: the next question goes through.
+        final next = line.ask(api, 'coder', 'ask', {
+          'request': 'anything else?',
+        });
+        await pumpEventQueue();
+        expect(sent, hasLength(3));
+        line.handle(reply('No.'));
+        line.handle(ended(2));
+        expect(await next, 'No.');
+      },
+    );
+
+    test('a new run answered before the last one ends both report', () async {
+      line.handle(nodes());
+      runs = [1, 2];
+      await line.ask(api, 'coder', 'do', {'task': 'fix the tests'});
+      await line.ask(api, 'coder', 'do', {'task': 'then the docs'});
+      line.handle(reply('Tests.'));
+      line.handle(ended(1));
+      line.handle(reply('Docs.'));
+      line.handle(ended(2));
+      expect(news, [
+        '(Coder has finished: Tests.)',
+        '(Coder has finished: Docs.)',
+      ]);
+    });
+
+    test('a card that opens before the send returns is still told', () async {
+      line.handle(nodes());
+      runs = [1, 2];
+      meanwhile = () => line.handle(approval(1));
+      expect(
+        await line.ask(api, 'coder', 'ask', {'request': 'send it?'}),
+        startsWith('Coder needs your OK on the screen.'),
+      );
+      line.handle(ended(1));
+      meanwhile = () => line.handle(approval(2));
+      await line.ask(api, 'coder', 'do', {'task': 'send the rest'});
+      expect(news.last, '(Coder needs your OK on the screen.)');
+    });
+
     test('ask answers with the reply, or says it needs a tap', () async {
       line.handle(nodes());
       runs = [1, 2];

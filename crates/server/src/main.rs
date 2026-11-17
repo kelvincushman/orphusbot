@@ -520,6 +520,33 @@ async fn send_message(
         ));
     }
     let files = attachments::check(&app.db, &bot.slug, &msg.attachments).await?;
+    // A message from a call that joins an active run keeps that run's model, so
+    // an `ask` (quick model) never joins a run, and a `do` (the bot's model) never
+    // joins an `ask`'s run (DESIGN §12.8). The app checks first; this decides.
+    if msg.voice && !msg.room {
+        let active = sqlx::query_scalar!(
+            "select prompt from run where thread_id = $1 and status in ('queued', 'running')",
+            thread.id
+        )
+        .fetch_optional(&app.db)
+        .await
+        .map_err(|e| internal("checking the bot", e))?;
+        match active {
+            Some(_) if !msg.work => {
+                return Err((
+                    StatusCode::CONFLICT,
+                    "It's busy with a task, so it can't answer quickly now",
+                ));
+            }
+            Some(prompt) if prompt.contains(room::VOICE_NOTE) => {
+                return Err((
+                    StatusCode::CONFLICT,
+                    "It's still answering a question; hand it the job once that's done",
+                ));
+            }
+            _ => {}
+        }
+    }
 
     if !text.is_empty() {
         let event = app.secrets.redact_event(ThreadEvent::Message {
@@ -550,10 +577,8 @@ async fn send_message(
     if msg.room {
         run_text.push_str(room::ROOM_NOTE);
     } else if msg.voice && msg.work {
-        // ponytail: a call message that joins an active run keeps that run's model
-        // (quick for `ask`, the bot's for `do`). The app keeps them apart: no `ask`
-        // while a run is active, no `do` while an `ask` waits. Upgrade path: make
-        // `runs::submit` queue a separate run when the model kind differs.
+        // ponytail: the check above and `runs::submit` are two statements, so a run
+        // started between them can still be joined; one transaction if that matters.
         run_text.push_str(room::DO_NOTE);
     } else if msg.voice {
         run_text.push_str(room::VOICE_NOTE);

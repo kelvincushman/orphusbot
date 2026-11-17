@@ -582,9 +582,11 @@ class OrchestratorLine {
   final _jobs = <int>{};
   // Where each followed run's reply starts in the thread.
   final _from = <int, int>{};
-  // Runs that ended without being followed, in case a send's answer comes
-  // after its run's end: (reply, completed).
-  final _ended = <int, (String?, bool)>{};
+  // Recent runs' ends, as a send's answer can come after its run's events:
+  // where the thread stood, whether it completed, and whether the call was
+  // told. And cards opened in runs not followed yet.
+  final _ended = <int, ({int at, bool ok, bool told})>{};
+  final _cards = <int, String>{};
 
   void start(Api api, String bot) {
     _events = api.events().listen((e) {
@@ -604,24 +606,29 @@ class OrchestratorLine {
       case 'dialog_opened' when inChat:
         final dialog = e['dialog'] as Map?;
         final run = (dialog?['run'] as num?)?.toInt();
+        if (run == null) return;
         final need = (dialog?['kind'] as Map?)?['kind'] == 'approval'
             ? 'needs your OK on the screen'
             : 'needs you on the screen';
         final w = _waiting;
-        if (run != null && run == _asked && w != null) {
+        if (run == _asked && w != null) {
           _waiting = null;
-          w.complete('$name $need. It carries on once Kelvin has tapped.');
-        } else if (run != null && (run == _asked || _jobs.contains(run))) {
+          w.complete(_needs(need));
+        } else if (run == _asked || _jobs.contains(run)) {
           onNews?.call('($name $need.)');
+        } else {
+          _keep(_cards, run, need);
         }
       case 'run_ended':
         final run = (e['run'] as num?)?.toInt();
         if (run == null) return;
-        final reply = _reply(_from.remove(run) ?? 0);
+        final at = thread.items.length;
         final ok = e['outcome'] == 'completed';
-        final job = _jobs.remove(run);
+        final reply = _reply(_from.remove(run) ?? at, at);
+        var told = false;
         if (run == _asked) {
           _asked = null;
+          told = true;
           final w = _waiting;
           _waiting = null;
           if (w != null) {
@@ -629,18 +636,28 @@ class OrchestratorLine {
           } else if (inChat) {
             onNews?.call(_finished(reply, ok));
           }
-        } else if (job) {
+        } else if (_jobs.remove(run)) {
+          told = true;
           onNews?.call(_finished(reply, ok));
-        } else {
-          _ended[run] = (reply, ok);
-          if (_ended.length > 20) _ended.remove(_ended.keys.first);
         }
+        _cards.remove(run);
+        _keep(_ended, run, (at: at, ok: ok, told: told));
     }
   }
 
-  /// The bot's last reply since item [from].
-  String? _reply(int from) {
+  /// Remembers a few recent runs only.
+  static void _keep<V>(Map<int, V> map, int run, V value) {
+    map[run] = value;
+    if (map.length > 20) map.remove(map.keys.first);
+  }
+
+  String _needs(String need) =>
+      '$name $need. It carries on once Kelvin has tapped.';
+
+  /// The bot's last reply between items [from] and [to].
+  String? _reply(int from, int to) {
     final said = thread.items
+        .take(to)
         .skip(from)
         .whereType<t.Message>()
         .where((m) => !m.mine);
@@ -679,11 +696,19 @@ class OrchestratorLine {
       }
       final run = await api.send(bot, task, voice: true, work: true);
       if (run == null) return 'Sent to $name.';
-      _from.putIfAbsent(run, () => mark);
-      if (_ended.remove(run) case final (String?, bool) done) {
-        onNews?.call(_finished(done.$1, done.$2));
+      final ended = _ended[run];
+      if (ended != null) {
+        // Its run ended before the answer came: reported already, or now.
+        if (!ended.told) {
+          onNews?.call(_finished(_reply(mark, ended.at), ended.ok));
+        }
+        _ended[run] = (at: ended.at, ok: ended.ok, told: true);
       } else {
+        _from.putIfAbsent(run, () => mark);
         _jobs.add(run);
+        if (_cards.remove(run) case final need?) {
+          onNews?.call('($name $need.)');
+        }
       }
       return "Started. $name will say when it's finished.";
     }
@@ -720,12 +745,18 @@ class OrchestratorLine {
       _waiting = null;
       return "Sent; $name's answer will be in its chat.";
     }
-    _from.putIfAbsent(run, () => mark);
-    if (_ended.remove(run) case final (String?, bool) ended) {
+    final ended = _ended[run];
+    if (ended != null) {
       _waiting = null;
-      return ended.$1 ?? "$name didn't answer.";
+      _ended[run] = (at: ended.at, ok: ended.ok, told: true);
+      return _reply(mark, ended.at) ?? "$name didn't answer.";
     }
+    _from.putIfAbsent(run, () => mark);
     _asked = run;
+    if (_cards.remove(run) case final need?) {
+      _waiting = null;
+      return _needs(need);
+    }
     return done.future.timeout(
       const Duration(seconds: 90),
       onTimeout: () {

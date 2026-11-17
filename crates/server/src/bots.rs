@@ -382,6 +382,7 @@ pub struct NewBot {
     x_search: bool,
     #[serde(default)]
     voice: Option<String>,
+    #[serde(default)]
     mail_accounts: Vec<String>,
 }
 

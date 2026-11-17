@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select prompt from run where thread_id = $1 and status in ('queued', 'running')",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "prompt",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "run",
+            "name": "prompt"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "217f97c6287c33667867fe377d7d44d76fd83e1d8ebf9ad50cf5d5c43d00e54c"
+}

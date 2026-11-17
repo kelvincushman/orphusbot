@@ -68,18 +68,19 @@ class _ChatScreenState extends State<ChatScreen> {
     onResume: () => _act(_loadBots),
   );
 
+  // A notification was clicked: back to the chat, on that bot.
+  void _openBot(String bot) {
+    if (!mounted) return;
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    setState(() => chosen = bot);
+  }
+
   @override
   void initState() {
     super.initState();
     life;
     _start();
-    startPush(widget.api, (bot) {
-      if (mounted) {
-        setState(() {
-          chosen = bot;
-        });
-      }
-    }).then(
+    startPush(widget.api, _openBot).then(
       (note) {
         if (note != null && mounted) setState(() => problem = note);
       },
@@ -214,7 +215,8 @@ class _ChatScreenState extends State<ChatScreen> {
         // A push to the owner, live only: a system notification on a
         // desktop. One that can't be shown (no notification daemon) is let go.
         if (type == 'push') {
-          showPush(e, open: chosen).onError((_, _) {});
+          if (!mounted) return;
+          showPush(e, open: showingChat(context, chosen)).onError((_, _) {});
           return;
         }
         if (bot == null) return;
@@ -251,6 +253,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    stopPush(_openBot);
     life.dispose();
     sub?.cancel();
     handoffs.close();

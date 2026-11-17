@@ -52,9 +52,15 @@ impl crate::App {
     /// Sends a push to the phone, and the same push to open desktop apps as a
     /// live `push` event. Every push goes through here.
     pub(crate) fn push(&self, push: Push<'_>) {
+        // Redacted whole before it is cut, so a secret across the cut can't leave half of itself.
         let event = ThreadEvent::Push {
             title: push.title.clone(),
-            body: push.body.chars().take(1_000).collect(),
+            body: self
+                .secrets
+                .redact(&push.body)
+                .chars()
+                .take(1_000)
+                .collect(),
             priority: push.priority.clamp(1, 5),
         };
         crate::publish(self, None, push.bot, event);
@@ -389,6 +395,19 @@ mod tests {
             bot: Some("coder"),
         });
         let live = rx.try_recv().expect("the push is published");
+        // A secret across the cut is redacted before it, so no part of it leaks.
+        app.secrets.learn("hunter2-hunter2-hunter2");
+        app.push(Push {
+            title: "Coder failed".into(),
+            body: format!("{}hunter2-hunter2-hunter2", "x".repeat(995)),
+            priority: 4,
+            tags: "",
+            bot: None,
+        });
+        let ThreadEvent::Push { body, .. } = rx.try_recv().unwrap().event else {
+            panic!("a push event");
+        };
+        assert_eq!(body, format!("{}[secr", "x".repeat(995)));
         assert_eq!(live.id, None, "live only: never stored or replayed");
         assert_eq!(live.bot.as_deref(), Some("coder"));
         assert!(!live.event.is_persisted());

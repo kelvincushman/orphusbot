@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orphusbot_app/push.dart';
 
@@ -7,7 +8,7 @@ void main() {
       bool desktop = true,
       bool focused = false,
       String? bot = 'coder',
-      String open = 'orchestrator',
+      String? open = 'orchestrator',
     }) =>
         shouldNotify(desktop: desktop, focused: focused, bot: bot, open: open);
     expect(yes(), isTrue);
@@ -21,6 +22,30 @@ void main() {
     expect(yes(open: 'coder'), isTrue);
     // About no bot (a digest, a budget): always told.
     expect(yes(focused: true, bot: null), isTrue);
+    // No chat showing (the Gallery is on top): told.
+    expect(yes(focused: true, open: null), isTrue);
+  });
+
+  testWidgets('a chat covered by another page is not showing', (t) async {
+    late BuildContext chat;
+    await t.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (c) {
+            chat = c;
+            return const Text('chat');
+          },
+        ),
+      ),
+    );
+    expect(showingChat(chat, 'coder'), 'coder');
+    Navigator.of(chat)
+        .push(MaterialPageRoute<void>(builder: (_) => const Text('gallery')));
+    await t.pumpAndSettle();
+    expect(showingChat(chat, 'coder'), isNull);
+    Navigator.of(chat).pop();
+    await t.pumpAndSettle();
+    expect(showingChat(chat, 'coder'), 'coder');
   });
 
   test('showPush hands the event to the notifier', () async {

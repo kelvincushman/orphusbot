@@ -18,6 +18,8 @@ import 'api.dart';
 
 final _notes = FlutterLocalNotificationsPlugin();
 Future<void>? _ready;
+// Opens a bot's chat on a click: the chat screen showing now, if any.
+void Function(String bot)? _open;
 
 const _channel = AndroidNotificationDetails(
   'bots',
@@ -30,9 +32,12 @@ const _channel = AndroidNotificationDetails(
 // A new id each time, so one notification never replaces another.
 var _id = DateTime.now().millisecondsSinceEpoch ~/ 1000 % 100000;
 
-// Once; a notification shown meanwhile waits for it.
-Future<void> _init(void Function(String bot)? open) =>
-    _ready ??= _notes.initialize(
+// Once; a notification shown meanwhile waits for it. A failure is tried
+// again with the next notification.
+// ponytail: on Linux the plugin counts a failed first try as done, so after
+// one, notifications still show but a click may not open the chat until a restart.
+Future<void> _init() => _ready ??= _notes
+    .initialize(
       settings: InitializationSettings(
         android: const AndroidInitializationSettings('@mipmap/ic_launcher'),
         // The `orphusbot` icon the app installs in the hicolor theme.
@@ -45,16 +50,20 @@ Future<void> _init(void Function(String bot)? open) =>
       ),
       onDidReceiveNotificationResponse: (r) {
         final bot = r.payload;
-        if (bot != null && bot.isNotEmpty) open?.call(bot);
+        if (bot != null && bot.isNotEmpty) _open?.call(bot);
       },
-    );
+    )
+    .catchError((Object e) {
+      _ready = null;
+      throw e;
+    });
 
 /// Shows one push from the server: `{title, body, bot, priority}`.
 Future<void> _show(PushMessage m) async {
   // ponytail: the payload isn't Web Push encrypted; it only crosses our own
   // ntfy over TLS. Encrypt with the endpoint's pubKeySet if a public distributor is used.
   final msg = jsonDecode(utf8.decode(m.content)) as Map<String, dynamic>;
-  await _init(null);
+  await _init();
   await _notes.show(
     id: _id++,
     title: msg['title'] as String?,
@@ -68,12 +77,13 @@ Future<void> _show(PushMessage m) async {
 /// distributor installed), else null. [open] is called with a bot's slug
 /// when a notification is tapped, including the one that launched the app.
 Future<String?> startPush(Api api, void Function(String bot) open) async {
+  _open = open;
   if (_desktop) {
-    await _init(open);
+    await _init();
     return null;
   }
   if (!Platform.isAndroid) return null;
-  await _init(open);
+  await _init();
   await _notes
       .resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin
@@ -99,6 +109,11 @@ Future<String?> startPush(Api api, void Function(String bot) open) async {
   return null;
 }
 
+/// The chat screen [open] (given to [startPush]) is closing: clicks no longer go to it.
+void stopPush(void Function(String bot) open) {
+  if (_open == open) _open = null;
+}
+
 /// Where `push` events become notifications. Android has UnifiedPush, which
 /// works with the app closed, so the event would only be a duplicate there.
 final _desktop = Platform.isLinux || Platform.isMacOS;
@@ -113,19 +128,24 @@ typedef ShowNote = Future<void> Function(
 
 /// Whether a `push` event about [bot] becomes a notification: on a desktop,
 /// unless the window is focused with that bot's chat ([open]) showing.
+/// [open] is null when no chat is showing, such as with the Gallery on top.
 bool shouldNotify({
   required bool desktop,
   required bool focused,
   required String? bot,
-  required String open,
-}) => desktop && !(focused && bot == open);
+  required String? open,
+}) => desktop && !(focused && bot != null && bot == open);
+
+/// The chat showing at [context]: [chosen], unless another page covers it.
+String? showingChat(BuildContext context, String chosen) =>
+    ModalRoute.of(context)?.isCurrent ?? true ? chosen : null;
 
 /// Shows a `push` event from the server (`{bot?, title, body, priority}`) as a
 /// system notification, if [shouldNotify] says so. [open] is the bot whose
 /// chat is showing.
 Future<void> showPush(
   Map<String, dynamic> e, {
-  required String open,
+  required String? open,
   bool? desktop,
   bool? focused,
   ShowNote? show,
@@ -154,7 +174,7 @@ Future<void> _showDesktop(
   String? bot,
   int priority,
 ) async {
-  await _init(null);
+  await _init();
   await _notes.show(
     id: _id++,
     title: title,

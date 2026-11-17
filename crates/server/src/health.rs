@@ -306,7 +306,7 @@ pub async fn check_now(app: &App) -> anyhow::Result<()> {
         let check = Box::pin(check_disk(&*h.probe, path));
         checks.push(("disk".into(), "Disk space".into(), check));
     }
-    // A new check (such as mail, once the server sends it) is one more entry here.
+    // A new check (such as the mail accounts, DESIGN §11.11) is one more entry here.
 
     let names: Vec<String> = checks.iter().map(|(name, ..)| name.clone()).collect();
     let results = join_all(checks.into_iter().map(|(name, label, check)| async move {
